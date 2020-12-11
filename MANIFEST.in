@@ -1,2 +1,2 @@
 include versioneer.py
-include fast_python/_version.py
+include hifast/_version.py
