@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>README</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    span.underline{text-decoration: underline;}
+    div.column{display: inline-block; vertical-align: top; width: 50%;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+  </style>
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+</head>
+<body>
+<h1 id="安装-fast_python-模块">安装 fast_python 模块</h1>
+<ul>
+<li><p>方法一： 用pip：</p>
+<ul>
+<li><p>安装</p>
+<pre><code>python -m pip install git+https://gitlab.com/jingyj/fast_python.git#egg=fast_python --upgrade</code></pre>
+<p>随后按照提示输入用户名fast-obs, 接着是fast-obs登录gitlab时用的密码。</p></li>
+<li><p>卸载</p>
+<pre><code>pip uninstall fast_python</code></pre></li>
+</ul></li>
+<li><p>方法二： 用setup.py</p>
+<p>下载安装包后<strong>先 cd 切换到代码(setup.py)所在目录下</strong></p>
+<ul>
+<li><p>安装</p>
+<pre><code>python setup.py install -f</code></pre></li>
+<li><p>卸载</p>
+<pre><code>python -c &#39;import fast_python;print(fast_python.__file__)&#39;</code></pre>
+<p>找到安装后的文件夹，删除。</p></li>
+<li><p>提示</p>
+<p>由于包文件里包括c代码，因此必须安装后才能正确 import。另外由于Python在 import 时是从当前路径开始搜索包，因此不要在安装包（setup.py）所在目录下执行fast_python相关命令。</p></li>
+</ul></li>
+</ul>
+<h1 id="示例">示例</h1>
+<h2 id="准备">准备</h2>
+<ul>
+<li>在任意位置新建文件夹 test ,</li>
+<li>拷贝 script 目录下 sep.sh, get_radec.sh, sub_baseline_mpi.sh 等.sh结尾的文件 到 test 文件夹下 ,</li>
+<li>在test下新建文件夹 data ,</li>
+<li>下载 Tcal文件夹( https://pan.cstcloud.cn/s/AfnCB96cT2s 提取码：cqwy ) 放到你的 home 目录 .</li>
+</ul>
+<h2 id="分离光谱并利用噪音管计算得出温度">1. 分离光谱并利用噪音管计算得出温度</h2>
+<p>sep.sh里的shell脚本如下：</p>
+<pre><code>#!/bin/bash
+
+export OPENBLAS_NUM_THREADS=10
+export MKL_NUM_THREADS=10
+
+fpart=&quot;/data/inspur_disk06/fast_data/3047/GAMA_G15/20191215/GAMA_G15_2_arcdrift-M&quot;
+
+for i in {01..19}
+do
+python  -m fast_python.sep_spectra &quot;${fpart}${i}_F_0001.fits&quot; -m 10 -n 10 --step 5 --freql 1417 --freqh 1429 --smooth poly --s_deg 1 --outdir ./data
+## or
+#python -m fast_python.sep_spectra &quot;${fpart}${i}_F_0001.fits&quot; -m 10 -n 10 --step 5 --freql 1329 --freqh 1429 --smooth gaussian --s_sigma 5 --outdir ./data
+## or
+#python -m fast_python.sep_spectra &quot;${fpart}${i}_F_0001.fits&quot; -m 10 -n 10 --step 5 --freql 1329 --freqh 1429 --smooth gaussian --s_sigma 5 --dfactor 16 --med_filter --med_size 5 --outdir ./data
+done</code></pre>
+<ul>
+<li>NumPy里某些函数会自动并行计算，默认最多能够使用整个机器一半的CPU资源。 OPENBLAS_NUM_THREADS 和 MKL_NUM_THREADS 这两个环境变量是来控制NumPy所能使用的最多CPU线程数，这里设置为10，根据需要修改为其他值或者注释掉这两行。</li>
+<li>修改fpart为你的数据路径。</li>
+<li>接下来的for循环依次处理19个beam的数据。</li>
+<li>python -m fast_python.sep_spectra 这行是来处理一个beam的数据，一些参数如下：
+<ul>
+<li><p>后面紧跟的是数据文件的绝对路径。 <br/>FAST的数据里每个beam是存成了很多块文件，以0001.fits——9999.fits结尾。这个仅需要给任何一个块文件的文件名即可，程序会从第一个文件开始依次读取处理。</p></li>
+<li><p><code>-m -n</code>：分别为Tcal on的时间除以谱线的采样时间，Tcal off的时间除以谱线的采样时间 <br/>Drift目前是噪音管(Tcal) on off 模式。 -m 后的数值为Tcal on的时间除以 谱线的采样时间，-n 则为Tcal off 的时间除以 谱线的采样时间，两个数都为整数。 <br/>如果-m 或者 -n 大于1，程序目前将会对谱线进行平均，结果就是一个Tcal on off周期只输出两条谱线。 <br/><del><strong><em>目前只处理噪音管为high模式的数据</em></strong></del></p></li>
+<li><p><code>--noise_mode</code>: 噪音管强度。 high 或者 low，默认为high</p></li>
+<li><p><code>--step</code> ：每次读入内存的块文件数量。 <br/>由于需要读入的第一条谱线是Tcal on，如果-m和-n之和不等于2，–step 必须是某个数的整倍数。可以随意设置较小的 –step，然后运行程序根据报错提示修改即可。</p></li>
+<li><p><code>--freql --freqh</code>：程序提取和处理的频率范围：–freql 为下限 –freqh 为上限。(需配合<code>--smooth</code>来设置) <br/> M31 HI 频率和速度（相对于LSR）的对应 见文件 freq_vs_vlsr_M31.txt。另外可以修改freq_vs_vlsr.py来估算你需要的 HI频率和速度的对应。不同的ra,dec和mjd，vlsr和freq的对应稍有差异。</p></li>
+<li><p><code>--smooth</code>: 平滑方法。gaussian, poly 或者 mean（默认）。 <br/>噪音管定标，在每一个Tcal on off的周期里, 温度在不同频率的值为 <br/> <img src="https://render.githubusercontent.com/render/math?math=T_{on}(\nu)= \frac{T_{cal}(\nu)_{smooth}}{(tcal\_on(\nu)-tcal\_off(\nu))_{smooth}}*tcal\_on-T_{cal}(\nu)_{smooth}"> <br/> <img src="https://render.githubusercontent.com/render/math?math=T_{off}(\nu)= \frac{T_{cal}(\nu)_{smooth}}{(tcal\_on(\nu)-tcal\_off(\nu))_{smooth}}*tcal\_off"></p>
+<ul>
+<li>mean: 适用于freq区间（<code>freqh</code>-<code>freql</code>）比较小（至少小于10?）。对freq内的所有流量值平均。</li>
+<li>poly: 适用于freq区间比较小。多项式拟合，需要同时加<code>--s_deg</code>参数，<code>s_deg</code>为 1 时为线性拟合，为0时等同于mean，默认值为1。</li>
+<li>gaussian：适用于freq区间比较大，需要同时加<code>--s_sigma</code>参数，<code>s_sigma</code>需要小于freq区间的三分之一。平滑结果在频率两端会不太准，因此推荐freq区间比需要的范围稍大一些。</li>
+</ul></li>
+<li><p><code>--med_filter</code>：median filter 谱线，去除极窄的rfi。</p></li>
+<li><p><code>--med_size</code>: median filter的窗口宽度。必须为奇数。</p></li>
+<li><p><code>--dfactor</code>：降低频率的采样率。<code>--dfactor 16</code>：每16个采样点平均，能使F带采样减低到W带。最好与<code>--med_filter</code>一起使用。</p></li>
+<li><p><code>--outdir</code> ：输出文件存放的目录。这里为之前新建的data文件夹。</p></li>
+<li><p><code>--sep_save</code>: 加上此参数让每一个step输出一个文件。默认为一个beam输出一个文件。</p></li>
+<li><p>输出文件名以 <code>specs_T.hdf5</code> 或 <code>specs_T_XXXX_XXXX.hdf5</code> (加–sep_save参数)结尾。可以用h5py来读取。例如：</p>
+<pre><code>  import h5py
+  f= h5py.File(&#39;data/GAMA_G15_2_arcdrift-M02_F-specs_T.hdf5&#39;,&#39;r&#39;)
+  print(f.keys())
+  f[&#39;mjd&#39;][:]</code></pre></li>
+<li><p>同时会输出文件名以sep.pdf结尾的图片用来检查Tcal on off的分离是否正确。</p></li>
+</ul></li>
+</ul>
+<h2 id="转换馈源ky位置到ra-dec">2. 转换馈源（KY）位置到RA DEC</h2>
+<p>get_radec.sh里的内容如下：</p>
+<pre><code>#!/bin/bash
+
+export OPENBLAS_NUM_THREADS=10
+export MKL_NUM_THREADS=10
+
+#for fname in  data/*M01*specs_T*.npy
+for fname in  data/*M01*specs_T*.hdf5
+do
+if [[ $fname == *&quot;radec&quot;* ]]; then continue; fi
+echo $fname
+python -m fast_python.ky2radec $fname
+done</code></pre>
+<ul>
+<li><p>这里只需输入(fname) beam M01 的上一步的输出文件specs_T<em>.hdf5或specs_T_XXXX_XXXX.hdf5（specs_T</em>.npy或specs_T_XXXX_XXXX.npy）即可，其它beam的 RA DEC 会存在这同一个文件里。</p></li>
+<li><p>python -m fast_python.ky2radec：</p>
+<ul>
+<li><p>后面紧跟的是上一步输出的specs_T*.npy或specs_T_XXXX_XXXX.npy 文件路径。</p></li>
+<li><p>程序会自动先依次检测是否存在 ‘your_HOME_dir/KY/’, ‘/data/inspur_disk06/fast_data/KY/’, ‘/data31/KY/’ 文件夹。 然后在最先检测到的文件夹里自动猜测寻找对应KY的文件。</p></li>
+<li><p><code>--kyfiles</code>：如果程序不能成功找到对应KY文件，用此参数来手动指定KY文件。参数后加KY文件的绝对路径。</p></li>
+<li><p><code>--outdir</code> ：指定输出文件存放的目录。默认与输入文件一致。</p></li>
+<li><p><code>--plot</code>：加此参数来画radec分布图，保存为pdf图片。</p></li>
+<li><p><del>存放radec的输出文件名是在输入文件名上加radec。可以用numpy来读取，读取完依然为一个dict，例如：</del></p>
+<pre><code>  radec_dict= np.load(&#39;data/GAMA_G15_2_arcdrift-M01_F-specs_T-radec.npy&#39;,allow_pickle=True)[()]</code></pre>
+<p>存放radec的输出文件名是在输入文件名上加radec。可以h5py来读取，例如：</p>
+<pre><code>  import h5py
+  f= h5py.File(&#39;data/GAMA_G15_2_arcdrift-M01_F-specs_T-radec.hdf5&#39;,&#39;r&#39;)
+  print(f.keys())
+  f[&#39;mjd&#39;][:]</code></pre></li>
+</ul></li>
+</ul>
+<h2 id="流量定标后-扣除基线">3. (流量定标后) 扣除基线</h2>
+<p>首先安装mpi4py</p>
+<p>如果已经有了MPI(mpirun,mpiexec)，可以用pip安装</p>
+<pre><code>pip install mpi4py</code></pre>
+<p>如果没有，推荐用anaconda安装，conda会同时安装mpich</p>
+<pre><code>conda install mpi4py</code></pre>
+<p>sub_baseline_mpi.sh的脚本如下：</p>
+<pre><code>#!/bin/bash
+
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+
+for fname in data/*specs_T*.hdf5
+do
+if [[ $fname == *&quot;radec&quot;* ]]; then continue; fi
+echo $fname
+mpiexec -n 30 python -m mpi4py -m fast_python.sub_baseline_mpi $fname
+done</code></pre>
+<ul>
+<li>这里已经要用MPI, OPENBLAS_NUM_THREADS 和 MKL_NUM_THREADS 都设置为1.</li>
+<li><em>mpiexec -n 30</em> 代表用30个线程来执行，根据需要修改30为其它值。</li>
+<li>python -m fast_python.sub_baseline_mpi ：
+<ul>
+<li>后面第一个参数为第1步处理输出的 specs_T*.hdf5或specs_T_XXXX_XXXX.hdf5 (specs_T.npy 或 specs_T_XXXX_XXXX.npy) 结尾的文件。</li>
+<li>程序根据输入文件名去读取对应存radec的文件。即第2步输出的文件名中有’M01’的radec文件。</li>
+<li><code>--f_range</code>： <br/> 指定拟合用的频率范围，后接两个数，空格隔开，下限在前。默认值为输入文件中freq的范围。 <br/> 范围越大，拟合用时越长，并且不是线性增长。</li>
+<li><code>--lam , --deg , --offset</code>： <br/> 去基线时的参数，具体见此目录下 <a href="./subtract_baseline_para.ipynb">subtract_baseline_para.ipynb</a>。</li>
+<li><code>--flux</code>：是否先转换为流量（Jy/beam）后再去基线，目前是考虑天顶角带来的增益后用固定系数转换。</li>
+<li><code>--plot</code>：是否画图并保存在figs的子文件下。一条光谱一个pdf文件（包括XX YY偏振共两张子图）。文件数量可能会很多。</li>
+<li>输出文件名中包含sub_baseline或者flux-sub_baseline的hdf5文件。可以用h5py来读取。</li>
+<li>文件中包括 ‘ra’ (deg), ‘dec’ (deg), ‘mjd’ (Modified Julian Day), ‘freq’ 和 ‘Ta’（或flux）。 ‘Ta’ 为两个偏振温度(分别拟合扣除基线)的平均值。</li>
+</ul></li>
+</ul>
+<h2 id="扣除基线后流量定标可选">4. （扣除基线后）流量定标（可选）</h2>
+<p>flux_after_sub_baseline.sh 里的内容如下：</p>
+<pre><code>#!/bin/bash
+for fname in ./data/*sub_baseline*.hdf5
+do
+  if [[ $fname == *&quot;corr_vel&quot;* ]]; then continue; fi
+  if [[ $fname == *&quot;flux&quot;* ]]; then continue; fi
+  echo $fname
+  python -m fast_python.flux $fname
+done</code></pre>
+<ul>
+<li>fast_python.flux 转换文档为流量（Jy/beam），目前是考虑天顶角带来的增益后用固定系数转换。
+<ul>
+<li>后接上一步没有加 <code>--flux</code> 生成的文件。</li>
+<li>输出文件名中包含sub_baseline-flux的hdf5文件。可以用h5py来读取。</li>
+</ul></li>
+</ul>
+<h2 id="地球运动修正">5. 地球运动修正</h2>
+<p>correct_vel.sh 里的内容如下：</p>
+<pre><code>#!/bin/bash
+
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+
+#for fname in data/*sub_baseline-flux*.hdf5
+#for fname in data/*flux-sub_baseline*.hdf5
+for fname in data/*sub_baseline*.hdf5
+do
+if [[ $fname == *&quot;corr_vel&quot;* ]]; then continue; fi
+echo $fname
+python -m fast_python.corr_vel $fname
+done
+
+</code></pre>
+<ul>
+<li>fast_python.corr_vel 修正频率到参考系<code>--frame</code>，同时给出速度（radio近似）。然后插值使每条光谱采样点一致。
+<ul>
+<li>后接的文件名依赖上面两步参数：
+<ul>
+<li>*sub_baseline*：温度，没有转换为流量</li>
+<li>*sub_baseline-flux*</li>
+<li>*flux-sub_baseline*</li>
+</ul></li>
+<li><code>--frame</code>: HELIOCENT 或者 LSRK。默认为LSRK。</li>
+<li>输出文件名中包含corr_vel的hdf5文件。可以用h5py来读取。</li>
+</ul></li>
+</ul>
+<h2 id="生成fits-cubes-文件">6. 生成fits cubes 文件</h2>
+<p>create_fits_cubes.sh 里的内容如下：</p>
+<pre><code>#!/bin/bash
+
+export OPENBLAS_NUM_THREADS=10
+export MKL_NUM_THREADS=10
+#python -m fast_python.fits_cubes --help
+python -m fast_python.fits_cubes **/data/*-corr_vel*.hdf5 \
+                          --outname ./test_cubes.fits \
+                          --bwidth 60 -p SIN</code></pre>
+<ul>
+<li>这里用 <code>fast_python.fits_cubes</code> 来生成fits cubes文件，程序先生成ra、dec格点，然后找到距离格点中央为<code>--r_cut</code>范围内的谱线然后按<code>--method</code>处理谱线，最后保存在fits文件里。</li>
+<li><code>python -m fast_python.fits_cubes</code>
+<ul>
+<li>后面紧跟的是上一步生成的hdf5文件，支持多个文件路径（空格隔开），支持通配符。程序运行后会首先输出要处理的文件路径，请检查无重复无错误。</li>
+<li><code>--outname</code>: 输出的fits cubes文件路径，需要指定。</li>
+<li><code>--bwidth</code>: ra dec 分格点时的间隔大小，单位为 角秒，默认为60。如果ra和dec采用一样间隔，参数后接一个数字即可，如果不一样，参数后接两个数，空格隔开。ra的间隔在前。</li>
+<li><code>--r_cut</code>: 考虑距离格点中心r_cut范围内谱线。单位为 角秒，默认为90.</li>
+<li><code>--method</code>: r_cut范围内谱线处理方法:
+<ul>
+<li>`<code>mean</code>: 对谱线求平均.</li>
+<li>`<code>median</code>: 对谱线求median值.</li>
+<li>`<code>reweight</code>: Barnes el. al. 2001, MNRAS 322, 486 https://ui.adsabs.harvard.edu/abs/2001MNRAS.322..486B/abstract .</li>
+<li>`<code>gaussian</code>: 待添加。</li>
+</ul></li>
+<li><code>--proj</code>: 投影方式: SIN, AIT, TAN.</li>
+<li><code>--ra_range</code>: ra的范围，后接两个数，空格隔开，下限在前，单位为度。默认值为输入文件里ra的最小值和最大值。</li>
+<li><code>--dec_range</code>: 类似<code>--ra_range</code>。</li>
+</ul></li>
+<li><strong><em>目前存在一个问题：生成的格点所在的ra dec的范围与谱线实际的范围或者是通过参数指定的范围有出入。大部分情况格点ra dec的范围偏大，因此生成的图像周围会有nan值</em></strong></li>
+</ul>
+</body>
+</html>

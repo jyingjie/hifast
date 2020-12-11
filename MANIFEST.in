@@ -1,0 +1,2 @@
+include versioneer.py
+include fast_python/_version.py
