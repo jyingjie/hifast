@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from scipy import ndimage
 from .util import extend_Trues
 
-def mask_rfi_p(T2p, s_sigma=10, chan_smooth_method='gaussian', times_s=1, times=6, ext_add=None):
+def mask_rfi_p(T2p, s_sigma=10, chan_smooth_method='gaussian', times_s=1, times=6, ext_add=0, ext_frac=0):
     """
     T2p: array, shape=(x,N,2); T or flux with two polar and sorted by time
     s_sigma: int; gaussian smooth size along time (axis=0)
@@ -51,6 +51,6 @@ def mask_rfi_p(T2p, s_sigma=10, chan_smooth_method='gaussian', times_s=1, times=
     
     is_rfi = is_rfi & is_rfi_and
     
-    if ext_add is not None:
-        is_rfi = extend_Trues(is_rfi, axis=1, ext_add=ext_add)
+    if ext_add > 0 or ext_frac > 0:
+        is_rfi = extend_Trues(is_rfi, axis=1, ext_add=ext_add, ext_frac=ext_frac)
     return is_rfi

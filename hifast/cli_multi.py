@@ -39,6 +39,8 @@ if __name__ == '__main__':
                        help='')
     parser.add_argument('--ext_add', type=int,
                        help='extend rfi range')
+    parser.add_argument('--ext_frac', type=float,
+                       help='between 0 and 1, extend rfi range')
     
     ## flux calibration
     parser.add_argument('--flux', action='store_true',
@@ -70,6 +72,7 @@ if __name__ == '__main__':
         pr_kwargs['times'] = args.pr_times
         pr_kwargs['times_s'] = args.pr_times_s
         pr_kwargs['ext_add'] = args.ext_add
+        pr_kwargs['ext_frac']= args.ext_frac
     if tr:
         tr_kwargs = {}
         tr_kwargs['method'] = args.tr_method
@@ -80,6 +83,7 @@ if __name__ == '__main__':
             tr_kwargs['times_s'] = args.tr_times
         tr_kwargs['times'] = args.tr_times_s
         tr_kwargs['ext_add'] = args.ext_add
+        tr_kwargs['ext_frac']= args.ext_frac
     #keys= args.key
     # flux
     flux = args.flux

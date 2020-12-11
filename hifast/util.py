@@ -47,7 +47,7 @@ def mask_Trues(arr, leng_lim=20):
     return arr[1:-1]
 
 @apply_along_axis
-def extend_Trues(is_rfi, leng_lim=1, ext_add=0, frac=1./4):
+def extend_Trues(is_rfi, leng_lim=1, ext_add=0, ext_frac=1./4):
     """
     extend "continuous Trues" to left and right
     

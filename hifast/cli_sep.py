@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 import os
+import sys
 import re
 from glob import glob
 
@@ -10,6 +11,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument('fname',
                         help='file name; one of the chunk files')
+    parser.add_argument('-f', '--force', action='store_true',
+                        help='overwriting file if out file exists')
     parser.add_argument('-d', '--n_delay', type=int, required=True,
                        help='time of delay divided by sampling time')
     parser.add_argument('-m', '--n_on', type=int, required=True,
@@ -64,6 +67,25 @@ if __name__ == '__main__':
     outdir = args.outdir
     if outdir is not None:
         os.makedirs(outdir, exist_ok=True)
+        
+    ## check out file 
+    def gen_out_name_base(fname_part, outdir):
+        fname_add = os.path.basename(os.path.dirname(os.path.abspath(fname_part)))
+        out_name_base = os.path.join(outdir, f"{os.path.basename(fname_part)[:-1]}-{fname_add}")
+        return out_name_base
+    out_name_base = gen_out_name_base(fname_part, outdir)
+    fileout =  out_name_base + f"-specs_T.hdf5"
+    fileout_sep = glob(out_name_base + rf"-specs_T_[0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9].hdf5")
+    
+    if os.path.exists(fileout) or len(fileout_sep)>0:
+        if args.force:
+            print(f"will overwrite the existing out file")
+        else:
+            print(f"File exists {fileout}")
+            print(fileout_sep)
+            print('exit... Using -f to overwrite it.')
+            sys.exit()
+            
     start_all, stop_all= args.start, args.stop
     if start_all is None:
         start_all = 1
