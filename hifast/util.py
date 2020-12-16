@@ -340,7 +340,7 @@ def add_extra(fin, _dict=None, fields_add=[]):
     """
     add some fields of fin to _dict
     """
-    fields = ['is_on', 'next_to_cal', 'is_delay', 'Tcal', 'is_extrapo']
+    fields = ['is_on', 'next_to_cal', 'is_delay', 'Tcal', 'is_extrapo', 'vel']
     fields += fields_add
     out_add = {}
     for field in fields:

@@ -13,7 +13,7 @@ import os
 import warnings 
 warnings.filterwarnings("ignore",r'overflow encountered in exp')
 
-def get_baseline(x, ys, axis=None, *, s_method=None, s_sigma=None, average_every=None, exclude=None, verbose=False, method='arPLS', bl_para=None, return_f=False):
+def get_baseline(x, ys, axis=None, *, s_method=None, s_sigma=None, average_every=None, exclude=None, verbose=False, method='arPLS', bl_para=None, return_f=False, check=True):
     """ 
     subtract the baseline of spectra with XX and YY polar.
     Parameters：
@@ -56,7 +56,18 @@ def get_baseline(x, ys, axis=None, *, s_method=None, s_sigma=None, average_every
         ys = average_every_n(ys, average_every, axis=axis, drop=drop)
         if exclude is not None:
             exclude = average_every_n(exclude, average_every, axis=axis, drop=drop).astype('bool')
-    
+    # after smooth(average), check nan, posinf, neginf
+    if check:
+        is_finite = np.isfinite(ys)
+        if not is_finite.all():
+            # replace value as 0 and add to exclude
+            ys = np.copy(ys)
+            ys[~is_finite] = 0.
+            if exclude is not None:
+                exclude = exclude | (~is_finite)
+            else:
+                exclude = ~is_finite
+        del is_finite
     # select baseline method
     if method == 'arPLS':
         if 'sym' in bl_para.keys():
