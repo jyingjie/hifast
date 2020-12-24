@@ -1,21 +1,10 @@
 #  安装 fast_python 模块
 
 
-* 方法一： 用pip直接安装：
-  * 安装
-  
-    ```
-    python -m pip install git+https://fast-obs:XJ7L8JCVtfQz1zop_V_z@gitlab.com/jingyj/hifast.git#egg=hifast --upgrade
-    ```
-    或
-    ```
-    python -m pip install git+https://gitlab.com/jingyj/hifast.git#egg=hifast --upgrade
-    ```
-    随后按照提示输入用户名fast-obs, 接着是fast-obs登录gitlab时用的密码。
-  * 卸载
-    ```
-    pip uninstall hifast
-    ```
+* 方法一： 用pip联网直接安装：
+
+  见 [wikis/Install](../../wikis/Install)
+
 * 方法二： 下载后安装
 
   下载安装包后**先 cd 切换到代码(setup.py)所在目录下**
@@ -209,9 +198,9 @@ mpiexec -n 10 python -m mpi4py -m hifast.cli_baseline_mpi data/XXX_arcdrift-M01_
 
 ## 5. 生成fits cubes 文件
 
-```
-python -m hifast.cli_cube **/data/*-fc*.hdf5 --outname ./test_cubes.fits --bwidth 60 -p SIN
-```
+  ```
+  python -m hifast.cli_cube **/data/*-fc*.hdf5 --outname ./test_cubes.fits --bwidth 60 -p SIN
+  ```
 * 这里用 ```hifast.cli_cube``` 来生成fits cubes文件，程序先生成ra、dec格点，然后找到距离格点中央为```--r_cut```范围内的谱线然后按```--method```处理谱线，最后保存在fits文件里。
 * ```python -m hifast.cli_cube```
   * 后面跟参考性修正后生成的hdf5文件，支持多个文件路径（空格隔开），支持通配符。程序运行后会首先输出要处理的文件路径，请检查无重复无错误。
@@ -233,9 +222,9 @@ python -m hifast.cli_cube **/data/*-fc*.hdf5 --outname ./test_cubes.fits --bwidt
 
 #### 用hifast.sh来对多个文件执行相同的```python -m hifast.cli_xxx```操作
 
-```
-hifast.sh /data/inspur_disk06/fast_data/3047/G15_drift_5/20200606/*_W*0001.fits -n 10 -c "python -m hifast.cli_sep | -d 0 -m 1 -n 1  --step 5  --frange 1369 1394 --smooth poly --s_deg 1 --outdir ./data"
-```
+  ```
+  hifast.sh /data/inspur_disk06/fast_data/3047/G15_drift_5/20200606/*_W*0001.fits -n 10 -c "python -m hifast.cli_sep | -d 0 -m 1 -n 1  --step 5  --frange 1369 1394 --smooth poly --s_deg 1 --outdir ./data"
+  ```
 
 * 这里用通配符来指定19个beam的文件.
 * ```-c``` 参数指定用到的```python -m hifast.cli_xxx```操作。
@@ -249,46 +238,44 @@ hifast.sh /data/inspur_disk06/fast_data/3047/G15_drift_5/20200606/*_W*0001.fits 
   * *files.txt* 内容如下：
   
     ```
-  /data/inspur_disk06/fast_data/3047/G15_drift_5/20200606/G15_drift_5_arcdrift-M01_W_0001.fits
-  /data/inspur_disk06/fast_data/3047/G15_drift_5/20200606/G15_drift_5_arcdrift-M02_W_0001.fits
-  /data/inspur_disk06/fast_data/3047/G15_drift_5/20200606/G15_drift_5_arcdrift-M03_W_0001.fits
-  /data/inspur_disk06/fast_data/3047/G15_drift_5/20200606/G15_drift_5_arcdrift-M04_W_0001.fits
-  /data/inspur_disk06/fast_data/3047/G15_drift_5/20200606/G15_drift_5_arcdrift-M05_W_0001.fits
+    /data/inspur_disk06/fast_data/3047/G15_drift_5/20200606/G15_drift_5_arcdrift-M01_W_0001.fits
+    /data/inspur_disk06/fast_data/3047/G15_drift_5/20200606/G15_drift_5_arcdrift-M02_W_0001.fits
+    /data/inspur_disk06/fast_data/3047/G15_drift_5/20200606/G15_drift_5_arcdrift-M03_W_0001.fits
+    /data/inspur_disk06/fast_data/3047/G15_drift_5/20200606/G15_drift_5_arcdrift-M04_W_0001.fits
+    /data/inspur_disk06/fast_data/3047/G15_drift_5/20200606/G15_drift_5_arcdrift-M05_W_0001.fits
     ```
   
   
   * *commands.par* 内容如下：
   
-    ```
-    python -m hifast.cli_sep | -d 0 -m 1 -n 1  --step 5  --frange 1369 1394 --smooth poly --s_deg 1 --outdir ./data
-  
-    ```
+  ```
+  python -m hifast.cli_sep | -d 0 -m 1 -n 1  --step 5  --frange 1369 1394 --smooth poly --s_deg 1 --outdir ./data
+
+  ```
     
   * 可以执行：
   
-    ```hifast.sh -i files.txt -n 10 -c commands.par```
+  ```hifast.sh -i files.txt -n 10 -c commands.par```
   
-#### 其他示例
-
-##### 计算radec
+##### hifast.sh计算radec
   
-```
-hifast.sh data/*M01*specs_T.hdf5 -c "python -m hifast.cli_radec |  "
-```
+  ```
+  hifast.sh data/*M01*specs_T.hdf5 -c "python -m hifast.cli_radec |  "
+  ```
 
-##### 组合 ```hifast.cli_baseline_mpi``` 和 ```hifast.cli_multi```
+##### hifast.sh 组合 ```hifast.cli_baseline_mpi``` 和 ```hifast.cli_multi```
+
   * *commands.par* 内容如下：
   
-    ```
-    # 续行符 "\" 之后不能有空格
-    mpiexec -n 3 python -m mpi4py -m hifast.cli_baseline_mpi | --method arPLS --lam 1e7 --outdir .
-    python -m hifast.cli_multi  |  --tr --tr_method smooth --tr_s_sigma 5 --tr_n_continue 100 --fc \
-         --keep_rfi --keep_polar
-  
-    ```
+  ```
+  # 续行符 "\" 之后不能有空格
+  mpiexec -n 3 python -m mpi4py -m hifast.cli_baseline_mpi | --method arPLS --lam 1e7 --outdir .
+  python -m hifast.cli_multi  |  --tr --tr_method smooth --tr_s_sigma 5 --tr_n_continue 100 --fc \
+        --keep_rfi --keep_polar
+
+  ```
   * 执行：
   
-    ```hifast.sh data/*M*specs_T.hdf5  -n 10 -c commands.par```
-    
-    <br/> 先运行```mpiexec```这行去基线，然后```hifast.sh```会自动把生成的文件输入到```python -m hifast.cli_multi``` 这行。
-    <br/> 注意 ```mpiexec```这行执行时会占用 ```3 * 10 = 30``` 个线程。
+  ```hifast.sh data/*M*specs_T.hdf5  -n 10 -c commands.par```
+  <br/> 先运行```mpiexec```这行去基线，然后```hifast.sh```会自动把生成的文件输入到```python -m hifast.cli_multi``` 这行。
+  <br/> 注意 ```mpiexec```这行执行时会占用 ```3 * 10 = 30``` 个线程。
