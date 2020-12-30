@@ -71,7 +71,7 @@ def extend_Trues(is_rfi, leng_lim=1, ext_add=0, ext_frac=1./4):
 
     leng = (ind_neg- ind_posi)
     is_use= leng>= leng_lim # not needed
-    l_ext= np.ceil(leng[is_use]*frac).astype('int') + ext_add
+    l_ext= np.ceil(leng[is_use]*ext_frac).astype('int') + ext_add
     #l_ext= np.full(len(leng),5)
     for i,n in zip(ind_neg[is_use],l_ext):
         is_rfi[i+1:i+n+1]= True

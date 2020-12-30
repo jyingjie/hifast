@@ -37,9 +37,9 @@ if __name__ == '__main__':
                        help='')
     parser.add_argument('--tr_times_s', type=float, default=1.5,
                        help='')
-    parser.add_argument('--ext_add', type=int,
+    parser.add_argument('--ext_add', type=int, default=0,
                        help='extend rfi range')
-    parser.add_argument('--ext_frac', type=float,
+    parser.add_argument('--ext_frac', type=float, default=0.,
                        help='between 0 and 1, extend rfi range')
     
     ## flux calibration
