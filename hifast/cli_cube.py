@@ -117,8 +117,8 @@ def _stack_spec(vel, Ta, vrange=None):
     _Ta = []
     for i,j in zip(vel,Ta):
         is_use= (i>=vmin)&(i<=vmax)
-        _vel+= [i[is_use]]
-        _Ta+= [j[:,is_use]]
+        _vel+= [i[:][is_use]]
+        _Ta+= [j[:][:,is_use]]
 
     vel_len= np.array([len(i) for i in _vel])
     len_use= vel_len.min()
