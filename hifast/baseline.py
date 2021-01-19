@@ -25,7 +25,7 @@ def get_baseline(x, ys, axis=None, *, s_method=None, s_sigma=None, average_every
     """
     if exclude is not None:
         if exclude.shape != ys.shape:
-            raise(ValueError('exclue should has same shape with ys'))
+            raise(ValueError('exclude should has same shape with ys'))
     # check if ys is one dim      
     if ys.ndim == 1:
         ys = ys[:, None]
@@ -139,7 +139,7 @@ def get_baseline(x, ys, axis=None, *, s_method=None, s_sigma=None, average_every
         else:
             return bls
 
-def get_baseline_mp(n, x, ys, *args, **kwargs):
+def get_baseline_mp(n, x, ys, *, exclude=None,  **kwargs):
     """
     testing...
     only support axis=1
@@ -151,9 +151,14 @@ def get_baseline_mp(n, x, ys, *args, **kwargs):
         q.put(res)
     ps = []
     qs = []
-    for yy in np.array_split(ys, n):
+    if exclude is not None:
+        exclude_list = np.array_split(exclude, n)
+    else:
+        exclude_list = [None,] * n
+    ys_list = np.array_split(ys, n)
+    for ys, exclude in zip(ys_list, exclude_list):
         q = Queue()
-        p = Process(target=get_baseline_q, args=(q, x, yy, *args), kwargs=kwargs)
+        p = Process(target=get_baseline_q, args=(q, x, ys), kwargs={'exclude':exclude, **kwargs})
         if 'verbose' in kwargs.keys():
             kwargs['verbose']=False
 
@@ -338,13 +343,13 @@ class BL_sin_poly(BL_base):
     ratio:
     niter:
     """
-    def __init__(self, f, ptype='poly', **kwarg):
+    def __init__(self, f, ptype='poly', opt_para={}, **kwarg):
         super().__init__(**kwarg)
         if np.isscalar(f):
             f = [f]
         self.f = f
         self.ptype = ptype
-        self.set_opt_para()
+        self.set_opt_para(**opt_para)
     def _fun(self, x, *arg):
         arg = np.asarray(arg)
         coef = arg[-(self.deg + 1):]

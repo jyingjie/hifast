@@ -216,7 +216,7 @@ def boxcar_smooth1d(vals, sigma, axis=0):
     
     win_shape= [1 if i!=axis else 2*int(sigma)+1  for i in range(len(vals.shape))]
     win_g= np.ones(win_shape[axis]).reshape(win_shape)
-    print(win_g)
+    #print(win_g)
     res= signal.convolve(vals, win_g, method='fft',mode='same') / np.sum(win_g)
     return res
 
