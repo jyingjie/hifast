@@ -110,7 +110,8 @@ def _stack_spec(vel, Ta, vrange=None):
     """
     if vrange is None:
         ranges= np.array([np.min([i[0]for i in vel]), np.max([i[-1] for i in vel])])
-        vmax,vmin= ranges.max(), ranges.min()
+        delta = (vel[0][0] - vel[0][1])/2.
+        vmax,vmin= ranges.max() + delta, ranges.min()-delta
     else:
         vmax,vmin=vrange[1],vrange[0]
     _vel = []
