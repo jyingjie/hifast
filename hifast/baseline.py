@@ -93,6 +93,8 @@ def get_baseline(x, ys, axis=None, *, s_method=None, s_sigma=None, average_every
     elif method == 'sin_poly_2':
         BL = BL_sin_poly_2(**bl_para)
         use_x = True
+    elif method == 'original':
+        return ys
     else:
         raise(ValueError('method does not support'))
     
