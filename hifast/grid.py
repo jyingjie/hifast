@@ -23,9 +23,9 @@ def pixel_spec(spec, dis, method='reweight', sigma=1.275088, statistic='median')
     dis: degree
     sigma: arcmin
     """
+    sigma = sigma/60*u.deg
     if method=="reweight":
         #Barnes el. al. 2001, MNRAS 322, 486 https://ui.adsabs.harvard.edu/abs/2001MNRAS.322..486B/abstract
-        sigma= sigma/60*u.deg
         if statistic=='median':
             wei_m= np.nanmedian(np.exp(- (dis/sigma)**2/2))
             return np.nanmedian(spec,axis=0)/wei_m

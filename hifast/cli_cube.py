@@ -167,17 +167,19 @@ if __name__ == '__main__':
                        help='dec_range; unit: deg')
     parser.add_argument('--range3', type=float,nargs=2,
                        help='freq or vel range')
+    parser.add_argument('--type3', choices=['vel', 'freq'], default='vel',
+                       help='third axis in cube,  freq or vel')
     parser.add_argument('--bwidth', type=float, default=[60.],nargs='+',
                        help='unit: arc second')
     parser.add_argument('--outname', required=True,
                        help='output file name, full path')
-    parser.add_argument('-k', '--key',
+    parser.add_argument('-k', '--key', choices=['flux', 'Ta'],
                        help='properties to make fits cube. flux or Ta')
     parser.add_argument('-p','--proj', default='AIT', #choices=['AIT', 'SIN', 'TAN'],
                        help='fits wcs projection')
     parser.add_argument('--r_cut', type=float, default=90,
                        help='spectra inside r_cut from the grid point will be considered; unit: arc second')
-    parser.add_argument('-m','--method', default='mean', choices=['reweight', 'mean', 'median'],
+    parser.add_argument('-m','--method', default='mean', choices=['reweight', 'mean', 'median', 'gaussian'],
                        help='method to process the spec in r_cut')
     parser.add_argument('-t','--threshold', type=float,
                        help='vals less than threshold will be masked as nan')
@@ -189,6 +191,7 @@ if __name__ == '__main__':
     bwidth= args.bwidth
     outname= args.outname
     key= args.key
+    type3 = args.type3
     proj= args.proj
     r_cut= args.r_cut
     r_cut=r_cut/60 # convert to arc minute
@@ -239,7 +242,7 @@ if __name__ == '__main__':
         # merge polar
         if Ta_.ndim == 3:
             Ta_ = np.mean(Ta_, axis=2, dtype='float64')
-        vel_ = f['vel']
+        vel_ = f[type3]
         if range3 is not None:
             is_ = (vel_[:] >= range3[0]) & (vel_[:] <= range3[1])
             vel_ = vel_[:][is_]
