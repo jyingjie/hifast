@@ -9,7 +9,7 @@ import os
 from os.path import basename
 import re
 
-from fast_python.gain import Get_gain
+from .gain import Get_gain
 
 def get_ratio(nB, freq=None):
     ratios_para= pd.read_json(os.path.dirname(__file__)+'/data/beam_ratios.json')

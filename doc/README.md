@@ -33,7 +33,7 @@
 ## 准备
 
  + 在任意位置新建文件夹 test, 在test下新建文件夹 data ,
- + 下载 Tcal文件夹(  https://pan.cstcloud.cn/s/AfnCB96cT2s 提取码：cqwy  ) 放到你的 home 目录 . (*已更新，添加20200531的噪音管文件*)
+ + 下载 Tcal文件夹(  https://pan.cstcloud.cn/s/AfnCB96cT2s 提取码：cqwy  ) 放到你的 home 目录 . (*2020-12-07后的代码需更新此文件*)
 
   **Note:**
 
@@ -50,7 +50,7 @@
 
   ```
   fname="/data/inspur_disk06/fast_data/3047/GAMA_G15/20191215/XXX_0001.fits"
-  python  -m hifast.cli_sep $fname -d 0 -m 1 -n 120 --step 5 --frange 1329 1429 --smooth poly --s_deg 1 --outdir ./data
+  python -m hifast.cli_sep $fname -d 0 -m 1 -n 120 --step 5 --frange 1329 1429 --smooth poly --s_deg 1 --outdir ./data
   # or
   python -m hifast.cli_sep $fname -d 0 -m 1 -n 120 --step 5 --frange 1020 1445 --smooth gaussian --s_sigma 5 --outdir ./data
   # or 
@@ -70,7 +70,7 @@
    * ```--smooth```: 平滑方法。gaussian, poly 或者 mean（默认）。
      <br/>噪音管定标，在每一个Tcal on off的周期里, 温度在不同频率的值为
      <br/>   <img src="https://render.githubusercontent.com/render/math?math=T_{on}(\nu)= (\frac{P_{cal\_on}(\nu)}{(P_{cal\_on}(\nu)-P_{cal\_off}(\nu))_{smooth}}-1)*T_{cal}(\nu)_{smooth}">
-     <br/>   <img src="https://render.githubusercontent.com/render/math?math=T_{off}(\nu)= \frac{P_{cal\_on}(\nu)}{(P_{cal\_on}(\nu)-P_{cal\_off}(\nu))_{smooth}}*T_{cal}(\nu)_{smooth}">
+     <br/>   <img src="https://render.githubusercontent.com/render/math?math=T_{off}(\nu)= \frac{P_{cal\_off}(\nu)}{(P_{cal\_on}(\nu)-P_{cal\_off}(\nu))_{smooth}}*T_{cal}(\nu)_{smooth}">
      * mean: 适用于freq区间（```--frange```）比较小（至少小于10?）。对freq内的所有流量值平均。
      * poly: 适用于freq区间比较小。多项式拟合，需要同时加```--s_deg```参数，```s_deg```为 1 时为线性拟合，为0时等同于mean，        默认值为1。
      * gaussian：适用于freq区间比较大，需要同时加```--s_sigma```参数，```s_sigma```需要小于freq区间的三分之一。平滑结果在        频率两端会不太准，因此推荐freq区间比需要的范围稍大一些。
@@ -130,7 +130,7 @@ conda install mpi4py
 pip install mpi4py
 ```
 
-```hifast.cli_baseline_mpi``` : 拟合基线。合并RADEC信息到谱线文件也在这步。
+```hifast.cli_baseline_mpi``` : 拟合基线。同时合并对应XXX-radec.hdf5文件内的ra和dec信息到谱线文件。
 
 * 示例
 ```
@@ -156,7 +156,7 @@ mpiexec -n 10 python -m mpi4py -m hifast.cli_baseline_mpi data/XXX_arcdrift-M01_
   * 输出文件名中包含```bld```或者```flux-bld```的hdf5文件。可以用h5py来读取。
   * 文件中包括 'ra' (deg), 'dec' (deg), 'mjd' (Modified Julian Day), 'freq' 和 'Ta'（或flux）。
 
-## 4. （扣除基线后）流量定标； rfi标记；静止坐标系（frame）修正
+## 4. （扣除基线后）流量定标；rfi标记；静止坐标系（frame）修正
 ```hifast.cli_multi``` ：流量定标，rfi 标记和坐标系（frame）修正。
 
 * 示例：
@@ -189,7 +189,7 @@ mpiexec -n 10 python -m mpi4py -m hifast.cli_baseline_mpi data/XXX_arcdrift-M01_
     * ```--tr_n_continue```: 一个“信号”持续多少条就标记为rfi
   
   * ```--flux```
-  * ```--fc```从望远镜所在的地平参考性修正到太阳或者LSR为中心的坐标系。同时会合并两个偏振；如果存在 is_rfi，则会把rfi替换为nan。
+  * ```--fc```从望远镜所在的地平参考系修正到太阳或者LSR为中心的参考系。同时会合并两个偏振；如果存在 is_rfi，则会把rfi替换为nan。
     * ```--frame```: 参考系选择，HELIOCENT 或者 LSRK
     * ```--keep_rfi```: 不替换rfi为nan
     * ```--keep_polar```: 不合并两个偏振
@@ -215,7 +215,7 @@ mpiexec -n 10 python -m mpi4py -m hifast.cli_baseline_mpi data/XXX_arcdrift-M01_
   * ```--proj```: 投影方式: SIN, AIT, TAN. 
   * ```--ra_range```: ra的范围，后接两个数，空格隔开，下限在前，单位为度。默认值为输入文件里ra的最小值和最大值。
   * ```--dec_range```: 类似```--ra_range```。
-  * ```--range3```: 第三轴（频率或者速度）的范围
+  * ```--range3```: 限制第三轴（速度）的范围，类似```--ra_range```。
 * ***目前存在一个问题：生成的格点所在的ra dec的范围与谱线实际的范围或者是通过参数指定的范围有出入。大部分情况格点ra dec的范围偏大，因此生成的图像周围会有nan值***(*已修正*)
 
 # hifast.sh 组合脚本
