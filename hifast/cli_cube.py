@@ -84,6 +84,18 @@ def gen_header(xrange, yrange, x_delta, y_delta, z, proj, vel_type, frame, histo
             header['HISTORY']= his
     return header
 
+def header_3to2(header_3d):
+    import copy
+    header_2d = copy.deepcopy(header_3d)
+    
+    keys_rm = ['CRPIX3','CDELT3','CUNIT3','CTYPE3','CRVAL3','NAXIS3',]
+    for key in keys_rm:
+        header_2d.pop(key)
+    header_2d['WCSAXES'] = 2
+    header_2d['NAXIS'] = 2
+    
+    return header_2d
+
 def gen_grid_radec(header):
     """
     https://github.com/radio-astro-tools/spectral-cube/blob/master/spectral_cube/base_class.py; world
@@ -297,3 +309,7 @@ if __name__ == '__main__':
     hdu = fits.PrimaryHDU(out, header=header)
     print(f'Saving to {outname}.')
     hdu.writeto(outname,overwrite=False)
+    # save the spec count in each grid
+    outname_c = '.'.join(outname.split('.')[:-1]) + '-count.fits'
+    hdu = fits.PrimaryHDU(nums, header=header_3to2(header))
+    hdu.writeto(outname_c, overwrite=True)
