@@ -26,8 +26,8 @@ setuptools.setup(
     ext_package='hifast/sofa',
     ext_modules = [sofa_lib],
     scripts=['scripts/hifast.sh'],
-    install_requires=['numpy>=1.12','matplotlib','scipy','h5py','pandas>=1.0','xlrd','astropy','PyAstronomy',
-                      'scikit-learn','tqdm'],
+    install_requires=['numpy>=1.12','matplotlib','scipy','h5py','pandas>=1.0','xlrd','openpyxl','astropy','PyAstronomy',
+                      'tqdm'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

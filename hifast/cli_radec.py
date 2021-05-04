@@ -51,7 +51,6 @@ import json
 import numpy as np
 import scipy.interpolate as interp
 import pandas as pd
-import xlrd
 import h5py
 
 from astropy import units as u
@@ -96,11 +95,13 @@ def process_ky(kyck_files, mjds_src, tlim, ky_type=None):
         this=True
         utcoffset = 8*u.hour
         #read ky data
-        sheet_name='整控-馈源舱数据'
-        book = xlrd.open_workbook(kyck_file)
-        if sheet_name not in book.sheet_names():
-            sheet_name=0 #if sheet_name is not exist, use first sheet
-        kyck_data = pd.read_excel(book,sheet_name=sheet_name)
+        sheet_name = '整控-馈源舱数据'
+        try:
+            kyck_data = pd.read_excel(kyck_file, sheet_name=sheet_name, engine='openpyxl')
+        except Exception as err:
+            print(err)
+            print('try to use the first sheet')
+            kyck_data = pd.read_excel(kyck_file, sheet_name=0, engine='openpyxl')
         if len(kyck_data)==0:
             print('empty sheet')
             continue
