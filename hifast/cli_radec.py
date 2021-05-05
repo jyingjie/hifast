@@ -160,16 +160,16 @@ def kydata2radec(kyck_data, mjd, nBs='All',ky_type=None):
     if nBs== 'All':
         nBs= range(1,20)
    
-    multibeamAngle= kyck_data['SDP_AngleM']
+    multibeamAngle= kyck_data['SDP_AngleM'].to_numpy()
 
     #实测中心波束相对中心的全局坐标
-    globalCenterX = kyck_data['SDP_PhaPos_X']
-    globalCenterY = kyck_data['SDP_PhaPos_Y']
-    globalCenterZ = kyck_data['SDP_PhaPos_Z']
+    globalCenterX = kyck_data['SDP_PhaPos_X'].to_numpy()
+    globalCenterY = kyck_data['SDP_PhaPos_Y'].to_numpy()
+    globalCenterZ = kyck_data['SDP_PhaPos_Z'].to_numpy()
     #实测下平台的全局姿态角
-    globalYaw = kyck_data['SDP_SwtDPose_Y']
-    globalPitch = kyck_data['SDP_SwtDPose_P']
-    globalRoll = kyck_data['SDP_SwtDPose_R']
+    globalYaw = kyck_data['SDP_SwtDPose_Y'].to_numpy()
+    globalPitch = kyck_data['SDP_SwtDPose_P'].to_numpy()
+    globalRoll = kyck_data['SDP_SwtDPose_R'].to_numpy()
     
     if ky_type=='drift':
         std= np.std(multibeamAngle[-10:])/np.pi*180
