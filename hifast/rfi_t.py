@@ -9,6 +9,7 @@ import scipy.interpolate as interp
 from scipy import ndimage
 
 from .util import average_every_n, boxcar_smooth1d, mask_Trues, extend_Trues
+from .util import smooth1d
 from scipy import ndimage
 
 def get_mean_rms(freq, T2p, **kwargs):
@@ -34,7 +35,8 @@ def get_rfi_folder(freq, T2p, folder, times, ext_add=0, ext_frac=0):
     return is_rfi[inds]
 
 
-def get_rfi_c(T2p, n_continue=50, s_sigma=10, chan_smooth_method='gaussian', times_s=2, times=5, ext_add=0, ext_frac=0):
+def find_signal(T2p, *, s_method_t='gaussian', s_sigma_t=10, s_method_freq='gaussian', s_sigma_freq=5, 
+              times_s=2, times=5, ext_add=0, ext_frac=0):
     """
     T2p: array, shape=(x,N,2); T or flux with two polar and sorted by time
     s_sigma: int; gaussian smooth size along time (axis=0)
@@ -42,17 +44,17 @@ def get_rfi_c(T2p, n_continue=50, s_sigma=10, chan_smooth_method='gaussian', tim
     times_s: # for smoothed channel
     times: # for not smoothed channel
     """
-    if s_sigma is not None: 
-        T2p_s = ndimage.gaussian_filter1d(T2p, s_sigma, axis=0)
+    # smooth along time
+    if s_method_t is not None: 
+        T2p_s = smooth1d(T2p, s_method_t, s_sigma_t, axis=0)
     else:
         T2p_s = T2p
 
     # smooth channel
-    chan_smooth_sigma=5
-    if chan_smooth_method == 'gaussian':
-        T2p_sc = ndimage.gaussian_filter1d(T2p_s, chan_smooth_sigma, axis=1)
-    elif chan_smooth_method == 'boxcar':
-        T2p_sc = util.boxcar_smooth1d(T2p_s, chan_smooth_sigma, axis=1)
+    if s_method_freq is not None:
+        T2p_sc = smooth1d(T2p_s, s_method_freq, s_sigma_freq, axis=1)
+    else:
+        T2p_sc = T2p_s
 
     # estimated rms
     pers = np.nanpercentile(T2p_s, [10, 50, 90], axis=1)
@@ -68,13 +70,50 @@ def get_rfi_c(T2p, n_continue=50, s_sigma=10, chan_smooth_method='gaussian', tim
         is_exceeded = extend_Trues(is_exceeded, axis=1, ext_add=ext_add, ext_frac=ext_frac)
     #return is_exceeded
     # n continue along t axis as rfi
-    is_rfi = mask_Trues(is_exceeded, axis=0, leng_lim=n_continue)
+    return is_exceeded
+
+def get_rfi_c(T2p, n_continue=50, return_sig=False, **kwargs):
+    is_sig = find_signal(T2p, **kwargs)
+    is_rfi = mask_Trues(is_sig, axis=0, leng_lim=n_continue)
+    if return_sig:
+        return is_rfi, is_sig
     return is_rfi
 
 def mask_rfi_t(freq, T2p, method='smooth', **kwargs):
     if method=='smooth':
-        is_rfi = get_rfi_c(T2p, **kwargs)
+        return get_rfi_c(T2p, **kwargs)
     elif method=='folder':
-        is_rfi = get_rfi_folder(freq, T2p, **kwargs)
+        return get_rfi_folder(freq, T2p, **kwargs)
     return is_rfi
-            
+
+## compare "signal" with rfi
+def cross_rfi_1d(arr, is_rfi, frac_match=0.3):
+    """
+    is_rfi:
+    frac_match:
+    """
+    leng_lim = 1
+    # add False in the beginning and ending of arr
+    arr = np.hstack([[False],arr,[False]])
+    diff = np.diff(arr.astype('int16'))
+
+    ind_neg = np.where(diff==-1)[0]
+    ind_posi = np.where(diff==1)[0]
+
+    leng = (ind_neg - ind_posi)
+    is_use = leng > leng_lim 
+
+    for i,j,_leng in zip(ind_posi[is_use],ind_neg[is_use], leng[is_use]):
+        leng_in = np.sum(is_rfi[i:j])
+        if leng_in/_leng < frac_match:
+            arr[i+1:j+1] = False
+    return arr[1:-1] | is_rfi
+
+def cross_rfi_axis1_d2(arr, is_rfi, inplace=False, **kwarg):
+    if not inplace:
+        out = np.zeros_like(is_rfi)
+    else:
+        out = is_rfi
+    for i in range(len(arr)):
+        out[i] = cross_rfi_1d(arr[i], is_rfi[i], **kwarg)
+    return out

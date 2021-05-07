@@ -29,10 +29,16 @@ if __name__ == '__main__':
                        help=" 'folder': merge spectra every 'folder'; smooth: gaussian smooth spectra along time axis")
     parser.add_argument('--tr_folder', type=int, default=40, 
                        help='')
-    parser.add_argument('--tr_s_sigma', type=float, default=5,
-                       help='gaussian smooth size for spectra smoothing along time axis')
-    parser.add_argument('--tr_n_continue', type=float, default=40,
-                       help='gaussian smooth size for spectra smoothing along time axis')
+    parser.add_argument('--tr_s_method_t', default='gaussian', 
+                       help='smoothing method along time axis')
+    parser.add_argument('--tr_s_sigma_t', type=int, default=10, 
+                       help='')
+    parser.add_argument('--tr_s_method_freq', default='gaussian', 
+                       help='smoothing method along time freq')
+    parser.add_argument('--tr_s_sigma_freq', type=float, default=5,
+                       help='')
+    parser.add_argument('--tr_n_continue', type=int, default=100,
+                       help='')
     parser.add_argument('--tr_times', type=float, default=6.,
                        help='')
     parser.add_argument('--tr_times_s', type=float, default=1.5,
@@ -41,6 +47,8 @@ if __name__ == '__main__':
                        help='extend rfi range')
     parser.add_argument('--ext_frac', type=float, default=0.,
                        help='between 0 and 1, extend rfi range')
+    parser.add_argument('--cross_frac', type=float, default=0.,
+                       help='between 0 and 1')
     
     ## flux calibration
     parser.add_argument('--flux', action='store_true',
@@ -79,6 +87,10 @@ if __name__ == '__main__':
         if tr_kwargs['method'] == 'folder':
             tr_kwargs['folder'] = args.tr_folder
         if tr_kwargs['method'] == 'smooth':
+            tr_kwargs['s_method_t'] = args.tr_s_method_t
+            tr_kwargs['s_sigma_t'] = args.tr_s_sigma_t
+            tr_kwargs['s_method_freq'] = args.tr_s_method_freq
+            tr_kwargs['s_sigma_freq'] = args.tr_s_sigma_freq
             tr_kwargs['n_continue'] = args.tr_n_continue
             tr_kwargs['times_s'] = args.tr_times
         tr_kwargs['times'] = args.tr_times_s
@@ -153,7 +165,16 @@ if __name__ == '__main__':
         is_rfi |= mask_rfi_p(T, **pr_kwargs)
     if tr:
         from .rfi_t import mask_rfi_t
-        is_rfi |= mask_rfi_t(freq, T, **tr_kwargs)
+        if tr_kwargs['method'] == 'smooth' and args.cross_frac is not None:
+            tr_kwargs['return_sig'] = True
+            is_rfi_t, is_sig = mask_rfi_t(freq, T, **tr_kwargs)
+            is_rfi |= is_rfi_t
+            del(is_rfi_t)
+            from .rfi_t import cross_rfi_axis1_d2
+            is_rfi = cross_rfi_axis1_d2(is_sig, is_rfi, frac_match=args.cross_frac)
+            del(is_sig)
+        else:
+            is_rfi |= mask_rfi_t(freq, T, **tr_kwargs)  
     if flux:
         from .flux import cali_src
         nB = int(re.findall(r'-M[0-1][0-9]',fname)[-1][2:])

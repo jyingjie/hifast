@@ -132,27 +132,7 @@ def down_sample(data,dfactor):
     data_d= np.stack(data_d,axis=2)
     return data_d
 
-def save_dict_hdf5(fname, dict_in, header=None, mode='w'):
-    """
-    fname: str
-    dict_in: dict; keys of the dict_in are str, value are numpy array like.
-    header: dict
-    """
-    try:
-        f= h5py.File(fname,mode)
-    except OSError:
-        if mode=='w':
-            from datetime import datetime
-            os.rename(fname,fname+'.bak.empty.'+datetime.now().strftime("%Y%m%d-%H%M%S"))
-            f= h5py.File(fname,mode)
-    if header is not None:
-        # sometimes hdf5 raises error if track_order = True
-        f.create_group('Header',track_order=False)
-        for key in header.keys():
-            f['Header'].attrs[key]= header[key]
-    for key in dict_in.keys():
-        f[key]= dict_in[key]
-    f.close()
+
     
 def freq2vlsr(freq, ra, dec, mjd):
     '''
@@ -254,6 +234,104 @@ def smooth_axis1_d3(vals, x=None, method=None, sigma=None, deg=None):
         return res
 
     
+def convolve1d(arr, kernel1d, axis=-1, mode='reflect', method='auto'):
+    '''
+    One-dimensional convolving kernel1d along axis of arr
+
+    Parameters
+    ----------
+    arr : array_like
+        The input array.
+    kernel1d : array_like
+        dimension = 1
+    axis : int, optional
+        The axis of `input` along which to calculate. Default is -1.
+    mode : str{'reflect', 'none'}, optional
+        The mode parameter determines how "arr" is extended beyond its boundaries.
+    method : str{'auto', 'direct', 'fft'} 
+        see scipy.signal.convolve
+    '''
+    # boundary
+    if mode == 'reflect':
+        extend = int(len(kernel1d)/2)
+        
+        sli_h = [slice(None)]*arr.ndim
+        sli_h[axis] = slice(None, extend)
+        sli_h = tuple(sli_h)
+
+        sli_t = [slice(None)]*arr.ndim
+        sli_t[axis] = slice(-extend,None)
+        sli_t = tuple(sli_t)
+
+        sli_flip = [slice(None)]*arr.ndim
+        sli_flip[axis] = slice(None, None, -1)
+        sli_flip = tuple(sli_flip)
+
+        if extend > arr.shape[axis]:
+            n_add_ker = int(np.ceil(extend/arr.shape[axis]))//2*2+1  # odd number
+            if n_add_ker < 3:
+                n_add_ker = 3
+            if n_add_ker > 9:
+                raise(ValueError('kernel length is too larger that arr'))
+            arr_ = np.concatenate([arr,] + [arr[sli_flip], arr,]*((n_add_ker-1)//2), axis=axis)
+        else:
+            arr_ = arr    
+        tail = arr_[sli_t][sli_flip]
+        head = arr_[sli_h][sli_flip]
+        arr = np.concatenate((head, arr, tail),axis=axis)
+        del(arr_, tail, head)
+    elif mode == 'none':
+        extend = None
+    else:
+        raise(ValueError("mode not support"))
+    # change kernel shape    
+    ker_shape = [1,]*arr.ndim
+    ker_shape[axis] = len(kernel1d)
+    kernel = kernel1d.reshape(ker_shape)
+    # here,  np.sum(kernel) is same effect with np.sum(win_g,axis=axis) coz other axis shape is 1. 
+    res = signal.convolve(arr, kernel, method=method, mode='same') / np.sum(kernel)
+    if extend is not None:
+        sli_res = [slice(None)]*arr.ndim
+        sli_res[axis] = slice(extend,-extend)
+        sli_res = tuple(sli_res)
+        res = res[sli_res]
+    return res
+
+def smooth1d(arr, method, sigma, axis=-1):
+    '''
+    One-dimensional smooth arr along axis using different method
+
+    Parameters
+    ----------
+    arr : array_like
+        The input array.
+    method : str{{'gaussian_fft', 'boxcar', 'gaussian', 'median'}}
+        'gaussian_fft': use scipy.signal.convolve; sigma is std; extend boundaries using 'reflect'.
+        'boxcar': use scipy.signal.convolve; average every int(2*sigma+1); extend boundaries using 'reflect'.
+        'gaussian': use scipy.ndimage.gaussian_filter1d; sigma is std
+        'median': use scipy.ndimage.median_filter; calcute the median value every int(2*sigma+1)
+    axis : int, optional
+        The axis of `input` along which to smooth. Default is -1.
+    '''
+    if 0 in arr.shape:
+        warnings.warn("input array is empty")
+        return arr
+    if method == 'gaussian_fft':
+        kernel1d = signal.windows.gaussian(2*(4*sigma)+1, sigma)
+        return convolve1d(arr, kernel1d, axis=axis)
+    elif method == 'boxcar':
+        kernel1d = np.ones(int(2*sigma+1))
+        return convolve1d(arr, kernel1d, axis=axis)
+    elif method == 'gaussian':
+        return ndimage.gaussian_filter1d(arr, sigma, axis=axis)
+    elif method == 'median':
+        return median_filter_1d(arr, size=int(2*sigma+1), axis=axis)
+    else:
+        raise(ValueError("method not supports"))
+
+
+## cal
+    
 def read_tcal_sav(nB, s_type='w', tcal_dir=None, mode='high', date='20190115'):
     """
     nB: int
@@ -319,7 +397,8 @@ def read_tcal(nB, s_type='w', tcal_dir=None, mode='high', date='auto', mjd=None)
         return read_tcal_sav(nB, s_type, tcal_dir, mode, date='20190115')
     else:
         return read_tcal_fits(nB, s_type, tcal_dir, mode, date=date)
-    
+
+## io
 def rec_his(**kwargs):
     import sys
     import json
@@ -350,3 +429,25 @@ def add_extra(fin, _dict=None, fields_add=[]):
         return out_add
     else:
         _dict.update(out_add)
+
+def save_dict_hdf5(fname, dict_in, header=None, mode='w'):
+    """
+    fname: str
+    dict_in: dict; keys of the dict_in are str, value are numpy array like.
+    header: dict
+    """
+    try:
+        f= h5py.File(fname,mode)
+    except OSError:
+        if mode=='w':
+            from datetime import datetime
+            os.rename(fname,fname+'.bak.empty.'+datetime.now().strftime("%Y%m%d-%H%M%S"))
+            f= h5py.File(fname,mode)
+    if header is not None:
+        # sometimes hdf5 raises error if track_order = True
+        f.create_group('Header',track_order=False)
+        for key in header.keys():
+            f['Header'].attrs[key]= header[key]
+    for key in dict_in.keys():
+        f[key]= dict_in[key]
+    f.close()
