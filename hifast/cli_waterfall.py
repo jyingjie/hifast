@@ -10,7 +10,7 @@ import os
 from scipy import interpolate as inter
 
 #import mpl_rcParams_paper
-plt.switch_backend('agg')
+
 
 def _tight_ra(ra):
     ra_s= np.sort(ra)
@@ -40,13 +40,14 @@ def plot(fname, ax=None, imshow_kwargs={}, vlines=[-80, -600], colorbar=True, se
         f_axis = f['freq'][()]
     else:
         raise()
-    try:
-        t_axis = f['ra'][()]
-        t_axis = _tight_ra(t_axis)
-        t_axis_2 = f['dec'][()]
-    except:
-        t_axis = t_axis_2 = np.arange(len(vals))
-
+#     try:
+#         t_axis = f['ra'][()]
+#         t_axis = _tight_ra(t_axis)
+#         t_axis_2 = f['dec'][()]
+#     except:
+#         t_axis = t_axis_2 = np.arange(len(vals))
+    t_axis = t_axis_2 = np.arange(len(vals))
+    
     if vals.ndim ==3:
         vals = vals[...,0]
     
@@ -96,6 +97,10 @@ if __name__ == '__main__':
                        help='')
     parser.add_argument('--vlines', type=float, nargs='+',
                        help='')
+    parser.add_argument('--show', action='store_true',
+                       help='')
+    parser.add_argument('--sec_ytick', action='store_true',
+                       help='')
     
     args = parser.parse_args()
     fnames = args.fnames
@@ -103,11 +108,12 @@ if __name__ == '__main__':
     outdir = args.outdir
     xrange = args.xrange
     
+    if not args.show:
+        plt.switch_backend('agg')
     fnames.sort()
-    single = False
+    single = args.single
     if len(fnames)==1:
         single = True
-    single = args.single
     imshow_kwargs = {}
     imshow_kwargs['vmax'] = args.vmax
     imshow_kwargs['vmin'] = args.vmin
@@ -125,7 +131,7 @@ if __name__ == '__main__':
             fig, axs = plt.subplots(nrows, ncols, figsize=(160/3,90/3), sharex=True, sharey=True)
             axs = axs.flatten()
             for i, (fname, ax) in enumerate(zip(_files['fname'], axs[:19])):
-                sec_ytick = True if (i+1)%ncols==0 else False
+                sec_ytick = True if (i+1)%ncols==0 and args.sec_ytick else False
                 im, _ = plot(fname, ax, imshow_kwargs, vlines=vlines, sec_ytick=sec_ytick, xrange=xrange)
             fig.colorbar(im, ax= axs[-1])
             ax = axs[-1]
@@ -133,6 +139,9 @@ if __name__ == '__main__':
             ax.legend()
             
             fig.tight_layout()
+            if args.show:
+                fig.show()
+                input()
             fig.savefig(f'{outdir}/{key}.19.pdf')
             fig.clear()
     else:
@@ -141,11 +150,14 @@ if __name__ == '__main__':
             nrows=1
             ncols=1
             fig, ax = plt.subplots(nrows, ncols, figsize=(15,12), sharex=True, sharey=True)
-            sec_ytick = True
+            sec_ytick = args.sec_ytick
             im, _ = plot(fname, ax, imshow_kwargs, vlines=vlines, sec_ytick=sec_ytick, xrange=xrange)
             fig.colorbar(im, ax= ax)
             ax.set_title(fbasename)
             
             fig.tight_layout()
+            if args.show:
+                fig.show()
+                input()
             fig.savefig(f'{outdir}/{fbasename}.pdf')
             fig.clear()
