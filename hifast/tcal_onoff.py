@@ -462,7 +462,7 @@ class Tcal_onoff(FastRawData):
         fname_add = os.path.basename(os.path.dirname(os.path.abspath(self.fname_part)))
         self.out_name_base = os.path.join(outdir, f"{os.path.basename(self.fname_part)[:-1]}-{fname_add}")
         
-    def __call__(self, outdir='./', step=None, header=None, sep_save=False, save_p_cal=False):
+    def __call__(self, outdir='./', step=None, header=None, sep_save=False, save_p_cal=False, cali=True):
         """
         get T, mjd etc, and save in hdf5 file
         
@@ -485,7 +485,7 @@ class Tcal_onoff(FastRawData):
 
         Ts=[]
         mjds = []
-        tc_inter= self.get_Tcal_s()
+        tc_inter = self.get_Tcal_s() if cali else 'none'
         extra = self.get_extra()
         p_cal_s_list = []
         inds_ton_list = []
@@ -500,14 +500,17 @@ class Tcal_onoff(FastRawData):
             sort = np.argsort(inds)
             mjd = self.get_field(inds[sort], field='UTOBS') # have sorted
             
-            count_tcal_res = self.get_count_tcal(inds_on, inds_off)
+            if cali:
+                count_tcal_res = self.get_count_tcal(inds_on, inds_off)
+            else:
+                count_tcal_res = [self.get_field(inds_on, 'DATA',), self.get_field(inds_off, 'DATA', close_file=True)]
             T = np.vstack(count_tcal_res[:2])
             if save_p_cal:
                 p_cal_s_list += [count_tcal_res[2]]
                 inds_ton_list += [count_tcal_res[3]]
             else:
                 del count_tcal_res
-            T = T*tc_inter
+            if cali: T = T*tc_inter
             T = T[sort] #sort T
             T = T.astype('float32') # finally convert to float32
             

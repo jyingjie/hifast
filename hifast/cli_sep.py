@@ -52,6 +52,8 @@ if __name__ == '__main__':
                         help='input hdf5 power of cal file')
     parser.add_argument('--save_p_cal', action='store_true',
                         help='save power of cal to file')
+    parser.add_argument('--not_cali', action='store_true',
+                        help='save power of cal to file')
     
     args = parser.parse_args()
     
@@ -127,5 +129,5 @@ if __name__ == '__main__':
                       smooth=smooth, s_para=s_para, dfactor=dfactor,
                       med_filter_size=med_filter_size, noise_mode=noise_mode, noise_date=noise_date,
                       med_filter_size_cal=med_filter_size_cal, p_cal_fname=p_cal_fname)
-    spec(outdir=outdir, step=step, header=header, sep_save=sep_save, save_p_cal=save_p_cal)
+    spec(outdir=outdir, step=step, header=header, sep_save=sep_save, save_p_cal=save_p_cal, cali=(not args.not_cali))
     
