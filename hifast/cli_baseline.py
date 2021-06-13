@@ -84,6 +84,8 @@ if __name__ == '__main__':
                        help='')
     parser.add_argument('--exclude_m', type=int, default=0,
                        help='')
+    parser.add_argument('--no_radec', action='store_true',
+                       help='')
     
     args = parser.parse_args()
     nproc = args.nproc
@@ -105,6 +107,7 @@ if __name__ == '__main__':
             print('exit... Using -f to overwrite it.')
             sys.exit()
     exclude_m = args.exclude_m
+    no_radec = args.no_radec
     
 import numpy as np
 import h5py
@@ -244,12 +247,13 @@ if __name__ == '__main__':
 
     fs = h5py.File(file_spec,'r')
     mjd = fs['mjd'][()]
-    if 'ra' not in fs.keys():
-        ra, dec, is_extrapo = get_radec(file_spec, nB, nB_radec, mjd)
-    else:
-        ra = fs['ra'][()]
-        dec = fs['dec'][()]
-        is_extrapo = None
+    if not no_radec:
+        if 'ra' not in fs.keys():
+            ra, dec, is_extrapo = get_radec(file_spec, nB, nB_radec, mjd)
+        else:
+            ra = fs['ra'][()]
+            dec = fs['dec'][()]
+            is_extrapo = None
     if 'T' in fs.keys():
         T = fs['T'][()]
         outfield = 'Ta'
@@ -267,8 +271,9 @@ if __name__ == '__main__':
 
     ind_sort = np.argsort(mjd)
     mjd = mjd[ind_sort]
-    ra = ra[ind_sort]
-    dec = dec[ind_sort]
+    if not no_radec:
+        ra = ra[ind_sort]
+        dec = dec[ind_sort]
     T = T[ind_sort]
     freq = fs['freq'][:]
 
@@ -300,8 +305,6 @@ if __name__ == '__main__':
      
   
     if flux:
-        ra = comm.scatter(ra, root=0)
-        dec = comm.scatter(dec, root=0)
         from .flux import cali_src
         print('Flux calibrating ...')
         T = cali_src(T, nB, freq, cali_fname, ra=ra, dec=dec, mjd=mjd)
@@ -399,12 +402,14 @@ if __name__ == '__main__':
     print(f"Saving...")
     dict_out= {}
     dict_out['mjd'] = mjd
-    dict_out['ra'] = ra
-    dict_out['dec'] = dec
+    if not no_radec:
+        dict_out['ra'] = ra
+        dict_out['dec'] = dec
+        if is_extrapo is not None:
+            dict_out['is_extrapo'] = is_extrapo
     dict_out[outfield] = T.astype('float32')
     dict_out['freq'] = freq
-    if is_extrapo is not None:
-        dict_out['is_extrapo'] = is_extrapo
+    
     #save file
     from .util import add_extra
     add_extra(fs, dict_out)

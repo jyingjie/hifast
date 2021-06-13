@@ -424,7 +424,10 @@ def add_extra(fin, _dict=None, fields_add=[]):
     out_add = {}
     for field in fields:
         if field in fin.keys():
-            out_add[field] = fin[field][:]
+            try:
+                out_add[field] = fin[field][:]
+            except:
+                pass
     if _dict is None:
         return out_add
     else:

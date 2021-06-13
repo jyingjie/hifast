@@ -24,7 +24,7 @@ def _tight_ra(ra):
         ra[is_c]= ra[is_c]-360
         return ra
 
-def plot(fname, ax=None, imshow_kwargs={}, vlines=[-80, -600], colorbar=True, sec_ytick=False, xrange=None):
+def plot(fname, ax=None, imshow_kwargs={}, vlines=None, colorbar=True, sec_ytick=False, xrange=None):
     f = h5py.File(fname,'r')
     if 'T' in f.keys():
         vals = f['T']
@@ -61,6 +61,17 @@ def plot(fname, ax=None, imshow_kwargs={}, vlines=[-80, -600], colorbar=True, se
 #         imshow_kwargs = {}
     else:
         fig = None
+    if 'vmax' in imshow_kwargs.keys():
+        if 'per' == imshow_kwargs['vmax'][:3]:
+            imshow_kwargs['vmax'] = np.nanpercentile(vals, float(imshow_kwargs['vmax'][3:]), interpolation='nearest')
+        else:
+            imshow_kwargs['vmax'] = float(imshow_kwargs['vmax'])
+    if 'vmin' in imshow_kwargs.keys():
+        if 'per' == imshow_kwargs['vmin'][:3]:
+            imshow_kwargs['vmin'] = np.nanpercentile(vals, float(imshow_kwargs['vmin'][3:]), interpolation='nearest')
+        else:
+            imshow_kwargs['vmin'] = float(imshow_kwargs['vmin'])
+            
     im = ax.imshow(vals[:], aspect='auto', extent=(f_axis[0], f_axis[-1], t_axis[0], t_axis[-1]), origin='lower', **imshow_kwargs)
     #rasterized=False
     if vlines is not None:
@@ -88,12 +99,12 @@ if __name__ == '__main__':
     parser.add_argument('--outdir', default='./',
                        help='default is ./')
     parser.add_argument('-s', '--single', action='store_true',
-                       help="19 beams in 19 figures")
+                       help="")
     parser.add_argument('--xrange', type=float, nargs=2,
                        help='x axis range')
-    parser.add_argument('--vmin', type=float,
+    parser.add_argument('--vmin', type=str, default='per0.1',
                        help='')
-    parser.add_argument('--vmax', type=float,
+    parser.add_argument('--vmax', type=str, default='per95',
                        help='')
     parser.add_argument('--vlines', type=float, nargs='+',
                        help='')
