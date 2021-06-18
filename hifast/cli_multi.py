@@ -161,26 +161,26 @@ if __name__ == '__main__':
         if is_rfi is None:
             is_rfi = np.full(T.shape[:2], False, dtype=bool)
     if pr:
-        from .rfi_polar import mask_rfi_p
+        from .core.rfi_polar import mask_rfi_p
         is_rfi |= mask_rfi_p(T, **pr_kwargs)
     if tr:
-        from .rfi_t import mask_rfi_t
+        from .core.rfi_t import mask_rfi_t
         if tr_kwargs['method'] == 'smooth' and args.cross_frac is not None:
             tr_kwargs['return_sig'] = True
             is_rfi_t, is_sig = mask_rfi_t(freq, T, **tr_kwargs)
             is_rfi |= is_rfi_t
             del(is_rfi_t)
-            from .rfi_t import cross_rfi_axis1_d2
+            from .core.rfi_t import cross_rfi_axis1_d2
             is_rfi = cross_rfi_axis1_d2(is_sig, is_rfi, frac_match=args.cross_frac)
             del(is_sig)
         else:
             is_rfi |= mask_rfi_t(freq, T, **tr_kwargs)  
     if flux:
-        from .flux import cali_src
+        from .core.flux import cali_src
         nB = int(re.findall(r'-M[0-1][0-9]',fname)[-1][2:])
         T = cali_src(T, nB, freq, cali_fname, ra=ra, dec=dec, mjd=mjd)
     if fc:
-        from .corr_vel import freq2vel, frame_correct
+        from .core.corr_vel import freq2vel, frame_correct
         if is_rfi is not None:
             if keep_rfi:
                 is_rfi, _ = frame_correct(is_rfi, freq, mjd, ra, dec, frame=frame, interp_kind='nearest')
@@ -205,10 +205,9 @@ if __name__ == '__main__':
     
     #save file
     print('Saving...')
-    from .util import add_extra
+    from .utils.io import add_extra, rec_his, save_dict_hdf5
     add_extra(f, dict_out)
     f.close()
-    from .util import rec_his, save_dict_hdf5
     header=rec_his(args=args)
     if fc:
         header['frame']= frame

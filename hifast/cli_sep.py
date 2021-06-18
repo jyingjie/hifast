@@ -120,8 +120,8 @@ if __name__ == '__main__':
     print('n_delay, n_on, n_off: ', n_delay, n_on, n_off)
     print('freq range: ', frange)
     #record history
-    from .util import rec_his
-    from .tcal_onoff import Tcal_onoff
+    from .utils.io import rec_his
+    from .core.tcal_onoff import Tcal_onoff
     header = rec_his(args=args)
     spec = Tcal_onoff(fname_part=fname_part, n_delay=n_delay, n_on=n_on, n_off=n_off, 
                       start=start_all, stop=stop_all, 

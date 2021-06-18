@@ -58,8 +58,8 @@ from astropy import units as u
 from astropy.time import Time
 from astropy.utils import iers
 #iers.Conf.iers_auto_url.set("https://datacenter.iers.org/data/9/finals2000A.all")
-from .kypara2radec import kypara2radec
-from .util import save_dict_hdf5
+from .core.kypara2radec import kypara2radec
+from .utils.io import rec_his, save_dict_hdf5
     
 def guess_ky(fname, obs_mjd, ky_dir=None):
     """
@@ -349,7 +349,6 @@ if __name__ == '__main__':
                 radec[key]=radec[key][1:]
     #saving
     ##record history
-    from .util import rec_his
     header=rec_his(args=args)
     
     print('Saving...')

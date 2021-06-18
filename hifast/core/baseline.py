@@ -7,7 +7,7 @@ import numpy as np
 import scipy.interpolate as interp
 from scipy import ndimage
 from scipy import optimize
-from .util import average_every_n, boxcar_smooth1d
+from ..utils.misc import average_every_n, boxcar_smooth1d
 
 import os
 import warnings 

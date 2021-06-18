@@ -27,7 +27,7 @@ setuptools.setup(
     ext_modules = [sofa_lib],
     scripts = glob.glob('scripts/*.sh'),
     install_requires=['numpy>=1.12','matplotlib','scipy','h5py','pandas>=1.0','xlrd','astropy','PyAstronomy',
-                      'scikit-learn','tqdm'],
+                     'tqdm'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

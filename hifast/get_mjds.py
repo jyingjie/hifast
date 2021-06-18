@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from fast_python.tcal_onoff import tcal_onoff
-from fast_python.util import save_dict_hdf5
+from .core.tcal_onoff import tcal_onoff
+from .utils.io import save_dict_hdf5
 from glob import glob
 import numpy as np
 import os

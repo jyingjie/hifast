@@ -112,8 +112,8 @@ if __name__ == '__main__':
 import numpy as np
 import h5py
 from scipy import ndimage
-from .baseline import get_baseline, get_baseline_mp
-from .util import extend_Trues, boxcar_smooth1d, median_filter_1d
+from .core.baseline import get_baseline, get_baseline_mp
+from .utils.misc import extend_Trues, boxcar_smooth1d, median_filter_1d
 
 def gen_radec_file(file_spec, paras):
     import subprocess
@@ -411,10 +411,9 @@ if __name__ == '__main__':
     dict_out['freq'] = freq
     
     #save file
-    from .util import add_extra
+    from .utils.io import rec_his, save_dict_hdf5, add_extra
     add_extra(fs, dict_out)
     fs.close()
-    from .util import rec_his, save_dict_hdf5
     header=rec_his(args=args)
     if header_in is not None: header.update(header_in)
     save_dict_hdf5(fileout, dict_out, header=header)

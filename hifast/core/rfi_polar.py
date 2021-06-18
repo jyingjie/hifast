@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 #from fast_python.baseline import baseline
 from scipy import ndimage
-from .util import extend_Trues
+from ..utils.misc import extend_Trues
 
 def mask_rfi_p(T2p, s_sigma=10, chan_smooth_method='gaussian', times_s=1, times=6, ext_add=0, ext_frac=0):
     """

@@ -6,11 +6,9 @@
 import numpy as np
 import h5py
 from .tcal_onoff_old import tcal_onoff
-from .util import read_tcal
-from .util import smooth_axis1_d3
-from .util import save_dict_hdf5
-from .util import down_sample
-from .util import median_filter_axis1_d3
+from ..utils.tcal import read_tcal
+from ..utils.misc import smooth_axis1_d3, down_sample, median_filter_axis1_d3
+from ..utils.io import save_dict_hdf5
 
 from astropy import constants as const
 from astropy.time import Time
@@ -271,7 +269,7 @@ if __name__ == '__main__':
     print('m,n: %d, %d'%(n1,n2))
     print('freq range',freql, freqh)
     #record history
-    from .util import rec_his
+    from ..utils.io import rec_his
     header=rec_his(args=args)
     if args.test:
         test(outdir,start_all)

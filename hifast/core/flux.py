@@ -119,7 +119,7 @@ if __name__ == '__main__':
     dict_out['mjd']=mjd
     dict_out['flux']=flux.astype('float32')
     #save file
-    from .util import rec_his,save_dict_hdf5
+    from ..utils.io import rec_his,save_dict_hdf5
     header=rec_his(args=args)
     if header_in is not None: header.update(header_in)
     save_dict_hdf5(fileout, dict_out, header=header)

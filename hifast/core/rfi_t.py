@@ -8,8 +8,7 @@ import numpy as np
 import scipy.interpolate as interp
 from scipy import ndimage
 
-from .util import average_every_n, boxcar_smooth1d, mask_Trues, extend_Trues
-from .util import smooth1d
+from ..utils.misc import average_every_n, boxcar_smooth1d, mask_Trues, extend_Trues, smooth1d
 from scipy import ndimage
 
 def get_mean_rms(freq, T2p, **kwargs):

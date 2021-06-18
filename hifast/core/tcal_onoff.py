@@ -15,11 +15,9 @@ import scipy.interpolate as interp
 import h5py
 from astropy.io import fits
 
-from .util import read_tcal
-from .util import smooth_axis1_d3
-from .util import save_dict_hdf5
-from .util import down_sample
-from .util import median_filter_axis1_d3
+from ..utils.tcal import read_tcal
+from ..utils.misc import smooth_axis1_d3, down_sample, median_filter_axis1_d3
+from ..utils.io import save_dict_hdf5
 
 class FastRawData(object):
     """ RAW data from FAST observations.
