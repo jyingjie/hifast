@@ -1,4 +1,4 @@
 
 from ._version import get_versions
-__version__ = get_versions()['version']
+__version__ = "0.0.1"
 del get_versions
