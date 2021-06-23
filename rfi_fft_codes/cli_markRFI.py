@@ -34,6 +34,10 @@ if __name__ == '__main__':
     ## time rfi
     parser.add_argument('--time_rfi', action='store_true',
                         help='find time rfi')
+    parser.add_argument('--lf', action='store_true',
+                        help='find long time time rfi')
+    parser.add_argument('--sf', action='store_true',
+                        help='find short time time rfi')
     # short freq
     parser.add_argument('--sf_frange', type=float, nargs=2,
                        help='freq range exists short-freq time rfi')
@@ -120,9 +124,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     fname = args.fname
     outdir = args.outdir
-
-    time_rfi = args.time_rfi
-    
+ 
     mask_all_theory = args.mask_all_theory
     freq_from_theory = args.freq_from_theory
     mask_thr = args.mask_thr
@@ -214,9 +216,14 @@ if __name__ == '__main__':
     ####################### time RFI ################################
     t_rfi = np.zeros_like(T,dtype = 'bool')
     
+    time_rfi = args.time_rfi
+    longf_rfi = args.lf
+    shortf_rfi = args.sf
+    
+    if (longf_rfi == True) or (shortf_rfi == True):
+        time_rfi = True
+    
     if time_rfi:
-        longf_rfi = True
-        shortf_rfi = True
         
         lf_beams = args.lf_beams
         if lf_beams is not None:
@@ -314,7 +321,8 @@ if __name__ == '__main__':
     if is_rfi is None:
         #is_rfi = is_rfi & (~protect_use)
         pd_rfi = np.full(T.shape[:2], False, dtype=bool)
-        rfi_freq_list = np.full((T.shape[0],len(theory)+50),np.nan)
+        if save_rfi_list:
+            rfi_freq_list = np.full((T.shape[0],len(theory)+50),np.nan)
         
         log.info("Looking for RFI...")
         for tn in tqdm(range(T.shape[0])):

@@ -8,8 +8,8 @@ G15,eg:
 ```
 python cli_markRFI.py $subname --outdir ./data \
         --time_rfi --lf_beams ['05','06','13'] \
-        --sf_frange 1380 1382 --sf_times 10 --sf_thr 10 --sf_rfi_last 20 --sf_T_thr .3 \
-        --lf_frange 1400 1450 --lf_times 1.5 --lf_thr 0 --lf_rfi_last 50 --lf_ext 10 \
+        --sf --sf_frange 1380 1382 --sf_times 10 --sf_thr 10 --sf_rfi_last 20 --sf_T_thr .3 \
+        --lf --lf_frange 1400 1450 --lf_times 1.5 --lf_thr 0 --lf_rfi_last 50 --lf_ext 10 \
         \
         --s_method_freq gaussian --s_sigma_freq 3 --s_method_t boxcar --s_sigma_t 7 \
         --rfi_thr 3 --rms_frange 1400 1403 --mw_frange 1419 1425 --rfi_groups 'two groups' \
@@ -19,7 +19,7 @@ python cli_markRFI.py $subname --outdir ./data \
 ```
 ### 时域
 
-* --time_rfi
+* --time_rfi、--sf、--lf
 
 标记时域上突然出现的RFI，根据占据的频率长度，分为short-freq/long-freq。对该频率区间内的所有谱线做频率方向的平均后，画出一维的图。
 
@@ -64,8 +64,8 @@ python cli_markRFI.py $subname --outdir ./data \
   ```
   python cli_markRFI.py $subname --outdir ./data \
         --time_rfi --lf_beams ['05','06','13'] \
-        --sf_frange 1380 1382 --sf_times 10 --sf_thr 10 --sf_rfi_last 20 --sf_T_thr .3 \
-        --lf_frange 1400 1450 --lf_times 1.5 --lf_thr 0 --lf_rfi_last 50 --lf_ext 10 \
+        --sf --sf_frange 1380 1382 --sf_times 10 --sf_thr 10 --sf_rfi_last 20 --sf_T_thr .3 \
+        --lf --lf_frange 1400 1450 --lf_times 1.5 --lf_thr 0 --lf_rfi_last 50 --lf_ext 10 \
         \
         --s_method_freq gaussian --s_sigma_freq 3 --s_method_t boxcar --s_sigma_t 7 \
         --rfi_thr 3 --rms_frange 1400 1403 --mw_frange 1419 1425 --rfi_groups 'two groups' \
