@@ -97,7 +97,10 @@ def get_startend(is_rfi,rfi_width_lim = 10,ext_sec= 30):
     if end_[-1]<start_[-1]:
         start_ = np.delete(start_,-1)
 
-    starend_use = (end_-start_)>rfi_width_lim
+    if isinstance(rfi_width_lim,int)|isinstance(rfi_width_lim,float):
+        starend_use = (end_-start_)>rfi_width_lim
+    elif len(rfi_width_lim) == 2:
+        starend_use = ((end_-start_)>rfi_width_lim[0])&((end_-start_)<rfi_width_lim[1])
     
     if starend_use.any() == False:
         raise ValueError("No Trues meet width condition.")
@@ -212,23 +215,28 @@ def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,**kwargs):
     
     return fcenter1,fcenter2,fcenter3,fc0
 
-def polyfit1order(item,freq_step=8.1,plot = False,pdf = None):
-    x = np.around((item-item[0])/freq_step)
+def polyfit1order(item,freq_step=8.1,plot = False,pdf = None,x_start = '1st point'):
+    if x_start == 'zero':
+        x = np.around(item/freq_step)
+    elif x_start == '1st point':
+        x = np.around((item-item[0])/freq_step)
     pfit = np.polyfit(x,item,1)
     pfunc = np.poly1d(pfit)
     if plot:
                
         if pdf is not None:
             plt.switch_backend('agg')
-        plt.figure()
-        plt.plot(x,pfunc(x),label = f'k = {pfunc[1]:.3f}')
-        plt.plot(x,item,'x',label = f'b = {pfunc[0]:.2f}')
-        plt.legend()
+        fig,ax = plt.subplots()
+        ax.plot(x,pfunc(x),label = f'k = {pfunc[1]:.3f}')
+        ax.plot(x,item,'x',label = f'b = {pfunc[0]:.2f}')
+        ax.legend()
+        ax.grid()
         if pdf is not None:
             pdf.savefig();plt.close()
     return pfunc
 
 def mask_RFI(freq,is_rfi,theory,mask_all_theory = False,freq_from_theory = None,**kwargs):
+    # fix width
     rfi_width_lim = kwargs['rfi_width_lim']
     ext_sec = kwargs['ext_sec']
     
@@ -247,6 +255,63 @@ def mask_RFI(freq,is_rfi,theory,mask_all_theory = False,freq_from_theory = None,
         bigrfi = bigrfi | bigrfi2
     
     return bigrfi
+
+def find_edge_old(spec,vel,peak_position,step,rms_thresh,ext_times,Print=False):
+    start = deepcopy(peak_position)
+    part_rms = rms(spec,vel,rms_vrange=[start-step/2,start+step/2])
+    while part_rms > rms_thresh:
+        start += -step
+        if start < min(vel):
+            break
+        part_rms = rms(spec,vel,rms_vrange=[start-step/2,start+step/2])           
+    
+    end = deepcopy(peak_position)
+    part_rms = rms(spec,vel,rms_vrange=[end-step/2,start+end/2])
+    while part_rms > rms_thresh:
+        end += step
+        if end > max(vel):
+            break
+        part_rms = rms(spec,vel,rms_vrange=[end-step/2,end+step/2]) 
+      
+    edge = np.array([start,end]) + np.array([-1,1]) * ext_times * step
+    edge[edge < min(vel)] = min(vel)
+    edge[edge > max(vel)] = max(vel)
+    if Print:
+        print(start,end)  
+        print(peak_position,edge)
+    return edge
+
+def mask_RFI_old(spec,freq,is_rfi,theory0,mark_rfi_width,**kwargs):
+    flim_l = theory0 - mark_rfi_width/2
+    flim_r = theory0 + mark_rfi_width/2
+    
+    rfi_width_lim = kwargs['rfi_width_lim']
+    ext_sec = kwargs['ext_sec']
+    
+    start,end = get_startend(is_rfi,rfi_width_lim=rfi_width_lim/2,ext_sec= ext_sec)
+    bigrfi = np.full(is_rfi.shape[0],False)
+    for s,e in zip(start,end):
+        fs,fe = freq[s],freq[e]
+        mark = (theory > fs) & (theory < fe)
+        if mark.any() == True:
+            bigrfi[s:e] = True
+            
+    bigrfi2 = deepcopy(bigrfi)
+    #mw_rfi_use = np.empty(0);theory0_mw = np.empty(0)
+    for j in range(len(flim_l)):
+        rfi_part = (freq > flim_l[j])&(freq < flim_r[j])
+        rspec = deepcopy(spec)[rfi_part]
+        
+        edge = find_edge(rspec,freq[rfi_part],peak_position = theory0[j],
+                         step=chan_step*fdelta,rms_thresh=RMS,ext_times=ext_times,Print=False)
+        edge_use = (freq >= edge[0])&(freq <= edge[1])
+        bigrfi2[edge_use] = True
+        if (theory0[j]>1420)&(theory0[j]<1421.5):
+            edge_use = (freq >= edge[0]-1)&(freq <= edge[1]+1)
+            #mw_rfi_use = deepcopy(edge_use);theory0_mw = theory0[j]
+    
+    return bigrfi2       
+            
 
 def find_RFI(spec,freq,is_rfi,is_rfi_mw,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge = 0,
              plot = False,pdf = None,ylim = None,rfi_fit_use = 'two groups',

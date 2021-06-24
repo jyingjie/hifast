@@ -110,6 +110,8 @@ if __name__ == '__main__':
                        help='flux calibration')
     parser.add_argument('-c', '--cali_fname',
                        help='quasar calibration file name')
+    parser.add_argument('--keep_polar',action='store_true',
+                       help='keep polar')
     
     parser.add_argument('--keep_rfi', action='store_true',
                        help='keep rfi')
@@ -142,6 +144,7 @@ if __name__ == '__main__':
     flux = args.flux
     cali_fname=args.cali_fname
     
+    keep_polar = args.keep_polar
     keep_rfi = args.keep_rfi
     plot = args.plot
     save_rfi_list = args.save_rfi_list
@@ -197,6 +200,8 @@ if __name__ == '__main__':
         outfield = 'flux'
         
     if len(T.shape) == 3:
+        if keep_polar:
+            T3 = deecopy(T)
         T = np.mean(T, axis=2, dtype='float64')    
     
     T = T[ind_sort]           
@@ -363,7 +368,12 @@ if __name__ == '__main__':
         rfi_mask[:,per_use] = True
     
     if not keep_rfi:
-        T_ori[rfi_mask] = np.nan  
+        if keep_polar: 
+            T_ret = T3
+            T_ret[rfi_mask,:] = np.nan
+        else:
+            T_ret = T_ori
+            T_ret[rfi_mask] = np.nan  
 
     if plot:    
         print(" 'Wait for plotting patiently, you must.' Master Yoda said")
@@ -379,11 +389,11 @@ if __name__ == '__main__':
     if flux:
         from hifast.flux import cali_src
         nB = int(re.findall(r'-M[0-1][0-9]',fname)[-1][2:])
-        T_ori = cali_src(T_ori, nB, freq, cali_fname, ra=ra, dec=dec, mjd=mjd)
+        T_ret = cali_src(T_ret, nB, freq, cali_fname, ra=ra, dec=dec, mjd=mjd)
     
     # out dict
-    dict_out={}
-
+    dict_out={}  
+        
     if pd_rfi is not None:
         dict_out['is_rfi'] = rfi_mask
     dict_out['freq'] = freq
@@ -391,7 +401,7 @@ if __name__ == '__main__':
         dict_out['ra'] = ra
         dict_out['dec'] = dec
     dict_out['mjd'] = mjd
-    dict_out[outfield] = T_ori.astype('float32')
+    dict_out[outfield] = T_ret.astype('float32')
     if save_rfi_list:
         dict_out['rfi_list'] = rfi_freq_list
     #save file

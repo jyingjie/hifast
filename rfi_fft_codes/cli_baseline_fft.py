@@ -85,10 +85,11 @@ def fit_ripple(data_rmrfi_low_mw, method, plot = False,**fit_args):
     
     global freq,fdelta,is_rfi_num,not_rfi_num,ori_shape
     sw_freq = fit_args['sw_freq']
-    rfi_freq_step = fit_args['rfi_freq_step'] 
     amp_thr = fit_args['amp_thr'] 
     sw_n = fit_args['sw_n'] 
-
+    rfi_8mhz = fit_args['rfi_8mhz']
+    rfi_freq_step = fit_args['rfi_freq_step'] 
+    
     if method == 'rfft':
         log.info(f"Fit baseline ripple with {method} method ...")
         
@@ -99,36 +100,40 @@ def fit_ripple(data_rmrfi_low_mw, method, plot = False,**fit_args):
         x = fftf.x
         amp_data = fftf.amp
         loc1 = np.argmin(np.abs((x - sw_freq)))
-        x_loc16 = np.arange(0,x[-1],rfi_freq_step)
-
-        N = freq.shape[0]
-        
-        fs = 1/fdelta
-        loc16 = np.around(x_loc16 / (fs/N)).astype('int')
-        # two sides
-        loc16_ = np.hstack((loc16 - 1,loc16,loc16 + 1))
-        loc16_.sort()
-
-        use16 = np.full(len(x),False)
-        use16[loc16_] = True;use16[loc1] = False ; use16[0] = False
-        use16 = use16 &  (amp_data >= amp_thr) 
-
         use = (np.abs(np.arange(len(x))-loc1) < sw_n) & (amp_data >= amp_thr) 
-
-        from scipy.interpolate import interp1d
-        x_ = deepcopy(x)
-        # interplate
+        
         amp_data_inpd = deepcopy(amp_data)
-        for ti in tqdm(range(amp_data.shape[0])):
-            x_mask = x_[~use16[ti]]
-            amp_data_mask = amp_data[ti][~use16[ti]]
-            amp_data_interp = interp1d(x_mask,amp_data_mask,kind='linear')#,fill_value="extrapolate")
-            amp_data_inpd[ti][use16[ti]] = amp_data_interp(x_[use16[ti]])
+        
+        if rfi_8mhz:
+            x_loc16 = np.arange(0,x[-1],rfi_freq_step)
+            
+            N = freq.shape[0]
+            fs = 1/fdelta
+            loc16 = np.around(x_loc16 / (fs/N)).astype('int')
+            # two sides
+            #loc16_ = np.hstack((loc16 - 1,loc16,loc16 + 1))
+            #loc16_.sort()
+
+            use16 = np.full(len(x),False)
+            use16[loc16] = True;use16[loc1] = False ; use16[0] = False
+            use16 = use16 &  (amp_data >= amp_thr) 
+            
+            from scipy.interpolate import interp1d
+            x_ = deepcopy(x)
+            # interplate
+            for ti in tqdm(range(amp_data.shape[0])):
+                x_mask = x_[~use16[ti]]
+                amp_data_mask = amp_data[ti][~use16[ti]]
+                amp_data_interp = interp1d(x_mask,amp_data_mask,kind='linear')#,fill_value="extrapolate")
+                amp_data_inpd[ti][use16[ti]] = amp_data_interp(x_[use16[ti]])
+        
         amp_data_inpd = amp_data - amp_data_inpd
         amp_data_inpd[:,0] = amp_data[:,0]
+          
         amp_data_inpd[use] = amp_data[use]
         amp_data_inpd[amp_data_inpd < 0] = 0
-        
+
+
         if plot:
             tn = not_rfi_num[0]
     
@@ -139,7 +144,8 @@ def fit_ripple(data_rmrfi_low_mw, method, plot = False,**fit_args):
             ax.stem(x[is_],amp_data_inpd[tn,is_],linefmt='--',markerfmt ='C1o',label = 'sw fft')
             ax.text(x[loc1],.1,f'{loc1}')
             ax.plot(x[use[tn]],np.zeros_like(x[use[tn]]),'co',label = f'near {x[loc1]:.4f} $\mu$s ')
-            ax.plot(x[loc16],np.zeros_like(loc16),'gs',label = f'step {rfi_freq_step:.4f} $\mu$s ')
+            if rfi_8mhz:
+                ax.plot(x[loc16],np.zeros_like(loc16),'gs',label = f'step {rfi_freq_step:.4f} $\mu$s ')
             ax.axhline(amp_thr,color = 'k',linestyle='--')
             ax.grid();ax.set_xlim(0,3)
             ax.set_xlabel('k [$\mu$s]')
@@ -202,16 +208,19 @@ if __name__ == '__main__':
                        help='method to remove ripples')
     parser.add_argument('--sw_freq', type=float, default=0.9254, 
                        help='standing waves freq(\mu s) in Fourier space')
-    parser.add_argument('--rfi_freq_step', type=float, default=0.0617283950617284, 
-                       help='big RFI linspace step, freq(\mu s) in Fourier space, nearly 1/16')
     parser.add_argument('--amp_thr', type=float, default=35, 
                        help='above amptitude threshold will be chosed')
     parser.add_argument('--sw_n', type=int, default=5, 
                        help='channel numbers near 1mhz to be chosed')
     
+    parser.add_argument('--rfi_8mhz', action='store_true',
+                       help='remove 8.1 mhz components ?')
+    parser.add_argument('--rfi_freq_step', type=float, 
+                       help='big RFI linspace step, freq(\mu s) in Fourier space, nearly 1/16')
+    
     
     parser.add_argument('-T', '--trans', action='store_true',
-                       help='')
+                       help='trans')
     #parser.add_argument('--keep_polar', action='store_true',
     #                   help='keep two polarizations')
     parser.add_argument('--fill_rfi', default='nan', choices=['nan','noise','rfi'],
@@ -277,9 +286,12 @@ if __name__ == '__main__':
     fit_args = {}
     if fft_method in ['rfft']:
         fit_args['sw_freq'] = args.sw_freq
-        fit_args['rfi_freq_step'] = args.rfi_freq_step
         fit_args['amp_thr'] = args.amp_thr
         fit_args['sw_n'] = args.sw_n
+        fit_args['rfi_8mhz'] = args.rfi_8mhz 
+        fit_args['rfi_freq_step'] = args.rfi_freq_step
+        if args.rfi_freq_step is not None:
+            fit_args['rfi_8mhz'] = True
     else:
         raise ValueError("Unsupport fit baseline ripple method.")
         
