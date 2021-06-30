@@ -6,10 +6,10 @@ def rec_his(**kwargs):
     import json
     from datetime import datetime
     from collections import OrderedDict
-    from ._version import get_versions
+    from ..__init__ import __version__
     
     history= OrderedDict()
-    history['version']= get_versions()['version']
+    history['version']= __version__
     history['cwd']= os.getcwd()
     history['argv']= ' '.join(sys.argv)
     for key in kwargs.keys():

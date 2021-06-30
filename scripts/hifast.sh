@@ -56,8 +56,8 @@ fi
 echo "processing:"
 for fname in "${fname_list[@]}"
 do
- if [[ ($fname != *.hdf5) && ($fname != *.fits) ]]; then echo "not hdf5 or fits file" && exit 1; fi
- if [[ ! -f $fname ]]; then echo "file ${fname} not exists" && exit 1; fi
+# if [[ ($fname != *.hdf5) && ($fname != *.fits) ]]; then echo "not hdf5 or fits file" && exit 1; fi
+ if [[ ! -f $fname ]] && [[ ! -d $fname ]]; then echo "file ${fname} not exists" && exit 1; fi
  echo "$fname"
 done
 sleep 1
@@ -75,14 +75,16 @@ if [[ "$command" == *".par" ]]; then
 elif [[ "$command" == *"|"* ]]; then
   commands+=("$command")
 fi
+coms="$(printf "%s\n" "${commands[@]}")"
+
 sleep 1
 #echo "${commands[@]}"
 #
 Run_fname() {
-for line in "${commands[@]}"
-do
+local fname="$1"
+echo "$coms" | while read line; do
   if [[ "$line" == "#"* ]]; then continue ; fi
-  run_str="$(echo $line | awk -F "|" -v a="$fname" '{print($1,a,$2)}')"
+  run_str="$(echo "$line" | awk -F "|" -v a="$fname" '{print($1,a,$2)}')"
   echo "run: ${run_str}"
   output="$(${run_str})"
   echo "$output"
@@ -92,14 +94,10 @@ done
 }
 
 # run all files
+export -f Run_fname
+export coms
+echo "${fname_list[@]}" | xargs -n 1 -P $nproc bash -c 'echo "$coms"; Run_fname "$1"' _
 
-for ((i = 0 ; i < ${#fname_list[@]} ; i++)); do
-  fname="${fname_list[i]}"
-  #echo $fname
-  Run_fname & 
-  if [[ $(( (i+1) % nproc )) -eq 0 ]]; then wait; fi
-done
-wait
 #Run_fname &
 #wc ${file_l ist[@]}
 #echo $($command)

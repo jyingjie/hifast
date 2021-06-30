@@ -327,4 +327,16 @@ def smooth1d(arr, method, sigma, axis=-1):
     else:
         raise(ValueError("method not supports"))
 
-
+def smooth1d_fft(x, ys, Tcut, axis=-1):
+    """
+    x : array_like shape:(m,)
+    ys : array_like
+        The input array.
+    Tcut : components with period smaller than Tcat will be removed.
+    """
+    Fy = np.fft.rfft(ys, norm='ortho', axis=axis)
+    f = np.fft.rfftfreq(ys.shape[axis], x[1]-x[0])
+    Fy = np.moveaxis(Fy, axis, -1)
+    Fy[...,f > 1/Tcut] *= 0
+    Fy = np.moveaxis(Fy, -1, axis)
+    return np.fft.irfft(Fy, norm='ortho', axis=axis)
