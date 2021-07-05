@@ -1,0 +1,20 @@
+name: hifast
+channels:
+  - conda-forge
+dependencies:
+  - python=3.9
+  - numpy=1.21.0
+  - matplotlib=3.4.2
+  - scipy=1.7.0
+  - hdf5=1.10.6
+  - h5py=3.3.0
+  - astropy=4.2.1
+  - openpyxl=3.0.7
+  - pandas=1.3.0
+  - tqdm=4.61.1
+  - pip=21.1.3
+  - ipykernel
+  - ipython
+  - pip:
+    - et-xmlfile==1.1.0
+    - pyastronomy==0.16.0
