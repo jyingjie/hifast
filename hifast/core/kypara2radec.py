@@ -3,7 +3,7 @@
 
 import numpy as np
 import math
-from . import sofa
+from .. import sofa
 
 #地理
 hm = 1110.03;
