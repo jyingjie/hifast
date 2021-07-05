@@ -38,8 +38,8 @@ if __name__ == '__main__':
                         help='sigma for gaussian smooth, default 5MHz')
     parser.add_argument('--s_deg', type=int, default=1,
                         help='Degree of the fitting polynomial, 0 equals mean; 1 is linear fit. default 1')
-    parser.add_argument('--dfactor', type=int,
-                        help='Down-sample the data before cal Teff')
+    parser.add_argument('--dfactor',
+                        help='Down-sample the data before cal Teff; str "W" or int number')
     parser.add_argument('--med_filter_size', type=int,
                         help='median filter kernel size for power of spec; odd number; default None')
     parser.add_argument('--noise_mode', default='high', choices=['high','low'],
@@ -108,6 +108,8 @@ if __name__ == '__main__':
     if smooth=='poly':
         s_para= {'s_deg': s_deg,}
     dfactor= args.dfactor
+    if dfactor is not None and dfactor.upper() != "W":
+        dfactor = int(dfactor)
     med_filter_size= args.med_filter_size
     #ave_cycle= args.ave_cycle
     noise_mode = args.noise_mode
