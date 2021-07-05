@@ -1,6 +1,22 @@
 #  安装 fast_python 模块
+配置环境：
+可以用已经存在的Python 3 环境 或者 用conda新建一个Python环境（推荐）:
 
+下载conda环境配置文件[hifast_env.yml](../hifast_env.yml)，然后执行
+```
+conda env create -n myenv --file hifast_env.yml 
+```
+可以修改myenv为其他字符。之后用
+```
+conda activate myenv
+```
+或
+```
+source activate myenv
+```
+来切换到对应的环境。
 
+下面开始安装
 * 方法一： 用pip联网直接安装：
 
   见 [wikis/Install](../../wikis/Install)
@@ -63,7 +79,7 @@
 * 其他参数：
    * ```-d -m -n ```：分别为delay时间，Cal on时间和Cal off时间 除以谱线的采样时间。三个数都为整数。delay默认为0。
    * ```--noise_mode```: 噪音管强度。 high 或者 low，默认为high。
-   * ```--noise_date```: 选用哪天的噪音温度文件。目前支持设为 20190115 或 20200531. 如果设为auto则选取与谱线观测时间最近的噪音管文件来定标。(20200531的噪音管文件Beam19 XX 偏振 在约1060MHz处有个大的gap。)
+   * ```--noise_date```: 选用哪天的噪音温度文件。例如设为 20190115 或 20200531. 如果设为auto则选取与谱线观测时间最近的噪音管文件来定标。(20200531的噪音管文件Beam19 XX 偏振 在约1060MHz处有个大的gap。)
    * ```--step``` ：每次读入内存的块文件数量。
    * ```--frange```：程序提取和处理的频率范围：后接两个数，分别是频率的下限和上限。(需配合```--smooth```来设置)
    <br/> M31 HI 频率和速度（相对于LSR）的对应 见文件 freq_vs_vlsr_M31.txt。另外可以修改freq_vs_vlsr.py来估算你需要的 HI频率和速度的对应。不同的ra,dec和mjd，vlsr和freq的对应稍有差异。
