@@ -35,7 +35,7 @@ setuptools.setup(
 #     long_description=long_description,
 #     long_description_content_type="text/markdown",
 #     url="",
-    packages=['hifast','hifast/sofa'],
+    packages=['hifast','hifast.sofa', 'hifast.utils', 'hifast.core'],
     package_data={
         "hifast": ["data/*.txt", "data/*.json"],
     },
