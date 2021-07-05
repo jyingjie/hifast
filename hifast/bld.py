@@ -12,14 +12,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument('fname',
                         help='file name')
-    parser.add_argument('--nproc', type=int,
+    parser.add_argument('-n', '--nproc', type=int,
                         help='number process')
     parser.add_argument('-f', '--force', action='store_true',
                         help='overwriting file if out file exists')
     parser.add_argument('--frange', type=float, nargs=2,
                        help='freq range')
     parser.add_argument('--nB_radec', type=int, default=1, 
-                       help='Beam number in the radec file name')
+                       help='Beam number of the radec file name')
     parser.add_argument('--outdir',
                        help='default is same with the input file')
     parser.add_argument('--flux', action='store_true',
@@ -28,7 +28,7 @@ if __name__ == '__main__':
                        help='quasar calibration file name')
     
     parser.add_argument('--method', default='arPLS', choices=['arPLS', 'srPLS', 'Chebyshev', 'poly', 'sin_poly', 'sin_poly_2', 'S', 'SP', 'original', 'asPLS'],
-                       help='method to fit baseline; arPLS, srPLS, 0,')
+                       help='method to fit baseline')
     
     parser.add_argument('--lam', type=float, default=1.0e8, 
                        help='baseline fit parameters')
@@ -44,7 +44,7 @@ if __name__ == '__main__':
                        help='sin freq')
     parser.add_argument('--s_method_freq', choices=['median', 'gaussian', 'boxcar', 'PLS', 'fft'],
                        help='')
-    parser.add_argument('--s_sigma_freq', type=int,
+    parser.add_argument('--s_sigma_freq', type=float,
                        help='')
     parser.add_argument('--average_every_freq', type=int,
                        help='')
@@ -72,11 +72,11 @@ if __name__ == '__main__':
                        help='join nspec along t')
     parser.add_argument('--njoin_t_2', type=int,
                        help='join nspec along t ')
-    parser.add_argument('--s_method_t', choices=['gaussian', 'boxcar', 'median_filter'],
+    parser.add_argument('--s_method_t', choices=['gaussian', 'boxcar', 'median'],
                        help='')
     parser.add_argument('--s_sigma_t', type=int, default=5,
                        help='')
-    parser.add_argument('--s_method_t_2', choices=['gaussian', 'boxcar', 'median_filter'],
+    parser.add_argument('--s_method_t_2', choices=['gaussian', 'boxcar', 'median'],
                        help='')
     parser.add_argument('--s_sigma_t_2', type=int, default=5,
                        help='')
@@ -112,8 +112,8 @@ if __name__ == '__main__':
 import numpy as np
 import h5py
 from scipy import ndimage
-from .core.baseline import get_baseline, get_baseline_mp
-from .utils.misc import extend_Trues, boxcar_smooth1d, median_filter_1d
+from .core.baseline import get_baseline, get_baseline_mp, sub
+from .utils.misc import extend_Trues, average_every_n, smooth1d, smooth1d_fft
 
 def gen_radec_file(file_spec, paras):
     import subprocess
@@ -312,50 +312,6 @@ if __name__ == '__main__':
     ## subtract baseline
     verbose = True
     
-    def sub(yss, njoin, method, para, exclude_fun=None, s_method_t=None, s_sigma_t=3):
-        #global freq, verbose, nproc
-        yss_ori = yss
-        if s_method_t == 'gaussian':
-            yss = ndimage.gaussian_filter1d(yss, s_sigma_t, axis=0)
-        elif s_method_t == 'boxcar':
-            yss = boxcar_smooth1d(yss, s_sigma_t, axis=0)
-        elif s_method_t == 'median_filter':
-            yss = median_filter_1d(yss, axis=0, size=s_sigma_t)
-
-        import copy
-        para = copy.deepcopy(para)
-        def apply(yss):
-            if njoin is not None:
-                shape_add = yss.shape[1:]
-                yss = yss.reshape((-1,njoin) + shape_add)
-                yssm = np.mean(yss, axis=1)
-            else:
-                yssm = yss
-            if exclude_fun is not None:
-                exclude = exclude_fun(yssm)
-            else:
-                exclude = None
-            if para['s_method'] == 'PLS':
-                # use arPLS, lam from s_sigma ( s_sigma_freq)
-                yssm = get_baseline_mp(nproc, freq, yssm, axis=1, method='arPLS', bl_para={'lam': para['s_sigma'], "offset":2, 'deg':2}, verbose=verbose)
-                para.pop('s_method')
-            bls = get_baseline_mp(nproc, freq, yssm, axis=1, method=method, verbose=verbose, exclude=exclude, **para)
-            
-            if njoin is not None: 
-                return (yss - bls[:, None, :, :]).reshape((-1,) + shape_add)
-            else:
-                return yss_ori - bls
-            
-        if njoin is not None:
-            num = len(yss)//njoin*njoin
-            if num != len(yss):
-                return np.vstack([apply(yss[:num]), apply(yss[-njoin:])[num-len(yss):]])
-            else:
-                return apply(yss)
-        else:
-            return apply(yss)
-            
-    
     if method == 'S' or method == 'SP':
         method_a = 'arPLS'
         para = {
@@ -374,13 +330,13 @@ if __name__ == '__main__':
         'average_every': average_every_freq_2,
         'bl_para': fit_args_2,
                }
-        T_bld1 = sub(T, njoin_t, method_a, para=para, s_method_t=s_method_t, s_sigma_t=s_sigma_t)
+        T_bld1 = sub(freq, T, njoin=njoin_t, nproc=nproc, s_method_t=s_method_t, s_sigma_t=s_sigma_t, method=method_a, **para)
         #exclude_fun = lambda x:abs(x) > 1.2*np.diff(np.percentile(x, [16,84], axis=1), axis=0)[0][:,None,:]
         if exclude_m == 0:
             exclude_fun = lambda x: extend_Trues(abs(x) > 1.*np.diff(np.percentile(x, [16,84], axis=1), axis=0)[0][:,None,:], axis=1, ext_frac=1/3, ext_add=3)
         elif exclude_m == 1:
             exclude_fun = lambda x: extend_Trues(abs(x) > 2.5*np.min(np.diff(np.percentile(x, [10, 50, 90], axis=1), axis=0), axis=0)[:,None,:], axis=1, ext_frac=1/3, ext_add=3)
-        bl_sin = T_bld1 - sub(T_bld1, njoin_t_2, method_b, para=para2, exclude_fun=exclude_fun, s_method_t=s_method_t_2, s_sigma_t=s_sigma_t_2)
+        bl_sin = T_bld1 - sub(freq, T_bld1, njoin=njoin_t_2, nproc=nproc, s_method_t=s_method_t_2, s_sigma_t=s_sigma_t_2, exclude_fun=exclude_fun, method=method_b, **para2)
         del(T_bld1)
         T = T - bl_sin
         del(bl_sin)
@@ -395,7 +351,7 @@ if __name__ == '__main__':
         'average_every': average_every_freq,
         'bl_para': fit_args,
                }
-        T = sub(T, njoin_t, method, para=para, s_method_t=s_method_t, s_sigma_t=s_sigma_t)
+        T = sub(freq, T, njoin=njoin_t, nproc=nproc, s_method_t=s_method_t, s_sigma_t=s_sigma_t, method=method, **para)
         
     if trans:
         T = T.transpose((1,0,2))

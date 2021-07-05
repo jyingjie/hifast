@@ -334,9 +334,12 @@ def smooth1d_fft(x, ys, Tcut, axis=-1):
         The input array.
     Tcut : components with period smaller than Tcat will be removed.
     """
-    Fy = np.fft.rfft(ys, norm='ortho', axis=axis)
-    f = np.fft.rfftfreq(ys.shape[axis], x[1]-x[0])
+    if len(x) != ys.shape[axis]:
+        raise ValueError(f"len(x) needs equal to and ys.shape[axis]")
+    n = len(x)
+    Fy = np.fft.rfft(ys, n=n, norm='ortho', axis=axis)
+    f = np.fft.rfftfreq(len(x), x[1]-x[0])
     Fy = np.moveaxis(Fy, axis, -1)
     Fy[...,f > 1/Tcut] *= 0
     Fy = np.moveaxis(Fy, -1, axis)
-    return np.fft.irfft(Fy, norm='ortho', axis=axis)
+    return np.fft.irfft(Fy, n=n, norm='ortho', axis=axis) # need specify n when ifft or irfft
