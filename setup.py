@@ -37,7 +37,7 @@ setuptools.setup(
 #     url="",
     packages=['hifast','hifast.sofa', 'hifast.utils', 'hifast.core'],
     package_data={
-        "hifast": ["data/*.txt", "data/*.json"],
+        "hifast.core": ["data/*.txt", "data/*.json"],
     },
     ext_package='hifast/sofa',
     ext_modules = [sofa_lib],
