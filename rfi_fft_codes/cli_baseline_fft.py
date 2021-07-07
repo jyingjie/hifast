@@ -221,8 +221,8 @@ if __name__ == '__main__':
     
     parser.add_argument('-T', '--trans', action='store_true',
                        help='trans')
-    #parser.add_argument('--keep_polar', action='store_true',
-    #                   help='keep two polarizations')
+    parser.add_argument('--keep_polar', action='store_true',
+                       help='keep two polarizations')
     parser.add_argument('--fill_rfi', default='nan', choices=['nan','noise','rfi'],
                        help='keep rfi')
     parser.add_argument('--plot', action= 'store_true',
@@ -230,14 +230,13 @@ if __name__ == '__main__':
     
     
     args = parser.parse_args()
-    #nproc = args.nproc
     file_spec = args.fname
     outdir = args.outdir
     trans= args.trans
     flux = args.flux
     
     fill_rfi = args.fill_rfi
-    #keep_polar = args.keep_polar
+    keep_polar = args.keep_polar
     plot = args.plot
     
     fpart = '-flux_' if args.flux else '-'
@@ -417,9 +416,10 @@ if __name__ == '__main__':
         print('Flux calibrating ...')
         T = cali_src(T, nB, freq, cali_fname, ra=ra, dec=dec, mjd=mjd)
     
-    #if not keep_polar:
     if len(T.shape) == 3:
-        T = np.mean(T, axis=2, dtype='float64')
+        if keep_polar:
+            T3 = deecopy(T)
+        T = np.mean(T, axis=2, dtype='float64')   
         
     ori_shape = T.shape
         
@@ -431,7 +431,7 @@ if __name__ == '__main__':
     if plot:
         pdf.savefig();plt.close()
     
-    # remove standing waves
+    # remove standing waves 
     rmsw_data = T - sw_fit
     
     # protect_mw
@@ -439,13 +439,8 @@ if __name__ == '__main__':
     if protect_mw:
         is_rfi = deecopy(is_rfi_no_mw)
     
-    # fill rfi with ?
-    if fill_rfi == 'nan':
-        rmsw_data[is_rfi] = np.nan
-    elif fill_rfi == 'noise':
-        rmsw_data[is_rfi] = data_rmrfi[is_rfi]
-    elif fill_rfi == 'rfi':
-        pass
+    rmsw_data_ = deepcopy(rmsw_data)
+    rmsw_data_[is_rfi] = np.nan    
         
     if plot:
         print(" 'Wait for plotting patiently, you must.' Master Yoda said")
@@ -456,7 +451,7 @@ if __name__ == '__main__':
         ax.plot(freq,np.mean(data_rmrfi_low_mw[tn-5:tn+5,:],axis = 0),'b',label='rm rfi',alpha = .5)
         ax.plot(freq,np.mean(T[tn-5:tn+5,:],axis = 0),label='original')
         ax.plot(freq,np.mean(sw_fit[tn-5:tn+5,:],axis = 0),label='ripple')
-        ax.plot(freq,np.mean(rmsw_data[tn-5:tn+5,:],axis = 0) - .5,label='result')
+        ax.plot(freq,np.mean(rmsw_data_[tn-5:tn+5,:],axis = 0) - .5,label='result')
         ax.grid();ax.legend();ax.set_title('ten specs mean')
         ax.set_xlim(1320,1440)
         ax.set_ylim(-1,.5)
@@ -466,12 +461,32 @@ if __name__ == '__main__':
         plot_waterfall(fs,data = T, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
                        title = os.path.basename(file_spec).split('.')[:-1],pdf = pdf)
         
-        plot_waterfall(fs,data = rmsw_data, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),pdf = pdf,
+        plot_waterfall(fs,data = rmsw_data_, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),pdf = pdf,
                        title = 'remove standing waves')
         
         pdf.close()
         log.info(f"Plot to {pdfname}")
         
+        
+    if keep_polar: 
+        sw_ = np.zeros_like(T3)
+        sw_[:,:,0] = sw_fit;sw_[:,:,1] = sw_fit
+        rmsw_data = T3 - sw_
+        # fill rfi with ?
+        if fill_rfi == 'nan':
+            rmsw_data[is_rfi,:] = np.nan
+        elif fill_rfi == 'noise':
+            rmsw_data[is_rfi,:] = data_rmrfi[is_rfi]
+        elif fill_rfi == 'rfi':
+            pass
+    else:
+        rmsw_data = T - sw_fit
+        if fill_rfi == 'nan':
+            rmsw_data[is_rfi] = np.nan
+        elif fill_rfi == 'noise':
+            rmsw_data[is_rfi] = data_rmrfi[is_rfi]
+        elif fill_rfi == 'rfi':
+            pass
         
     print(f"Saving...")
     dict_out= {}
