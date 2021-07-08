@@ -29,6 +29,21 @@ def rms(data,vel,rms_vrange=None):
             ans = np.sqrt(np.nanmean((data[:,is_use])**2,axis = -1))
     return ans
 
+def mean(data,vel, vrange=None):
+    if len(data.shape) == 1:
+        if  vrange is None:
+            ans = np.nanmean(data)
+        else:
+            is_use = (vel >  vrange[0])&(vel <  vrange[1])
+            ans = np.nanmean(data[is_use])
+    elif len(data.shape) ==2:
+        if  vrange is None:
+            ans = np.nanmean(data)
+        else:
+            is_use = (vel >  vrange[0])&(vel <  vrange[1])
+            ans = np.nanmean(data[:,is_use])
+    return ans
+
 def find_local_peak(rfi1,freq1,RMS,distance=5,):
     from scipy import signal
     loc_max = signal.find_peaks(rfi1,distance = distance)[0]
@@ -42,8 +57,8 @@ def find_local_peak(rfi1,freq1,RMS,distance=5,):
         print("No local peak is found")
         return np.nan,np.nan
         
-    freq_max = freq1[loc]
-    flux_peak = rfi1[loc] - RMS
+    freq_max = np.float(freq1[loc])
+    flux_peak = np.float(rfi1[loc] - RMS)
     
     return freq_max,flux_peak
 
@@ -81,7 +96,7 @@ def fit_line(rfi,freq,half_factor,**kwargs):
 
     return half_v_left, half_v_righ
 
-def get_startend(is_rfi,rfi_width_lim = 10,ext_sec= 30):
+def get_startend(is_rfi,rfi_width_lim = None,ext_sec= 0):
     if is_rfi.any() == False:
         raise ValueError("Input array has no Trues.")
     
@@ -96,17 +111,21 @@ def get_startend(is_rfi,rfi_width_lim = 10,ext_sec= 30):
         end_ = np.delete(end_,0)
     if end_[-1]<start_[-1]:
         start_ = np.delete(start_,-1)
-
-    if isinstance(rfi_width_lim,int)|isinstance(rfi_width_lim,float):
-        starend_use = (end_-start_)>rfi_width_lim
-    elif len(rfi_width_lim) == 2:
-        starend_use = ((end_-start_)>rfi_width_lim[0])&((end_-start_)<rfi_width_lim[1])
     
-    if starend_use.any() == False:
-        raise ValueError("No Trues meet width condition.")
+    if rfi_width_lim is None:
+        start = start_ - ext_sec
+        end = end_ + ext_sec
+    else:
+        if isinstance(rfi_width_lim,int)|isinstance(rfi_width_lim,float):
+            starend_use = (end_-start_)>rfi_width_lim
+        elif len(rfi_width_lim) == 2:
+            starend_use = ((end_-start_)>rfi_width_lim[0])&((end_-start_)<rfi_width_lim[1])
 
-    start = start_[starend_use]-ext_sec
-    end = end_[starend_use]+ext_sec
+        if starend_use.any() == False:
+            raise ValueError("No Trues meet width condition.")
+
+        start = start_[starend_use] - ext_sec
+        end = end_[starend_use] + ext_sec
 
     if min(start) < 0:
         start[start<0] = 0 
@@ -126,11 +145,13 @@ def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,**kwargs):
         rfi1 = spec[s:e]
         freq1 = freq[s:e]
         freq_peak,flux_peak = find_local_peak(rfi1,freq1,RMS=RMS)
-        half_v_left, half_v_righ = fit_line(rfi1,freq1,half_factor =.5,RMS=RMS)
-        if np.sum(np.isnan([half_v_left, half_v_righ])) == 0:
-            vc = np.float((half_v_left + half_v_righ)/2)
-            if (vc > freq1[0])&(vc < freq1[-1]):   
-                fc0 += [vc,]; peaks += [flux_peak,]
+        #half_v_left, half_v_righ = fit_line(rfi1,freq1,half_factor =.5,RMS=RMS)
+        #if np.sum(np.isnan([half_v_left, half_v_righ])) == 0:
+            #vc = np.float((half_v_left + half_v_righ)/2)
+            #if (vc > freq1[0])&(vc < freq1[-1]):  
+        vc = freq_peak
+        fc0 += [vc,]; peaks += [flux_peak,]
+    
     peaks = np.array(peaks)
     # from the biggest one to guess rfi set 1
     fc00 = fc0[np.argmax(peaks)]
@@ -252,13 +273,19 @@ def mask_RFI(freq,is_rfi,theory,mask_all_theory = False,freq_from_theory = None,
         bigrfi2 = np.zeros_like(bigrfi,dtype = 'bool')
         for th in theory:
             bigrfi2[(freq>th - freq_from_theory/2) & (freq<th + freq_from_theory/2)] = True
-        bigrfi = bigrfi | bigrfi2
+        bigrfi3 = bigrfi | bigrfi2
     
-    return bigrfi
+    return bigrfi,bigrfi3
 
-def find_edge_old(spec,vel,peak_position,step,rms_thresh,ext_times,Print=False):
+def find_edge_2sides(spec,vel,peak_position,step,rms_thresh,Print=False,small_rfi_times=2):
     start = deepcopy(peak_position)
     part_rms = rms(spec,vel,rms_vrange=[start-step/2,start+step/2])
+    
+    if part_rms < rms_thresh * small_rfi_times:
+        #print("theory peak rms < rms_thresh")
+        edge = np.array([np.nan,np.nan])
+        return edge
+    
     while part_rms > rms_thresh:
         start += -step
         if start < min(vel):
@@ -273,7 +300,7 @@ def find_edge_old(spec,vel,peak_position,step,rms_thresh,ext_times,Print=False):
             break
         part_rms = rms(spec,vel,rms_vrange=[end-step/2,end+step/2]) 
       
-    edge = np.array([start,end]) + np.array([-1,1]) * ext_times * step
+    edge = np.array([start,end]) #+ np.array([-1,1]) * ext_times * step
     edge[edge < min(vel)] = min(vel)
     edge[edge > max(vel)] = max(vel)
     if Print:
@@ -281,52 +308,39 @@ def find_edge_old(spec,vel,peak_position,step,rms_thresh,ext_times,Print=False):
         print(peak_position,edge)
     return edge
 
-def mask_RFI_old(spec,freq,is_rfi,theory0,mark_rfi_width,**kwargs):
+def mask_RFI_2sides(spec,freq,is_rfi,theory0,mark_rfi_width,small_rfi_times,RMS,
+                    ext_times = 0,chan_step=3,**kwargs):
     flim_l = theory0 - mark_rfi_width/2
     flim_r = theory0 + mark_rfi_width/2
+    fdelta = freq[1] - freq[0]
     
     rfi_width_lim = kwargs['rfi_width_lim']
     ext_sec = kwargs['ext_sec']
     
     start,end = get_startend(is_rfi,rfi_width_lim=rfi_width_lim/2,ext_sec= ext_sec)
+    '''
     bigrfi = np.full(is_rfi.shape[0],False)
     for s,e in zip(start,end):
         fs,fe = freq[s],freq[e]
-        mark = (theory > fs) & (theory < fe)
+        mark = (theory0 > fs) & (theory0 < fe)
         if mark.any() == True:
             bigrfi[s:e] = True
-            
-    bigrfi2 = deepcopy(bigrfi)
-    #mw_rfi_use = np.empty(0);theory0_mw = np.empty(0)
+    '''       
+    bigrfi2 = np.full(is_rfi.shape[0],False)
     for j in range(len(flim_l)):
         rfi_part = (freq > flim_l[j])&(freq < flim_r[j])
         rspec = deepcopy(spec)[rfi_part]
         
-        edge = find_edge(rspec,freq[rfi_part],peak_position = theory0[j],
-                         step=chan_step*fdelta,rms_thresh=RMS,ext_times=ext_times,Print=False)
-        edge_use = (freq >= edge[0])&(freq <= edge[1])
-        bigrfi2[edge_use] = True
-        if (theory0[j]>1420)&(theory0[j]<1421.5):
-            edge_use = (freq >= edge[0]-1)&(freq <= edge[1]+1)
-            #mw_rfi_use = deepcopy(edge_use);theory0_mw = theory0[j]
-    
-    return bigrfi2       
+        edge = find_edge_2sides(rspec,freq[rfi_part],peak_position = theory0[j],small_rfi_times = small_rfi_times,
+                         step=chan_step*fdelta,rms_thresh=RMS,Print=False)
+        if edge[0] < edge[1]:
+            edge_use = (freq >= edge[0])&(freq <= edge[1])
+            bigrfi2[edge_use] = True
+    bigrfi = bigrfi2    
+        
+    return bigrfi,bigrfi2       
             
-
-def find_RFI(spec,freq,is_rfi,is_rfi_mw,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge = 0,
-             plot = False,pdf = None,ylim = None,rfi_fit_use = 'two groups',
-             mask_all_theory = False,freq_from_theory = None,mask_thr = 15,**kwargs):
-         
-    if plot:
-             
-        if pdf is not None:
-            plt.switch_backend('agg')
-
-    fdelta = freq[1] - freq[0]
-
-    fcenter1,fcenter2,fcenter3,fc0 = find_center(spec,freq,is_rfi,RMS,freq_step=freq_step,
-                                                 freq_thr =freq_thr,**kwargs)
-    
+def center_theory(freq,fcenter1,fcenter2,fcenter3,freq_step,plot,pdf,rfi_fit_use = 'two groups'):
     if fcenter3.size <= 1:
         rfi_fit_use = 'two groups'
     
@@ -337,30 +351,59 @@ def find_RFI(spec,freq,is_rfi,is_rfi_mw,freq_step=8.1,RMS = None,freq_thr = 0.5,
         former = int((pfunc1[0] - freq[0])//pfunc1[1] + 10)
         theory1 = np.arange(pfunc1[0]-pfunc1[1]*former,1460,pfunc1[1])
         theory1 = np.delete(theory1,np.where((theory1 < freq[0])|(theory1 > freq[-1]))[0])
+        former = int((pfunc2[0] - freq[0])//pfunc2[1] + 10)
         theory2 = np.arange(pfunc2[0]-pfunc2[1]*former,1460,pfunc2[1])
         theory2 = np.delete(theory2,np.where((theory2 < freq[0])|(theory2 > freq[-1]))[0])
         
         if rfi_fit_use == 'three groups':  
             pfunc3 = polyfit1order(fcenter3, freq_step=freq_step, plot = plot, pdf = pdf)
+            former = int((pfunc3[0] - freq[0])//pfunc3[1] + 10)
             theory3 = np.arange(pfunc3[0]-pfunc3[1]*former,1460,pfunc3[1])
             theory3 = np.delete(theory3,np.where((theory3 < freq[0])|(theory3 > freq[-1]))[0])
             theory0 = np.hstack((theory1,theory2,theory3)) 
-        elif rfi_fit_use == 'two groups':                         
+        elif rfi_fit_use == 'two groups':      
+            theory3 = np.array([])
             theory0 = np.hstack((theory1,theory2))
-        theory0.sort()
+        theory0.sort()  
         
     elif rfi_fit_use == 'all':
         former = int((pfunc0[0] - freq[0])//pfunc0[1] + 10)
         pfunc0 = polyfit1order(fc0, freq_step=freq_step/2)
         theory0 = np.arange(pfunc0[0]-pfunc0[1]*4*former,1460,pfunc0[1])
         theory0 = np.delete(theory0,np.where((theory0 < freq[0])|(theory0 > freq[-1]))[0])
+        theory1,theory2,theory3 = [],[],[]
+    
+    return theory0,theory1,theory2,theory3
+        
     
     
+def find_RFI(spec,freq,is_rfi,is_rfi_mw,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge = 0,
+             plot = False,pdf = None,ylim = None,rfi_fit_use = 'two groups',
+             mask_RFI_method = '2 sides',small_rfi_times = 2,chan_step = 3,
+             mask_all_theory = False,freq_from_theory = None,mask_thr = 15,
+             ret_type = 'all theory',**kwargs):
+         
+    if plot:
+             
+        if pdf is not None:
+            plt.switch_backend('agg')
+
+    fdelta = freq[1] - freq[0]
+
+    fcenter1,fcenter2,fcenter3,fc0 = find_center(spec,freq,is_rfi,RMS,freq_step=freq_step,
+                                                 freq_thr =freq_thr,**kwargs)
+    theory0,theory1,theory2,theory3 = center_theory(freq,fcenter1,fcenter2,fcenter3,freq_step =freq_step,
+                            plot = plot,pdf = pdf,rfi_fit_use =rfi_fit_use)
+
     is_rfi_ = (spec > RMS * mask_thr)
-    bigrfi = mask_RFI(freq,is_rfi_,theory0,mask_all_theory,freq_from_theory,**kwargs)
-    
+    if mask_RFI_method == '2 sides':
+        bigrfi,bigrfi2 = mask_RFI_2sides(spec,freq,is_rfi,theory0,mark_rfi_width = freq_from_theory,
+                                 small_rfi_times = small_rfi_times,chan_step = chan_step,RMS = RMS,**kwargs)
+    elif mask_RFI_method == 'fixed freq':
+        bigrfi,bigrfi2 = mask_RFI(freq,is_rfi_,theory0,mask_all_theory,freq_from_theory,**kwargs)
+        
     if ext_edge > 0:
-        from hifast.util import extend_Trues
+        from hifast.utils.misc import extend_Trues
         bigrfi = extend_Trues(bigrfi,axis = -1,ext_add = ext_edge)
      
     if plot:   
@@ -387,7 +430,7 @@ def find_RFI(spec,freq,is_rfi,is_rfi_mw,freq_step=8.1,RMS = None,freq_thr = 0.5,
         fig,ax = plt.subplots(figsize=(15,3))    
         ax.plot(freq,spec)
         spec_ = np.full(spec.shape[0],np.nan)
-        spec_[bigrfi] = spec[bigrfi]
+        spec_[bigrfi2] = spec[bigrfi2]
         ax.plot(freq,spec_)
         if (rfi_fit_use == 'two groups')|(rfi_fit_use == 'three groups'):
             ax.vlines(theory1,ymin=ymin,ymax=ymax,linestyles='--',colors='r',label = 'theory1')
@@ -402,8 +445,14 @@ def find_RFI(spec,freq,is_rfi,is_rfi_mw,freq_step=8.1,RMS = None,freq_thr = 0.5,
         plt.grid();plt.legend()
         if pdf is not None:
             pdf.savefig();plt.close()
+            
+    if ret_type == 'all theory':
+        return bigrfi2,theory0
+    elif ret_type == 'theory 123':
+        return bigrfi2,(theory1,theory2,theory3)
 
-    return bigrfi,theory0
+
+
 
 
 ####################### time rfi ########################
@@ -443,7 +492,7 @@ def find_t(data,freq = None,times = 10,thr = 20,frange = None,rfi_width_lim = 20
             is_timerfi[s:e] = True
             
     if ext_add > 0:
-        from hifast.util import extend_Trues
+        from hifast.utils.misc import extend_Trues
         is_timerfi = extend_Trues(is_timerfi,axis = 0,ext_add = ext_add)
     
     if plot:  

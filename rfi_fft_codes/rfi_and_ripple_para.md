@@ -14,7 +14,7 @@ python cli_markRFI.py $subname --outdir ./data \
         --s_method_freq gaussian --s_sigma_freq 3 --s_method_t boxcar --s_sigma_t 7 \
         --rfi_thr 3 --rms_frange 1400 1403 --mw_frange 1419 1425 --rfi_groups 'two groups' \
         --rfi_width_lim 20 --ext_sec 20 --freq_thr .3 --freq_step 8.1 \
-        --ext_edge 20 --mask_thr 15 \
+        --mask_RFI_method 'fixed freq' --ext_edge 3 --mask_thr 2 --mask_all_theory --freq_from_theory .5 \
         --plot -f  || exit 1 
 ```
 ### 时域
@@ -60,11 +60,17 @@ python cli_markRFI.py $subname --outdir ./data \
 ### 标记
 
 * --ext_edge: 结果扩展边缘的通道数
-* --mask_thr: 只mask超过rms的几倍。很小的会去不干净。
+* --mask_thr: 只mask超过rms的几倍。很小的rfi会保留。
+* --mask_RFI_method: 'fixed freq' 对于小rfi，固定mask宽度
 * --mask_all_theory: 是否理论的全mask，会非常干净。
-  --freq_from_theory: 很小的去掉多少频率
+  --freq_from_theory: 很小的去掉多少频率(固定宽度)
+  
+* --mask_RFI_method: '2 sides' 从中心向两边按step循环，确定mask边界，比较慢
+* --small_rfi_times: 小于RMS这个倍数的不标记
+  --chan_step: step通道数
+  --freq_from_theory: mask rfi最大的宽度
   ```
-  python cli_markRFI.py $subname --outdir ./data \
+  python ../../cli_markRFI.py $subname --outdir ./data \
         --sf --lf --lf_beams ['05','06','13'] \
         --sf_frange 1380 1382 --sf_times 10 --sf_thr 10 --sf_rfi_last 20 --sf_T_thr .3 \
         --lf_frange 1400 1450 --lf_times 1.5 --lf_thr 0 --lf_rfi_last 50 --lf_ext 10 \
@@ -72,7 +78,8 @@ python cli_markRFI.py $subname --outdir ./data \
         --s_method_freq gaussian --s_sigma_freq 3 --s_method_t boxcar --s_sigma_t 7 \
         --rfi_thr 3 --rms_frange 1400 1403 --mw_frange 1419 1425 --rfi_groups 'two groups' \
         --rfi_width_lim 20 --ext_sec 20 --freq_thr .3 --freq_step 8.1 \
-        --ext_edge 3 --mask_thr 3 --mask_all_theory --freq_from_theory .5 \
+        --mask_RFI_method '2 sides' --ext_edge 10 --mask_thr 2 --freq_from_theory 3\
+        --small_rfi_times 2 --chan_step 5 \
         --plot -f  || exit 1 
   ```
   
@@ -92,11 +99,11 @@ python cli_baseline_fft.py $subname --outdir ./sub_once \
         --fft_method rfft --sw_freq 0.9254  --amp_thr 35  --sw_n 5 \
         --rfi_8mhz --rfi_freq_step $rfi_freq_step  \
         --rfi_method subtract --mw_frange 1420.2 1420.55 --sg_window 1.0 --sg_polyorder 7 --mw_lower 1.0e5 \
-        --plot -f --fill_rfi nan || exit 1 
+        --plot -f --fill_rfi nan --keep_polar|| exit 1 
 ```
 ### 对RFI
 
-* -rfi, --rfi_fname: 指定标记rfi的文件。无则自动到上一级名为/cor_vel_once/的文件夹里找
+* -rfi, --rfi_fname: 指定标记rfi的文件。无则自动到上一级名为/cor_vel_once/的文件夹里找*pdrfi*
 * --rfi_method: 防止大rfi干扰fft，用原始值减去滤波值。目前只提供减法
 * --mw_frange: 保护银河系区域
 * --sg_window --sg_polyorder: savgol_filter的窗口大小(MHz)和阶数
@@ -113,4 +120,8 @@ python cli_baseline_fft.py $subname --outdir ./sub_once \
 * --rfi_freq_step: 残余的8.1MHzRFI，在fourier空间间隔为1/16.2$\mu$s左右
 
 * --fill_rfi: 对输入的rfi区域，可以填nan，减去滤波后的噪声或者保持原样。'nan','noise','rfi'
+* --keep_polar: 保留xx，yy，返回三维的结果
+
+输出的hdf5包含去除驻波的数组(T或者flux)，和单独的驻波```dict_out['ripple']```
+
 

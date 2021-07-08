@@ -93,15 +93,25 @@ if __name__ == '__main__':
     parser.add_argument('--rfi_groups', default = 'two groups', choices=['two groups','three groups','all'],
                         help='divide rfi into 2 or 3 groups')
     
-    # mask rfi
-    parser.add_argument('--mask_thr', type=float, default=15, 
-                       help='default 15 times of rms threshold will be masked')
+    ## mask rfi
+    parser.add_argument('--freq_from_theory', type=float,default = 3,
+                        help='mask width from theory center')
+    parser.add_argument('--mask_thr', type=float, default=3, 
+                       help='default below 3 times of rms threshold will be masked')
     parser.add_argument('--ext_edge', type=int, default= 0, 
                        help=' extend result channel on freq axis')
+    parser.add_argument('--mask_RFI_method',default='fixed freq',choices=['2 sides','fixed freq'],
+                         help='from center to two sides, or use a fixed freq width')
+    # 2 sides  
+    parser.add_argument('--small_rfi_times',type=float, default = 2,
+                        help='small rfi below 2*RMS will not be masked')
+    parser.add_argument('--chan_step' ,type=int, default= 5,
+                        help='channel step when walk from center to two sides')
+    # fixed freq
     parser.add_argument('--mask_all_theory', action= 'store_true',
                        help='mask_all_theory')
-    parser.add_argument('--freq_from_theory', type=float,default = .5,
-                        help='if mask_all_theory, mask width from theory')
+    
+    # time coherent
     parser.add_argument('--time_coherent_per', type=float, default = 1,
                        help='rfi in one freq appears more than emmm, maybe 70%, mask them all on time axis.')
     
@@ -120,13 +130,17 @@ if __name__ == '__main__':
     parser.add_argument('--ylim', type=float, nargs=2,
                         help='set ylim in plot')
     parser.add_argument('--save_rfi_list', action= 'store_true',
-                       help='plot')
+                       help='')
     
     
     args = parser.parse_args()
     fname = args.fname
     outdir = args.outdir
- 
+    
+    
+    mask_RFI_method = args.mask_RFI_method
+    small_rfi_times = args.small_rfi_times
+    chan_step = args.chan_step
     mask_all_theory = args.mask_all_theory
     freq_from_theory = args.freq_from_theory
     mask_thr = args.mask_thr
@@ -279,7 +293,7 @@ if __name__ == '__main__':
     s_method_t = args.s_method_t
     s_sigma_t = args.s_sigma_t
     
-    from hifast.util import smooth1d
+    from hifast.utils.misc import smooth1d
     if  s_method_t in ['gaussian', 'boxcar', 'median']:
         print('Smooth ing ...')
         T = smooth1d(T,axis = 0,sigma = s_sigma_t, method = s_method_t)
@@ -321,7 +335,9 @@ if __name__ == '__main__':
         is_rfi_ = is_rfi_mw & (~protect_use)
         _,theory = find_RFI(spec,freq,is_rfi_,is_rfi_mw,freq_step = freq_step,RMS = RMS,freq_thr = freq_thr,
                      ext_edge = ext_edge,rfi_fit_use = 'two groups',plot = plot,pdf=pdf,ylim=ylim,
-                     mask_all_theory = mask_all_theory,freq_from_theory = freq_from_theory,mask_thr =mask_thr,**find_args)
+                     mask_RFI_method = mask_RFI_method, small_rfi_times = small_rfi_times,chan_step = chan_step,
+                     mask_all_theory = mask_all_theory,freq_from_theory = freq_from_theory,mask_thr = mask_thr,
+                     **find_args)
     
     if is_rfi is None:
         #is_rfi = is_rfi & (~protect_use)
@@ -338,8 +354,10 @@ if __name__ == '__main__':
                 is_rfi = (spec > RMS * rfi_thr) & (~protect_use)
                 try:
                     pd_rfi[tn,:],rfi_theory = find_RFI(spec,freq,is_rfi,is_rfi_mw,freq_step = freq_step,RMS = RMS,
-                              freq_thr = freq_thr,ext_edge = ext_edge,rfi_fit_use = rfi_groups ,plot = False,
-                              mask_all_theory = mask_all_theory,freq_from_theory = freq_from_theory,mask_thr =mask_thr,**find_args)
+                       freq_thr = freq_thr,ext_edge = ext_edge,rfi_fit_use = rfi_groups ,plot = False,
+                       mask_RFI_method = mask_RFI_method, small_rfi_times = small_rfi_times,chan_step = chan_step,
+                       mask_all_theory = mask_all_theory,freq_from_theory = freq_from_theory,mask_thr = mask_thr,
+                       **find_args)
 
                     if save_rfi_list:
                         if len(rfi_theory) < rfi_freq_list.shape[1]:
@@ -387,7 +405,7 @@ if __name__ == '__main__':
     
         
     if flux:
-        from hifast.flux import cali_src
+        from hifast.core.flux import cali_src
         nB = int(re.findall(r'-M[0-1][0-9]',fname)[-1][2:])
         T_ret = cali_src(T_ret, nB, freq, cali_fname, ra=ra, dec=dec, mjd=mjd)
     
@@ -406,10 +424,11 @@ if __name__ == '__main__':
         dict_out['rfi_list'] = rfi_freq_list
     #save file
     print('Saving...')
-    from hifast.util import add_extra
+    
+    from hifast.utils.io import rec_his, save_dict_hdf5,add_extra
     add_extra(f, dict_out)
     f.close()
-    from hifast.util import rec_his, save_dict_hdf5
+    
     header=rec_his(args=args)
 
     if header_in is not None: header.update(header_in)

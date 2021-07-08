@@ -26,6 +26,5 @@ class FFT(object):
         self.complex_num = A_data
         self.x = fft.rfftfreq(N,fdelta)
         self.amp = np.abs(A_data)
-        self.phi = np.angle(A_data)
-
+        self.phi = np.angle(A_data)        
         

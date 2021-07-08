@@ -4,15 +4,11 @@
 import numpy as np
 from copy import deepcopy
 
-
 def percent_vminmax(data,percent = None):
     if percent != None:
-        arr = data.flatten()
-        arr = arr[~np.isnan(arr)]
-        sort_arr = np.sort(arr)
-        left,right = np.around(len(arr)*(1-percent)/2),np.around(len(arr)*(1+percent)/2)
-
-        return sort_arr[int(left)],sort_arr[int(right)]
+        vmin = np.nanpercentile(data,q = (1-percent)/2* 100,interpolation='nearest')
+        vmax = np.nanpercentile(data,q = (1+percent)/2* 100,interpolation='nearest')
+        return vmin,vmax
     else:
         return np.nanmin(data),np.nanmax(data)
 
@@ -32,9 +28,18 @@ def _round_up_to_odd_integer(value):
                 r[i] = c[i]
     return r.astype('int')
 
+def date2mjd(date):
+    """
+    date: str; UTC+8
+    """
+    from astropy.time import Time; import astropy.units as u
+    t = Time(date, format='iso', scale='utc') - 8*u.hour
+    
+    return t.mjd
+
 def plot_waterfall(f,corvel=None,data = None,xtype = 'freq',polar = 'xx',cmap = 'rainbow',per_vmin_max = None,
                    vmin_max = None,xylim = None,outdir = './',xrange = None,ynsmall = None,
-                   plot = True,pdf = None, figsize=(18,9),title = None,**kwargs):
+                   plot = True,pdf = None,time_label = False, figsize=(18,9),title = None,**kwargs):
     from matplotlib import pyplot as plt
     
     if pdf is not None:
@@ -69,6 +74,8 @@ def plot_waterfall(f,corvel=None,data = None,xtype = 'freq',polar = 'xx',cmap = 
             elif polar == 'yy':                  
                 data = T[:,:,1]
     
+
+    
     if xrange != None:
         x1,x2 = np.min(xrange),np.max(xrange)
         is_use = (x>x1)&(x<x2)
@@ -88,7 +95,11 @@ def plot_waterfall(f,corvel=None,data = None,xtype = 'freq',polar = 'xx',cmap = 
         data = data[nspec_use,:][ind_sort2]
     
     if plot:
-        extent = (xrange[0],xrange[1],0,data.shape[0])            
+        if time_label:
+            mjds = f['mjd'][()]
+            extent = (xrange[0],xrange[1],mjds[0],mjds[-1]) 
+        else:
+            extent = (xrange[0],xrange[1],0,data.shape[0])            
 
         fig,ax = plt.subplots(figsize=figsize)
 
@@ -115,7 +126,13 @@ def plot_waterfall(f,corvel=None,data = None,xtype = 'freq',polar = 'xx',cmap = 
             xlim1,xlim2,ylim1,ylim2 = xylim
             ax.set_xlim(xlim1,xlim2)
             ax.set_ylim(ylim1,ylim2)
-
+        ax.minorticks_on()
+        if time_label:
+            
+            from astropy.time import Time; import astropy.units as u
+            labels_new = ((Time(ax.axes.get_yticks(), format='mjd')) + 8*u.hour).strftime('%H:%M')
+            ax.axes.set_yticklabels(labels_new)
+            
         if pdf is not None:
             pdf.savefig();plt.close()
         else:

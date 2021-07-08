@@ -15,8 +15,6 @@ import h5py
 from copy import deepcopy
 from tqdm import tqdm
 from fft import FFT
-#from hifast.util import extend_Trues#, boxcar_smooth1d, median_filter_1d
- 
     
 def replace_rfi(data, is_rfi, method,**rep_args):
     """
@@ -60,7 +58,7 @@ def replace_rfi(data, is_rfi, method,**rep_args):
         RMS = rms(data_rmrfi[0,:],freq,[freq[0],freq[0]+20])
         thr_lower = RMS*times_lower
         low_use = (data_rmrfi > thr_lower) 
-        from hifast.util import extend_Trues
+        from hifast.utils.misc import extend_Trues
         low_use = extend_Trues(low_use,ext_add =10,leng_lim = 20,axis = -1)
           
         data_rmrfi_low_mw = deepcopy(data_rmrfi)
@@ -172,8 +170,6 @@ if __name__ == '__main__':
                         help='file name to sub standing waves')
     parser.add_argument('-rfi', '--rfi_fname',
                        help='mask rfi file name')
-    #parser.add_argument('--nproc', type=int,
-    #                    help='number process')
     parser.add_argument('-f', '--force', action='store_true',
                         help='overwriting file if out file exists')
     parser.add_argument('--frange', type=float, nargs=2,
@@ -187,7 +183,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--cali_fname',
                        help='quasar calibration file name')
     
-    
+    ## replace big RFI
     parser.add_argument('--rfi_method', default='subtract', choices=['subtract'],
                        help='method to replace big RFI')
     parser.add_argument('--mw_frange', type=float, nargs=2,
@@ -203,7 +199,7 @@ if __name__ == '__main__':
     parser.add_argument('--times_lower', type=float, default=5, 
                        help='above 5 times of rms will be lowered')
     
-    
+    ## fft remove ripple
     parser.add_argument('--fft_method', default='rfft', choices=['rfft'],
                        help='method to remove ripples')
     parser.add_argument('--sw_freq', type=float, default=0.9254, 
@@ -212,7 +208,7 @@ if __name__ == '__main__':
                        help='above amptitude threshold will be chosed')
     parser.add_argument('--sw_n', type=int, default=5, 
                        help='channel numbers near 1mhz to be chosed')
-    
+    # remove 8.1 mhz RFI in fft ?
     parser.add_argument('--rfi_8mhz', action='store_true',
                        help='remove 8.1 mhz components ?')
     parser.add_argument('--rfi_freq_step', type=float, 
@@ -227,6 +223,8 @@ if __name__ == '__main__':
                        help='keep rfi')
     parser.add_argument('--plot', action= 'store_true',
                        help='plot')
+    parser.add_argument('--no_radec', action='store_true',
+                       help='do not check radec')
     
     
     args = parser.parse_args()
@@ -299,13 +297,16 @@ if __name__ == '__main__':
     # load data
     fs = h5py.File(file_spec,'r')
     mjd = fs['mjd'][()]
-    if 'ra' not in fs.keys():
-        from hifast.cli_baseline import get_radec 
-        ra, dec, is_extrapo = get_radec(file_spec, nB, nB_radec, mjd)
-    else:
-        ra = fs['ra'][()]
-        dec = fs['dec'][()]
-        is_extrapo = None
+    
+    no_radec = args.no_radec
+    if not no_radec:
+        if 'ra' not in fs.keys():
+            from hifast.cli_baseline import get_radec 
+            ra, dec, is_extrapo = get_radec(file_spec, nB, nB_radec, mjd)
+        else:
+            ra = fs['ra'][()]
+            dec = fs['dec'][()]
+            is_extrapo = None
         
     if 'T' in fs.keys():
         T = fs['T'][()]
@@ -353,6 +354,7 @@ if __name__ == '__main__':
         is_rfi = rfi['is_rfi'][()]
         rfi.close()
         if len(is_rfi.shape) == 3:
+            # use 2D rfi mask
             is_rfi = is_rfi[:,:,0]|is_rfi[:,:,1]
     else:
         if 'T' in rfi.keys():
@@ -401,9 +403,6 @@ if __name__ == '__main__':
     else:
         header_in = None
 
-    #close files
-    # fs.close() # don't close, load extra later
-
     if trans:
         T = T.transpose((1,0,2))
         if flux:
@@ -418,92 +417,112 @@ if __name__ == '__main__':
     
     if len(T.shape) == 3:
         if keep_polar:
-            T3 = deecopy(T)
-        T = np.mean(T, axis=2, dtype='float64')   
+            T3 = deepcopy(T)
+            T_xx = T[:,:,0]
+            T_yy = T[:,:,1]
+            ori_shape = T_xx.shape
+            
+            # replace big rfi
+            data_rmrfi_xx , data_rmrfi_low_mw_xx, is_rfi_no_mw_xx = replace_rfi(T_xx,is_rfi,method = rfi_method,**rep_args)
+            # get standing waves
+            sw_fit_xx = fit_ripple(data_rmrfi_low_mw_xx,method = fft_method,plot = plot, **fit_args)
+            
+            data_rmrfi_yy , data_rmrfi_low_mw_yy, is_rfi_no_mw_yy = replace_rfi(T_yy,is_rfi,method = rfi_method,**rep_args)
+            
+            sw_fit_yy = fit_ripple(data_rmrfi_low_mw_yy,method = fft_method,plot = plot, **fit_args)
+            
+        else:
+            T = np.mean(T, axis=2, dtype='float64')   
+            ori_shape = T.shape
+            
+            # replace big rfi
+            data_rmrfi , data_rmrfi_low_mw, is_rfi_no_mw = replace_rfi(T,is_rfi,method = rfi_method,**rep_args)
+            # get standing waves
+            sw_fit = fit_ripple(data_rmrfi_low_mw,method = fft_method,plot = plot, **fit_args)
+    else:
+        raise ValueError('data should be 3D, and has 2 polars') 
+
         
-    ori_shape = T.shape
-        
-    # replace big rfi
-    data_rmrfi , data_rmrfi_low_mw, is_rfi_no_mw = replace_rfi(T,is_rfi,method = rfi_method,**rep_args)
+    # protect_mw
+    protect_mw = args.protect_mw
+    if protect_mw:
+        if keep_polar:
+            is_rfi_no_mw = np.append(is_rfi_no_mw_xx,is_rfi_no_mw_yy)
+            is_rfi = is_rfi_no_mw.reshape((2,ori_shape[0],ori_shape[1])).transpose((1,2,0))
+        else:    
+            is_rfi = deecopy(is_rfi_no_mw)
     
-    # get standing waves
-    sw_fit = fit_ripple(data_rmrfi_low_mw,method = fft_method,plot = plot, **fit_args)
     if plot:
         pdf.savefig();plt.close()
     
     # remove standing waves 
-    rmsw_data = T - sw_fit
-    
-    # protect_mw
-    protect_mw = args.protect_mw
-    if protect_mw:
-        is_rfi = deecopy(is_rfi_no_mw)
-    
-    rmsw_data_ = deepcopy(rmsw_data)
-    rmsw_data_[is_rfi] = np.nan    
+    if keep_polar: 
+        sw_fit = np.append(sw_fit_xx,sw_fit_yy)
+        sw_fit = sw_fit.reshape((2,ori_shape[0],ori_shape[1])).transpose((1,2,0))
+        rmsw_data = T3 - sw_fit
+    else:
+        rmsw_data = T - sw_fit
         
+    # fill rfi with ?
+    if fill_rfi == 'nan':
+        rmsw_data[is_rfi] = np.nan
+    elif fill_rfi == 'noise':
+        if keep_polar:
+            data_rmrfi = np.append(data_rmrfi_xx,data_rmrfi_yy)
+            data_rmrfi = data_rmrfi.reshape((2,ori_shape[0],ori_shape[1])).transpose((1,2,0))
+        rmsw_data[is_rfi] = data_rmrfi[is_rfi]
+    elif fill_rfi == 'rfi':
+        pass
+           
     if plot:
         print(" 'Wait for plotting patiently, you must.' Master Yoda said")
         tn = not_rfi_num[10]
-        fig = plt.figure(figsize=(40,4))
-        ax = fig.add_subplot(111)
-        ax.hlines([0,-.5],1320,1440,alpha = .8)
-        ax.plot(freq,np.mean(data_rmrfi_low_mw[tn-5:tn+5,:],axis = 0),'b',label='rm rfi',alpha = .5)
-        ax.plot(freq,np.mean(T[tn-5:tn+5,:],axis = 0),label='original')
-        ax.plot(freq,np.mean(sw_fit[tn-5:tn+5,:],axis = 0),label='ripple')
-        ax.plot(freq,np.mean(rmsw_data_[tn-5:tn+5,:],axis = 0) - .5,label='result')
-        ax.grid();ax.legend();ax.set_title('ten specs mean')
-        ax.set_xlim(1320,1440)
-        ax.set_ylim(-1,.5)
-        pdf.savefig();plt.close()
-        
-        from util import plot_waterfall
-        plot_waterfall(fs,data = T, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
-                       title = os.path.basename(file_spec).split('.')[:-1],pdf = pdf)
-        
-        plot_waterfall(fs,data = rmsw_data_, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),pdf = pdf,
-                       title = 'remove standing waves')
+        def plot_in_pdf(data_rmrfi_low_mw,T,sw_fit,rmsw_data,polar,pdf = None):
+            global tn, freq
+            fig = plt.figure(figsize=(40,4))
+            ax = fig.add_subplot(111)
+            ax.hlines([0,-.5],1320,1440,alpha = .8)
+            ax.plot(freq,np.mean(data_rmrfi_low_mw[tn-5:tn+5,:],axis = 0),'b',label='rm rfi',alpha = .5)
+            ax.plot(freq,np.mean(T[tn-5:tn+5,:],axis = 0),label='original')
+            ax.plot(freq,np.mean(sw_fit[tn-5:tn+5,:],axis = 0),label='ripple')
+            ax.plot(freq,np.mean(rmsw_data[tn-5:tn+5,:],axis = 0) - .5,label='result')
+            ax.grid();ax.legend();ax.set_title(f'ten specs mean, polar {polar}')
+            ax.set_xlim(1320,1440)
+            ax.set_ylim(-1,.5)
+            pdf.savefig();plt.close()
+
+            from util import plot_waterfall
+            plot_waterfall(fs,data = T, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
+                           title = os.path.basename(file_spec).split('.')[:-1],pdf = pdf)
+
+            plot_waterfall(fs,data = rmsw_data, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),pdf = pdf,
+                           title = f'remove standing waves, polar {polar}')
+            
+        if keep_polar:
+            plot_in_pdf(data_rmrfi_low_mw_xx,T_xx,sw_fit_xx,rmsw_data[:,:,0],polar='xx',pdf = pdf)
+            plot_in_pdf(data_rmrfi_low_mw_yy,T_yy,sw_fit_yy,rmsw_data[:,:,1],polar='yy',pdf = pdf)
+        else:
+            plot_in_pdf(data_rmrfi_low_mw,T,sw_fit,rmsw_data,polar='merged',pdf = pdf)
         
         pdf.close()
         log.info(f"Plot to {pdfname}")
-        
-        
-    if keep_polar: 
-        sw_ = np.zeros_like(T3)
-        sw_[:,:,0] = sw_fit;sw_[:,:,1] = sw_fit
-        rmsw_data = T3 - sw_
-        # fill rfi with ?
-        if fill_rfi == 'nan':
-            rmsw_data[is_rfi,:] = np.nan
-        elif fill_rfi == 'noise':
-            rmsw_data[is_rfi,:] = data_rmrfi[is_rfi]
-        elif fill_rfi == 'rfi':
-            pass
-    else:
-        rmsw_data = T - sw_fit
-        if fill_rfi == 'nan':
-            rmsw_data[is_rfi] = np.nan
-        elif fill_rfi == 'noise':
-            rmsw_data[is_rfi] = data_rmrfi[is_rfi]
-        elif fill_rfi == 'rfi':
-            pass
-        
+
     print(f"Saving...")
     dict_out= {}
     dict_out['mjd'] = mjd
     dict_out['ra'] = ra
     dict_out['dec'] = dec
     dict_out[outfield] = rmsw_data.astype('float32')
+    dict_out['ripple'] = sw_fit.astype('float32')
     dict_out['freq'] = freq
     dict_out['is_rfi'] = is_rfi
     if is_extrapo is not None:
         dict_out['is_extrapo'] = is_extrapo
     #save file
-    from hifast.util import add_extra
+    from hifast.utils.io import rec_his, save_dict_hdf5,add_extra
     add_extra(fs, dict_out)
     fs.close()
     rfi.close()
-    from hifast.util import rec_his, save_dict_hdf5
     header=rec_his(args=args)
     if header_in is not None: header.update(header_in)
     save_dict_hdf5(fileout, dict_out, header=header)
