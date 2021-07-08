@@ -68,7 +68,7 @@ def replace_rfi(data, is_rfi, method,**rep_args):
     return data_rmrfi, data_rmrfi_low_mw, is_rfi_no_mw
     
 
-def fit_ripple(data_rmrfi_low_mw, method, plot = False,**fit_args): 
+def fit_ripple(data_rmrfi_low_mw, method, plot = False,pdf = None,title = None,**fit_args): 
     """
     fit baseline ripple (standing wave) by FFT
     Parameter:
@@ -134,7 +134,8 @@ def fit_ripple(data_rmrfi_low_mw, method, plot = False,**fit_args):
 
         if plot:
             tn = not_rfi_num[0]
-    
+            if pdf is not None:
+                plt.switch_backend('agg')
             is_ = (x >= 0) & (x <= 3)
             fig = plt.figure(figsize=(22,5))
             ax = fig.add_subplot(111) 
@@ -149,6 +150,10 @@ def fit_ripple(data_rmrfi_low_mw, method, plot = False,**fit_args):
             ax.set_xlabel('k [$\mu$s]')
             plt.legend()
             plt.tight_layout()
+            if title is not None:
+                ax.set_title(title)
+            if pdf is not None:
+                pdf.savefig();plt.close()
 
         A_data_inpd =  amp_data_inpd * np.exp(1j*fftf.phi)
         A_data_ifft = np.real(np.fft.irfft(A_data_inpd,n=data_rmrfi_low_mw.shape[1]))
@@ -421,15 +426,17 @@ if __name__ == '__main__':
             T_xx = T[:,:,0]
             T_yy = T[:,:,1]
             ori_shape = T_xx.shape
-            
+            print("polar xx ...")
             # replace big rfi
             data_rmrfi_xx , data_rmrfi_low_mw_xx, is_rfi_no_mw_xx = replace_rfi(T_xx,is_rfi,method = rfi_method,**rep_args)
             # get standing waves
-            sw_fit_xx = fit_ripple(data_rmrfi_low_mw_xx,method = fft_method,plot = plot, **fit_args)
-            
+            sw_fit_xx = fit_ripple(data_rmrfi_low_mw_xx,method = fft_method,plot = plot,pdf=pdf,title='polar xx',
+                                   **fit_args)
+            print("polar yy ...")
             data_rmrfi_yy , data_rmrfi_low_mw_yy, is_rfi_no_mw_yy = replace_rfi(T_yy,is_rfi,method = rfi_method,**rep_args)
             
-            sw_fit_yy = fit_ripple(data_rmrfi_low_mw_yy,method = fft_method,plot = plot, **fit_args)
+            sw_fit_yy = fit_ripple(data_rmrfi_low_mw_yy,method = fft_method,plot = plot,pdf=pdf,title='polar yy',
+                                   **fit_args)
             
         else:
             T = np.mean(T, axis=2, dtype='float64')   
@@ -438,7 +445,8 @@ if __name__ == '__main__':
             # replace big rfi
             data_rmrfi , data_rmrfi_low_mw, is_rfi_no_mw = replace_rfi(T,is_rfi,method = rfi_method,**rep_args)
             # get standing waves
-            sw_fit = fit_ripple(data_rmrfi_low_mw,method = fft_method,plot = plot, **fit_args)
+            sw_fit = fit_ripple(data_rmrfi_low_mw,method = fft_method,plot = plot,pdf=pdf,title='polar merged',
+                                **fit_args)
     else:
         raise ValueError('data should be 3D, and has 2 polars') 
 
@@ -451,9 +459,6 @@ if __name__ == '__main__':
             is_rfi = is_rfi_no_mw.reshape((2,ori_shape[0],ori_shape[1])).transpose((1,2,0))
         else:    
             is_rfi = deecopy(is_rfi_no_mw)
-    
-    if plot:
-        pdf.savefig();plt.close()
     
     # remove standing waves 
     if keep_polar: 
