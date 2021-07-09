@@ -68,9 +68,9 @@ if __name__ == '__main__':
     parser.add_argument('--average_every_freq_2', type=int,
                        help='')
     
-    parser.add_argument('--njoin_t', type=int,
+    parser.add_argument('--njoin', type=int,
                        help='join nspec along t')
-    parser.add_argument('--njoin_t_2', type=int,
+    parser.add_argument('--njoin_2', type=int,
                        help='join nspec along t ')
     parser.add_argument('--s_method_t', choices=['gaussian', 'boxcar', 'median'],
                        help='')
@@ -112,7 +112,7 @@ if __name__ == '__main__':
 import numpy as np
 import h5py
 from scipy import ndimage
-from .core.baseline import get_baseline, get_baseline_mp, sub
+from .core.baseline import get_baseline, get_baseline_mp, sub_baseline
 from .utils.misc import extend_Trues, average_every_n, smooth1d, smooth1d_fft
 
 def gen_radec_file(file_spec, paras):
@@ -207,8 +207,8 @@ if __name__ == '__main__':
     cali_fname = args.cali_fname
     
     method = args.method
-    njoin_t = args.njoin_t
-    njoin_t_2 = args.njoin_t_2
+    njoin = args.njoin
+    njoin_2 = args.njoin_2
     s_method_t = args.s_method_t
     s_sigma_t = args.s_sigma_t
     s_method_t_2 = args.s_method_t_2
@@ -315,9 +315,9 @@ if __name__ == '__main__':
     if method == 'S' or method == 'SP':
         method_a = 'arPLS'
         para = {
-        's_sigma': s_sigma_freq,
-        's_method': s_method_freq,
-        'average_every': average_every_freq,
+        's_sigma_freq': s_sigma_freq,
+        's_method_freq': s_method_freq,
+        'average_every_freq': average_every_freq,
         'bl_para': fit_args,
                }
         
@@ -325,33 +325,33 @@ if __name__ == '__main__':
         bounds = [(0.,1.), (0.899, 0.961), (0, 2*np.pi), (-1,1)]
         fit_args_2['opt_para'] = {'bounds':bounds,}
         para2 = {
-        's_sigma': s_sigma_freq_2,
-        's_method': s_method_freq_2,
-        'average_every': average_every_freq_2,
+        's_sigma_freq': s_sigma_freq_2,
+        's_method_freq': s_method_freq_2,
+        'average_every_freq': average_every_freq_2,
         'bl_para': fit_args_2,
                }
-        T_bld1 = sub(freq, T, njoin=njoin_t, nproc=nproc, s_method_t=s_method_t, s_sigma_t=s_sigma_t, method=method_a, **para)
+        T_bld1 = sub_baseline(freq, T, njoin=njoin, nproc=nproc, s_method_t=s_method_t, s_sigma_t=s_sigma_t, method=method_a, **para)
         #exclude_fun = lambda x:abs(x) > 1.2*np.diff(np.percentile(x, [16,84], axis=1), axis=0)[0][:,None,:]
         if exclude_m == 0:
             exclude_fun = lambda x: extend_Trues(abs(x) > 1.*np.diff(np.percentile(x, [16,84], axis=1), axis=0)[0][:,None,:], axis=1, ext_frac=1/3, ext_add=3)
         elif exclude_m == 1:
             exclude_fun = lambda x: extend_Trues(abs(x) > 2.5*np.min(np.diff(np.percentile(x, [10, 50, 90], axis=1), axis=0), axis=0)[:,None,:], axis=1, ext_frac=1/3, ext_add=3)
-        bl_sin = T_bld1 - sub(freq, T_bld1, njoin=njoin_t_2, nproc=nproc, s_method_t=s_method_t_2, s_sigma_t=s_sigma_t_2, exclude_fun=exclude_fun, method=method_b, **para2)
+        bl_sin = T_bld1 - sub_baseline(freq, T_bld1, njoin=njoin_2, nproc=nproc, s_method_t=s_method_t_2, s_sigma_t=s_sigma_t_2, exclude_fun=exclude_fun, method=method_b, **para2)
         del(T_bld1)
         T = T - bl_sin
         del(bl_sin)
         if method == 'SP':
-            T = sub(T, njoin_t, method_a, para=para)
+            T = sub_baseline(freq, T, njoin=njoin, method=method_a, **para)
     elif method == '1':
         pass
     else:
         para = {
-        's_sigma': s_sigma_freq,
-        's_method': s_method_freq,
-        'average_every': average_every_freq,
+        's_sigma_freq': s_sigma_freq,
+        's_method_freq': s_method_freq,
+        'average_every_freq': average_every_freq,
         'bl_para': fit_args,
                }
-        T = sub(freq, T, njoin=njoin_t, nproc=nproc, s_method_t=s_method_t, s_sigma_t=s_sigma_t, method=method, **para)
+        T = sub_baseline(freq, T, njoin=njoin, nproc=nproc, s_method_t=s_method_t, s_sigma_t=s_sigma_t, method=method, **para)
         
     if trans:
         T = T.transpose((1,0,2))
