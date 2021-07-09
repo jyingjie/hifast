@@ -3,19 +3,20 @@ import glob
 import versioneer
 
 import re
-from hifast._version import get_versions
-_re_version = re.compile('^__version__\s*=.*$', re.MULTILINE)
-fname = 'hifast/__init__.py'
-__version__ = get_versions()['version']
-version = f'__version__ = "{__version__}"'
 
-with open(fname, 'r') as f: code = f.read()
-if _re_version.search(code) is None:
-    code = version + "\n" + code
-else:
-    code = _re_version.sub(version, code)
-with open(fname, 'w') as f:
-    f.write(code)
+# from hifast._version import get_versions
+# _re_version = re.compile('^__version__\s*=.*$', re.MULTILINE)
+# fname = 'hifast/__init__.py'
+# __version__ = get_versions()['version']
+# version = f'__version__ = "{__version__}"'
+
+# with open(fname, 'r') as f: code = f.read()
+# if _re_version.search(code) is None:
+#     code = version + "\n" + code
+# else:
+#     code = _re_version.sub(version, code)
+# with open(fname, 'w') as f:
+#     f.write(code)
     
 # with open("README.md", "r") as fh:
 #     long_description = fh.read()
