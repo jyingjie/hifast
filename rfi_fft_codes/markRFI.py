@@ -404,7 +404,7 @@ def find_RFI(spec,freq,is_rfi,is_rfi_mw,freq_step=8.1,RMS = None,freq_thr = 0.5,
         
     if ext_edge > 0:
         from hifast.utils.misc import extend_Trues
-        bigrfi = extend_Trues(bigrfi,axis = -1,ext_add = ext_edge)
+        bigrfi2 = extend_Trues(bigrfi2,axis = -1,ext_add = ext_edge)
      
     if plot:   
         fig,ax = plt.subplots(figsize=(15,3))
@@ -516,41 +516,37 @@ def find_t(data,freq = None,times = 10,thr = 20,frange = None,rfi_width_lim = 20
     return  is_timerfi
 
 
-def mask_time_rfi(data,freq,T_thr = None,rtype = 'short-freq',frange = None,**kwargs):
+def mask_time_rfi(data,freq,T_thr = None,rtype = 'short-freq',frange = None,file = None,**kwargs):
     ret = np.zeros_like(data,dtype = 'bool')
     
     if rtype == 'short-freq':
-        if frange == None:
-            raise ValueError("frange shouldn't be None.Request 1~2MHz wide.")
-        else:
-            if isinstance(frange,str):
-                file = frange
-                frange = np.load(file)
-                if frange.shape[1] != 2:
-                    raise ValueError("time RFI freq shape must like (n,2)")
+        if isinstance(file,str):
+            frange = np.load(file)
+            if frange.shape[1] != 2:
+                raise ValueError("time RFI freq shape must like (n,2)")
 
-                f_use = np.zeros_like(freq,dtype = 'bool')
-                for nf in range(frange.shape[0]):
-                    f_use = f_use | (freq>frange[nf,0])&(freq<frange[nf,1])
+            f_use = np.zeros_like(freq,dtype = 'bool')
+            for nf in range(frange.shape[0]):
+                f_use = f_use | (freq>frange[nf,0])&(freq<frange[nf,1])
 
-            elif len(frange) == 2:
-                f_use = (freq>frange[0])&(freq<frange[1])
-            
-            print(f"Looking for short-freq time RFI in {frange} ...")
-            is_timerfi = find_t(data,freq,frange =f_use, **kwargs)
-            
-            if is_timerfi.any() == False:
-                print("No short-freq time rfi is found.")
-                return ret
-            
-            use1 = np.zeros_like(data,dtype = 'bool')
-            use2 = np.zeros_like(data,dtype = 'bool')
-            use1[is_timerfi,:]  = True
-            use2[:,f_use]  = True
-            use = use1 & use2
+        elif len(frange) == 2:
+            f_use = (freq>frange[0])&(freq<frange[1])
 
-            tmp = deepcopy(data[use])
-            ret[use] = (tmp > T_thr)
+        print(f"Looking for short-freq time RFI in {frange} ...")
+        is_timerfi = find_t(data,freq,frange =f_use, **kwargs)
+
+        if is_timerfi.any() == False:
+            print("No short-freq time rfi is found.")
+            return ret
+
+        use1 = np.zeros_like(data,dtype = 'bool')
+        use2 = np.zeros_like(data,dtype = 'bool')
+        use1[is_timerfi,:]  = True
+        use2[:,f_use]  = True
+        use = use1 & use2
+
+        tmp = deepcopy(data[use])
+        ret[use] = (tmp > T_thr)
             
     elif rtype == 'long-freq':
         print(f"Looking for long-freq time RFI ...")

@@ -39,8 +39,10 @@ if __name__ == '__main__':
     parser.add_argument('--sf', action='store_true',
                         help='find short time time rfi')
     # short freq
-    parser.add_argument('--sf_frange', 
-                       help='freq range exists short-freq time rfi or npy filename')
+    parser.add_argument('--sf_frange', type=float, nargs=2,
+                       help='freq range exists short-freq time rfi ')
+    parser.add_argument('--sf_file',         
+                        help='freq range exists short-freq time rfi npy filename')
     parser.add_argument('--sf_times', type=float, default=10,
                        help='first threhold, rfi is this times of median value')
     parser.add_argument('--sf_thr', type=float, default=10,
@@ -257,6 +259,7 @@ if __name__ == '__main__':
         from markRFI import mask_time_rfi
         if shortf_rfi:
             shortf_args = {}
+            shortf_args['file'] = args.sf_file
             shortf_args['frange'] = args.sf_frange
             shortf_args['times'] = args.sf_times
             shortf_args['thr'] = args.sf_thr
