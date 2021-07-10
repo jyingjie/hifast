@@ -39,8 +39,8 @@ if __name__ == '__main__':
     parser.add_argument('--sf', action='store_true',
                         help='find short time time rfi')
     # short freq
-    parser.add_argument('--sf_frange', type=float, nargs=2,
-                       help='freq range exists short-freq time rfi')
+    parser.add_argument('--sf_frange', 
+                       help='freq range exists short-freq time rfi or npy filename')
     parser.add_argument('--sf_times', type=float, default=10,
                        help='first threhold, rfi is this times of median value')
     parser.add_argument('--sf_thr', type=float, default=10,
@@ -215,7 +215,7 @@ if __name__ == '__main__':
         
     if len(T.shape) == 3:
         if keep_polar:
-            T3 = deecopy(T)
+            T3 = deepcopy(T)
         T = np.mean(T, axis=2, dtype='float64')    
     
     T = T[ind_sort]           
@@ -392,6 +392,11 @@ if __name__ == '__main__':
         else:
             T_ret = T_ori
             T_ret[rfi_mask] = np.nan  
+    else:
+        if keep_polar: 
+            T_ret = T3
+        else:
+            T_ret = T_ori
 
     if plot:    
         print(" 'Wait for plotting patiently, you must.' Master Yoda said")

@@ -463,7 +463,8 @@ def find_t(data,freq = None,times = 10,thr = 20,frange = None,rfi_width_lim = 20
     is_timerfi = np.zeros_like(t,dtype = 'bool')
     
     if (freq is not None)&(frange is not None):
-        pattern_use = (freq>frange[0])&(freq<frange[1])
+        pattern_use = frange
+        
         pat_data = data[:,pattern_use]
     else:
         pat_data = data
@@ -522,10 +523,21 @@ def mask_time_rfi(data,freq,T_thr = None,rtype = 'short-freq',frange = None,**kw
         if frange == None:
             raise ValueError("frange shouldn't be None.Request 1~2MHz wide.")
         else:
-            f_use = (freq>frange[0])&(freq<frange[1])
+            if isinstance(frange,str):
+                file = frange
+                frange = np.load(file)
+                if frange.shape[1] != 2:
+                    raise ValueError("time RFI freq shape must like (n,2)")
+
+                f_use = np.zeros_like(freq,dtype = 'bool')
+                for nf in range(frange.shape[0]):
+                    f_use = f_use | (freq>frange[nf,0])&(freq<frange[nf,1])
+
+            elif len(frange) == 2:
+                f_use = (freq>frange[0])&(freq<frange[1])
             
             print(f"Looking for short-freq time RFI in {frange} ...")
-            is_timerfi = find_t(data,freq,frange =frange, **kwargs)
+            is_timerfi = find_t(data,freq,frange =f_use, **kwargs)
             
             if is_timerfi.any() == False:
                 print("No short-freq time rfi is found.")
@@ -542,7 +554,9 @@ def mask_time_rfi(data,freq,T_thr = None,rtype = 'short-freq',frange = None,**kw
             
     elif rtype == 'long-freq':
         print(f"Looking for long-freq time RFI ...")
-        is_timerfi = find_t(data,freq,frange =frange, **kwargs)
+        if len(frange) == 2:
+            f_use = (freq>frange[0])&(freq<frange[1])
+        is_timerfi = find_t(data,freq,frange =f_use, **kwargs)
         if is_timerfi.any() == False:
             print("No long-freq time rfi is found.")
             return ret
