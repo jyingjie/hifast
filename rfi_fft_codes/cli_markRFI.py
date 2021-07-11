@@ -21,6 +21,7 @@ if __name__ == '__main__':
     import warnings 
     warnings.filterwarnings("ignore",r'overflow encountered in exp')
     warnings.filterwarnings("ignore",r'Polyfit may be poorly conditioned')
+    
     import argparse
     parser = argparse.ArgumentParser(allow_abbrev=False)
     
@@ -51,6 +52,8 @@ if __name__ == '__main__':
                        help='rfi lasts at least 20 spec numbers')
     parser.add_argument('--sf_T_thr',type=float, default=.5, 
                        help='T above thr will be masked')
+    parser.add_argument('--sf_ext',type = int,default=0, 
+                       help='extend edge')
     # long freq
     parser.add_argument('--lf_beams', 
                         help='beam numbers which has long-freq time rfi')
@@ -81,6 +84,8 @@ if __name__ == '__main__':
                        help='default 3 times of rms threshold')
     parser.add_argument('--rms_frange', type=float, nargs=2,
                        help='freq range to compute rms')
+    parser.add_argument('--rms_sigma', type=float, default =6,
+                       help='gauss filter sigma to compute real rms')
     parser.add_argument('--mw_frange', type=float, nargs=2,
                        help='protect milky way freq range(estimate)')
     
@@ -265,6 +270,7 @@ if __name__ == '__main__':
             shortf_args['thr'] = args.sf_thr
             shortf_args['rfi_width_lim'] = args.sf_rfi_last
             shortf_args['T_thr'] = args.sf_T_thr
+            shortf_args['ext_add'] = args.sf_ext
             
             s_rfi = mask_time_rfi(T,freq, rtype = 'short-freq',plot = plot,pdf = pdf,**shortf_args)
             t_rfi = s_rfi
@@ -313,9 +319,10 @@ if __name__ == '__main__':
     ###################### freq period RFI ##########################    
 
     #mark RFI  
-    from markRFI import find_RFI, rms
+    from markRFI import find_RFI, real_rms
     rfi_thr = args.rfi_thr
     rms_frange = args.rms_frange
+    rms_sigma = args.rms_sigma
     mw_frange = args.mw_frange
     #print("Calutating RMS.")
     #RMS = rms(T,freq,rms_frange)
@@ -332,8 +339,8 @@ if __name__ == '__main__':
         
         tn = not_rfi_num[0]
         spec = deepcopy(T[tn,:])
-        
-        RMS = rms(spec,freq,rms_frange)
+        #RMS = rms(spec,freq,rms_frange)
+        RMS = real_rms(spec,freq,rms_sigma,rms_frange)
         is_rfi_mw = (spec > RMS * rfi_thr)
         is_rfi_ = is_rfi_mw & (~protect_use)
         _,theory = find_RFI(spec,freq,is_rfi_,is_rfi_mw,freq_step = freq_step,RMS = RMS,freq_thr = freq_thr,
@@ -352,7 +359,8 @@ if __name__ == '__main__':
         for tn in tqdm(range(T.shape[0])):
             if tn in not_rfi_num:
                 spec = deepcopy(T[tn,:]) 
-                RMS = rms(spec,freq,rms_frange)
+                #RMS = rms(spec,freq,rms_frange)
+                RMS = real_rms(spec,freq,rms_sigma,rms_frange)
                 is_rfi_mw = (spec > RMS * rfi_thr)
                 is_rfi = (spec > RMS * rfi_thr) & (~protect_use)
                 try:

@@ -15,33 +15,39 @@ from copy import deepcopy
 from tqdm import tqdm
 
 def rms(data,vel,rms_vrange=None):
-    if len(data.shape) == 1:
-        if rms_vrange is None:
-            ans = np.sqrt(np.nanmean((data)**2))
-        else:
-            is_use = (vel > rms_vrange[0])&(vel < rms_vrange[1])
-            ans = np.sqrt(np.nanmean((data[is_use])**2))
-    elif len(data.shape) ==2:
-        if rms_vrange is None:
-            ans = np.sqrt(np.nanmean((data)**2,axis = -1))
-        else:
-            is_use = (vel > rms_vrange[0])&(vel < rms_vrange[1])
-            ans = np.sqrt(np.nanmean((data[:,is_use])**2,axis = -1))
+    if rms_vrange is not None:
+        is_use = (vel > rms_vrange[0])&(vel < rms_vrange[1])
+        if len(data.shape) == 1:
+            data = data[is_use]
+        elif len(data.shape) ==2:
+            data = data[:,is_use]
+        
+    ans = np.sqrt(np.nanmean((data)**2,axis = -1))   
+    return ans
+
+def real_rms(data,vel,sigma,rms_vrange=None):
+    from scipy.ndimage import gaussian_filter1d
+    if rms_vrange is not None:
+        is_use = (vel > rms_vrange[0])&(vel < rms_vrange[1])
+        if len(data.shape) == 1:
+            data = data[is_use]
+        elif len(data.shape) ==2:
+            data = data[:,is_use]
+            
+    g = gaussian_filter1d(data, sigma, axis = -1)
+    ans = np.sqrt(np.nanmean((data - g)**2,axis = -1))        
+    
     return ans
 
 def mean(data,vel, vrange=None):
-    if len(data.shape) == 1:
-        if  vrange is None:
-            ans = np.nanmean(data)
-        else:
-            is_use = (vel >  vrange[0])&(vel <  vrange[1])
-            ans = np.nanmean(data[is_use])
-    elif len(data.shape) ==2:
-        if  vrange is None:
-            ans = np.nanmean(data)
-        else:
-            is_use = (vel >  vrange[0])&(vel <  vrange[1])
-            ans = np.nanmean(data[:,is_use])
+    if rms_vrange is not None:
+        is_use = (vel > rms_vrange[0])&(vel < rms_vrange[1])
+        if len(data.shape) == 1:
+            data = data[is_use]
+        elif len(data.shape) ==2:
+            data = data[:,is_use]
+            
+    ans = np.nanmean(data,axis = -1)  
     return ans
 
 def find_local_peak(rfi1,freq1,RMS,distance=5,):
@@ -100,16 +106,16 @@ def get_startend(is_rfi,rfi_width_lim = None,ext_sec= 0):
     if is_rfi.any() == False:
         raise ValueError("Input array has no Trues.")
     
+    if is_rfi[0] == True:
+        is_rfi[0] = False
+        
     starend = np.hstack((np.diff(is_rfi+0),0))
     start_ = np.where(starend==1)[0]
     end_ = np.where(starend==-1)[0]
-    starend = np.hstack((np.diff(is_rfi+0),0))
-    start_ = np.where(starend==1)[0]
-    end_ = np.where(starend==-1)[0]
-
-    if end_[0]<start_[0]:
+    
+    if end_[0] < start_[0]:
         end_ = np.delete(end_,0)
-    if end_[-1]<start_[-1]:
+    if end_[-1] < start_[-1]:
         start_ = np.delete(start_,-1)
     
     if rfi_width_lim is None:
@@ -136,7 +142,7 @@ def get_startend(is_rfi,rfi_width_lim = None,ext_sec= 0):
     return start,end
 
 
-def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,**kwargs):
+def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,check = True,**kwargs):
 
     start,end = get_startend(is_rfi,**kwargs)
     # big rfi position
@@ -156,8 +162,8 @@ def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,**kwargs):
     # from the biggest one to guess rfi set 1
     fc00 = fc0[np.argmax(peaks)]
     
-    def rfi_set1(fc0,fc00,freq,freq_step,freq_thr):
-        fcenter1 = []
+    def rfi_set1(fc0,fc00,freq,freq_step,freq_thr,peaks):
+        fcenter1 = []; peak1 = []
         former = int((fc00 - freq[0])//freq_step + 10)
         fc1 = np.arange(fc00-freq_step*former,1440,freq_step)
         
@@ -168,19 +174,25 @@ def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,**kwargs):
             ii += 1
             if np.min(np.abs(vc - fc1)) < freq_thr:
                 # record rfi set 1 center
-                fcenter1 += [vc,]
+                fcenter1 += [vc,]; peak1 += [peaks[j],]
             else:   
                 fcenter2_loc += [int(ii),]
+                
+        fcenter1 = np.array(fcenter1)
+        if check:
+            peak1 = np.array(peak1)
+            _,fcenter1 = check_repeat_center(fcenter1,freq_step=8.1,x_start = '1st point',peaks = peak1)        
+                   
         return fcenter1,fcenter2_loc,fc1
     
-    fcenter1,fcenter2_loc,fc1 = rfi_set1(fc0,fc00,freq,freq_step,freq_thr)
+    fcenter1,fcenter2_loc,fc1 = rfi_set1(fc0,fc00,freq,freq_step,freq_thr,peaks)
     
     if len(fcenter1)<2:
         log.warning(f"rfi set 1 only has {len(fcenter1)} items, please check if it is a high-flux source or non-period RFI. Try again...")
         peaks[np.argmax(peaks)] = 0
         # find another one
         fc00 = fc0[np.argmax(peaks)]
-        fcenter1,fcenter2_loc,fc1 = rfi_set1(fc0,fc00,freq,freq_step,freq_thr)
+        fcenter1,fcenter2_loc,fc1 = rfi_set1(fc0,fc00,freq,freq_step,freq_thr,peaks)
     
     # guess rfi set 2 besides set 1                
     peak_use = np.full(len(peaks),False)
@@ -188,8 +200,8 @@ def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,**kwargs):
     peaks[~peak_use] = 0
     fc01 = fc0[np.argmax(peaks)]
 
-    def rfi_set2(fc0,fc1,fc01,freq,freq_step,freq_thr):
-        fcenter2 = []
+    def rfi_set2(fc0,fc1,fc01,freq,freq_step,freq_thr,peaks):
+        fcenter2 = []; peak2 = []
         former = int((fc01 - freq[0])//freq_step + 10)
         fc2 = np.arange(fc01-freq_step*former,1440,freq_step)
 
@@ -199,19 +211,25 @@ def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,**kwargs):
             vc = fc0[j]
             ii += 1
             if np.min(np.abs(vc - fc2)) < freq_thr:
-                fcenter2 += [vc,]
+                fcenter2 += [vc,]; peak2 += [peaks[j],]
             elif (np.min(np.abs(vc - fc1)) >= freq_thr)&(np.min(np.abs(vc - fc2)) >= freq_thr):
                 fcenter3_loc += [int(ii),]
+        
+        fcenter2 = np.array(fcenter2)
+        if check:
+            peak2 = np.array(peak2)
+            _,fcenter2 = check_repeat_center(fcenter2,freq_step=8.1,x_start = '1st point',peaks = peak2)         
+        
         return fcenter2,fcenter3_loc
     
-    fcenter2,fcenter3_loc = rfi_set2(fc0,fc1,fc01,freq,freq_step,freq_thr)
+    fcenter2,fcenter3_loc = rfi_set2(fc0,fc1,fc01,freq,freq_step,freq_thr,peaks)
     
     if len(fcenter2)<2:
         log.warning(f"rfi set 2 only has {len(fcenter2)} items, please check if it is a high-flux source or non-period RFI. Try again...")
         peaks[np.argmax(peaks)] = 0
         fc01 = fc0[np.argmax(peaks)]
         # find another one 
-        fcenter2,fcenter3_loc = rfi_set2(fc0,fc1,fc01,freq,freq_step,freq_thr)
+        fcenter2,fcenter3_loc = rfi_set2(fc0,fc1,fc01,freq,freq_step,freq_thr,peaks)
     
     # guess rfi set 3 besides set 1 & 2 
     peak_use = np.full(len(peaks),False)
@@ -223,24 +241,63 @@ def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,**kwargs):
         
         former = int((fc02 - freq[0])//freq_step + 10)
         fc3 = np.arange(fc02-freq_step*former,1440,freq_step)  
-        
+        peak3 = []
         for j in range(len(fc0)):
             vc = fc0[j]
             if np.min(np.abs(vc - fc3)) < freq_thr:
-                fcenter3 += [vc,]
-    
-    fcenter1 = np.array(fcenter1).flatten()
-    fcenter2 = np.array(fcenter2).flatten()
-    fcenter3 = np.array(fcenter3).flatten()
+                fcenter3 += [vc,]; peak3 +=[peaks[j]]
+        fcenter3 = np.array(fcenter3)
+        if check:
+            peak3 = np.array(peak3)       
+            _,fcenter3 = check_repeat_center(fcenter3,freq_step=8.1,x_start = '1st point',peaks = peak3)  
+    else:
+        fcenter3 = np.array(fcenter3)
     fc0 = np.array(fc0).flatten()
     
     return fcenter1,fcenter2,fcenter3,fc0
 
-def polyfit1order(item,freq_step=8.1,plot = False,pdf = None,x_start = '1st point'):
+def check_repeat_center(item,freq_step=8.1,x_start = '1st point',peaks = None):
     if x_start == 'zero':
         x = np.around(item/freq_step)
     elif x_start == '1st point':
         x = np.around((item-item[0])/freq_step)
+
+    if len(set(x)) < len(x):
+        from collections import Counter 
+        c = Counter(x)
+        repeat_loc = np.array(list(c.values())) > 1
+        repeat_key = np.array(list(c.keys()))[repeat_loc]
+
+        if isinstance(peaks,np.ndarray):
+            delete_loc = []
+            for i in range(len(repeat_key)):
+                repeat_loc_in_x = np.where(x == repeat_key[i])[0]
+                peak = np.zeros_like(x)
+                peak[repeat_loc_in_x] = peaks[repeat_loc_in_x]
+                Max = np.max(peak)
+                if np.sum(peak == Max) > 1:
+                    del_loc = np.hstack((np.where((peak > 0)&(peak < np.max(peak)))[0],np.arange(len(peak))[np.argmax(peak)]))
+                else:
+                    del_loc = np.where((peak > 0)&(peak < np.max(peak)))[0]
+                delete_loc.append(del_loc)
+        else:
+            repeat_loc_in_x = np.array([np.where(x == repeat_key[i])[0] for i in range(len(repeat_key))])
+            delete_loc = repeat_loc_in_x[:,1:].flatten()
+            
+        x = np.delete(x,delete_loc,)
+        item = np.delete(item,delete_loc,)
+        #log.warning("RFIs are too closed. So x has repeated item, delete {len(delete_loc)}.")
+        #raise ValueError(f" RFIs are too closed. So x has repeated item, delete {len(delete_loc)}.")
+    return x,item
+
+
+def polyfit1order(item,plot = False,pdf = None,**kwargs):
+
+    x,item = check_repeat_center(item,**kwargs)
+        
+    if len(x) <= 1:
+        raise ValueError(f" x only has {len(x)} item, can't polyfit.")
+        
     pfit = np.polyfit(x,item,1)
     pfunc = np.poly1d(pfit)
     if plot:
@@ -274,6 +331,8 @@ def mask_RFI(freq,is_rfi,theory,mask_all_theory = False,freq_from_theory = None,
         for th in theory:
             bigrfi2[(freq>th - freq_from_theory/2) & (freq<th + freq_from_theory/2)] = True
         bigrfi3 = bigrfi | bigrfi2
+    else:
+        bigrfi3 = bigrfi
     
     return bigrfi,bigrfi3
 
@@ -356,10 +415,13 @@ def center_theory(freq,fcenter1,fcenter2,fcenter3,freq_step,plot,pdf,rfi_fit_use
         theory2 = np.delete(theory2,np.where((theory2 < freq[0])|(theory2 > freq[-1]))[0])
         
         if rfi_fit_use == 'three groups':  
-            pfunc3 = polyfit1order(fcenter3, freq_step=freq_step, plot = plot, pdf = pdf)
-            former = int((pfunc3[0] - freq[0])//pfunc3[1] + 10)
-            theory3 = np.arange(pfunc3[0]-pfunc3[1]*former,1460,pfunc3[1])
-            theory3 = np.delete(theory3,np.where((theory3 < freq[0])|(theory3 > freq[-1]))[0])
+            try:
+                pfunc3 = polyfit1order(fcenter3, freq_step=freq_step, plot = plot, pdf = pdf)
+                former = int((pfunc3[0] - freq[0])//pfunc3[1] + 10)
+                theory3 = np.arange(pfunc3[0]-pfunc3[1]*former,1460,pfunc3[1])
+                theory3 = np.delete(theory3,np.where((theory3 < freq[0])|(theory3 > freq[-1]))[0])
+            except ValueError:
+                theory3 = np.array([])
             theory0 = np.hstack((theory1,theory2,theory3)) 
         elif rfi_fit_use == 'two groups':      
             theory3 = np.array([])
@@ -418,7 +480,7 @@ def find_RFI(spec,freq,is_rfi,is_rfi_mw,freq_step=8.1,RMS = None,freq_thr = 0.5,
         ax.vlines(fc0,ymin=ymin,ymax=ymax,linestyles='--',colors='k',label = 'all')
         ax.vlines(fcenter1,ymin=ymin,ymax=ymax,linestyles='--',colors='r',label = '1')
         ax.vlines(fcenter2,ymin=ymin,ymax=ymax,linestyles='--',colors='g',label = '2')
-        if rfi_fit_use == 'three groups':
+        if (rfi_fit_use == 'three groups') & (fcenter3.size>0):
             ax.vlines(fcenter3,ymin=ymin,ymax=ymax,linestyles='--',colors='b',label = '3')
         if ylim is not None:
             ax.set_ylim(ylim[0],ylim[1])
@@ -435,7 +497,7 @@ def find_RFI(spec,freq,is_rfi,is_rfi_mw,freq_step=8.1,RMS = None,freq_thr = 0.5,
         if (rfi_fit_use == 'two groups')|(rfi_fit_use == 'three groups'):
             ax.vlines(theory1,ymin=ymin,ymax=ymax,linestyles='--',colors='r',label = 'theory1')
             ax.vlines(theory2,ymin=ymin,ymax=ymax,linestyles='--',colors='g',label = 'theory2')
-            if rfi_fit_use == 'three groups':
+            if (rfi_fit_use == 'three groups') & (theory3.size>0):
                 ax.vlines(theory3,ymin=ymin,ymax=ymax,linestyles='--',colors='b',label = 'theory3')
         elif rfi_fit_use == 'all':
             ax.vlines(theory0,ymin=ymin,ymax=ymax,linestyles='--',colors='k',label = 'theory0')
@@ -458,7 +520,7 @@ def find_RFI(spec,freq,is_rfi,is_rfi_mw,freq_step=8.1,RMS = None,freq_thr = 0.5,
 ####################### time rfi ########################
 
 def find_t(data,freq = None,times = 10,thr = 20,frange = None,rfi_width_lim = 20,
-           ext_add = 0,plot = False,pdf = None):
+           ext_add = 0,plot = False,pdf = None,ylim = None):
     t = np.arange(data.shape[0])
     is_timerfi = np.zeros_like(t,dtype = 'bool')
     
@@ -510,6 +572,8 @@ def find_t(data,freq = None,times = 10,thr = 20,frange = None,rfi_width_lim = 20
         ax.legend()
         ax.set_ylabel('mean along freq axis')
         ax.set_xlabel('spec number (time)')
+        if ylim is not None:
+            ax.set_ylim(ylim[0],ylim[1])
         if pdf is not None:
             pdf.savefig();plt.close()
             
