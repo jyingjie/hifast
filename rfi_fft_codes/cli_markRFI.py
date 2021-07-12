@@ -417,13 +417,13 @@ if __name__ == '__main__':
         from util import plot_waterfall
         if keep_polar:
             plot_waterfall(f,data = T_ret[:,:,0], vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
-                           title = os.path.basename(fileout).split('.')[:-1][0] + 'polar xx',pdf = pdf)
+                           title = os.path.basename(fileout).split('.')[:-1][0] + '_polar xx',pdf = pdf)
                         
             plot_waterfall(f,data = T_ret[:,:,1], vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
-                           title = os.path.basename(fileout).split('.')[:-1][0] + 'polar yy',pdf = pdf)
+                           title = os.path.basename(fileout).split('.')[:-1][0] + '_polar yy',pdf = pdf)
         else:
             plot_waterfall(f,data = T_ret, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
-                           title = os.path.basename(fileout).split('.')[:-1][0] + 'polar merged',pdf = pdf)              
+                           title = os.path.basename(fileout).split('.')[:-1][0] + '_polar merged',pdf = pdf)              
         
         pdf.close()
         log.info(f"Plot to {pdfname}")
