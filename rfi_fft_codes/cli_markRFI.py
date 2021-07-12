@@ -343,11 +343,12 @@ if __name__ == '__main__':
         RMS = real_rms(spec,freq,rms_sigma,rms_frange)
         is_rfi_mw = (spec > RMS * rfi_thr)
         is_rfi_ = is_rfi_mw & (~protect_use)
-        _,theory = find_RFI(spec,freq,is_rfi_,is_rfi_mw,freq_step = freq_step,RMS = RMS,freq_thr = freq_thr,
-                     ext_edge = ext_edge,rfi_fit_use = 'two groups',plot = plot,pdf=pdf,ylim=ylim,
-                     mask_RFI_method = mask_RFI_method, small_rfi_times = small_rfi_times,chan_step = chan_step,
-                     mask_all_theory = mask_all_theory,freq_from_theory = freq_from_theory,mask_thr = mask_thr,
-                     **find_args)
+        _,theory = find_RFI(
+            spec,freq,is_rfi_,is_rfi_mw,freq_step = freq_step,RMS = RMS,freq_thr = freq_thr,
+            ext_edge = ext_edge,rfi_fit_use = 'two groups',plot = plot,pdf=pdf,ylim=ylim,
+            mask_RFI_method = mask_RFI_method, small_rfi_times = small_rfi_times,chan_step = chan_step,
+            mask_all_theory = mask_all_theory,freq_from_theory = freq_from_theory,mask_thr = mask_thr,
+            **find_args)
     
     if is_rfi is None:
         #is_rfi = is_rfi & (~protect_use)
@@ -364,11 +365,12 @@ if __name__ == '__main__':
                 is_rfi_mw = (spec > RMS * rfi_thr)
                 is_rfi = (spec > RMS * rfi_thr) & (~protect_use)
                 try:
-                    pd_rfi[tn,:],rfi_theory = find_RFI(spec,freq,is_rfi,is_rfi_mw,freq_step = freq_step,RMS = RMS,
-                       freq_thr = freq_thr,ext_edge = ext_edge,rfi_fit_use = rfi_groups ,plot = False,
-                       mask_RFI_method = mask_RFI_method, small_rfi_times = small_rfi_times,chan_step = chan_step,
-                       mask_all_theory = mask_all_theory,freq_from_theory = freq_from_theory,mask_thr = mask_thr,
-                       **find_args)
+                    pd_rfi[tn,:],rfi_theory = find_RFI(
+                        spec,freq,is_rfi,is_rfi_mw,freq_step = freq_step,RMS = RMS,
+                        freq_thr = freq_thr,ext_edge = ext_edge,rfi_fit_use = rfi_groups ,plot = False,
+                        mask_RFI_method = mask_RFI_method, small_rfi_times = small_rfi_times,chan_step = chan_step,
+                        mask_all_theory = mask_all_theory,freq_from_theory = freq_from_theory,mask_thr = mask_thr,
+                        **find_args)
 
                     if save_rfi_list:
                         if len(rfi_theory) < rfi_freq_list.shape[1]:
@@ -398,23 +400,30 @@ if __name__ == '__main__':
     
     if not keep_rfi:
         if keep_polar: 
-            T_ret = T3
+            T_ret = deepcopy(T3)
             T_ret[rfi_mask,:] = np.nan
         else:
-            T_ret = T_ori
+            T_ret = deepcopy(T_ori)
             T_ret[rfi_mask] = np.nan  
     else:
         if keep_polar: 
-            T_ret = T3
+            T_ret = deepcopy(T3)
         else:
-            T_ret = T_ori
+            T_ret = deepcopy(T_ori)
 
     if plot:    
         print(" 'Wait for plotting patiently, you must.' Master Yoda said")
         
         from util import plot_waterfall
-        plot_waterfall(f,data = T_ori, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
-                       title = os.path.basename(fileout).split('.')[:-1],pdf = pdf)
+        if keep_polar:
+            plot_waterfall(f,data = T_ret[:,:,0], vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
+                           title = os.path.basename(fileout).split('.')[:-1][0] + 'polar xx',pdf = pdf)
+                        
+            plot_waterfall(f,data = T_ret[:,:,1], vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
+                           title = os.path.basename(fileout).split('.')[:-1][0] + 'polar yy',pdf = pdf)
+        else:
+            plot_waterfall(f,data = T_ret, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
+                           title = os.path.basename(fileout).split('.')[:-1][0] + 'polar merged',pdf = pdf)              
         
         pdf.close()
         log.info(f"Plot to {pdfname}")
@@ -430,10 +439,15 @@ if __name__ == '__main__':
         
     if pd_rfi is not None:
         dict_out['is_rfi'] = rfi_mask
+    if shortf_rfi:
+        if np.sum(s_rfi) > 0:
+            dict_out['short_rfi'] = s_rfi
+    
     dict_out['freq'] = freq
     if 'ra' in f.keys():
         dict_out['ra'] = ra
         dict_out['dec'] = dec
+        
     dict_out['mjd'] = mjd
     dict_out[outfield] = T_ret.astype('float32')
     if save_rfi_list:

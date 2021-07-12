@@ -78,7 +78,7 @@ def plot_waterfall(f,corvel=None,data = None,xtype = 'freq',polar = 'xx',cmap = 
     
     if xrange != None:
         x1,x2 = np.min(xrange),np.max(xrange)
-        is_use = (x>x1)&(x<x2)
+        is_use = (x>=x1)&(x<=x2)
         x = x[is_use]
         if data.shape[1] != x.shape[0]:
             data = data[:,is_use]
@@ -160,7 +160,7 @@ def get_data(f,polar='average',xrange = None):
         data =T
     if xrange != None:
         x1,x2 = np.min(xrange),np.max(xrange)
-        is_use = (x>x1)&(x<x2)
+        is_use = (x>=x1)&(x<=x2)
         x = x[is_use]
         if data.shape[1] != x.shape[0]:
             data = data[:,is_use]

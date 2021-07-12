@@ -26,13 +26,14 @@ def replace_rfi(data, is_rfi, method,**rep_args):
     sg_polyorder: scipy.signal.savgol_filter polyorder
     mw_lower: lower milky way area by divide a number
     """
-    global mw_use,fdelta,is_rfi_num,not_rfi_num
+    global mw_use,fdelta,is_rfi_num,not_rfi_num,s_rfi
     
     sg_window = rep_args['sg_window']
     sg_polyorder = rep_args['sg_polyorder']
     mw_lower = rep_args['mw_lower']
     times_lower = rep_args['times_lower']
-
+    rms_sigma = rep_args['rms_sigma'] 
+    
     if method == 'subtract':
 
         is_rfi_no_mw = deepcopy(is_rfi)
@@ -54,10 +55,14 @@ def replace_rfi(data, is_rfi, method,**rep_args):
                 sg = savgol_filter(data_no_mw[tn,:],window_length = window_length ,polyorder=sg_polyorder,)
                 data_rmrfi[tn,is_rfi_no_mw[tn]] = data[tn,is_rfi_no_mw[tn]] - sg[is_rfi_no_mw[tn]]
 
-        from markRFI import rms
-        RMS = rms(data_rmrfi[0,:],freq,[freq[0],freq[0]+20])
+        from markRFI import real_rms
+        RMS = real_rms(data_rmrfi[0,:],freq,sigma=rms_sigma,rms_vrange=[freq[0],freq[0]+10])
+        
+        if s_rfi is not None:
+            data_rmrfi[s_rfi] = 0
+        
         thr_lower = RMS*times_lower
-        low_use = (data_rmrfi > thr_lower) 
+        low_use = (np.abs(data_rmrfi) > thr_lower)
         from hifast.utils.misc import extend_Trues
         low_use = extend_Trues(low_use,ext_add =10,leng_lim = 20,axis = -1)
           
@@ -133,7 +138,7 @@ def fit_ripple(data_rmrfi_low_mw, method, plot = False,pdf = None,title = None,*
 
 
         if plot:
-            tn = not_rfi_num[0]
+            tn = not_rfi_num[10]
             if pdf is not None:
                 plt.switch_backend('agg')
             is_ = (x >= 0) & (x <= 3)
@@ -175,6 +180,8 @@ if __name__ == '__main__':
                         help='file name to sub standing waves')
     parser.add_argument('-rfi', '--rfi_fname',
                        help='mask rfi file name')
+    parser.add_argument('-sep', '--sep_fname',
+                       help='sep file name')
     parser.add_argument('-f', '--force', action='store_true',
                         help='overwriting file if out file exists')
     parser.add_argument('--frange', type=float, nargs=2,
@@ -195,6 +202,8 @@ if __name__ == '__main__':
                        help='milky way freq range')
     parser.add_argument('--protect_mw', action= 'store_true',
                        help='protect mw')    
+    parser.add_argument('--rms_sigma', type=float, default = 6,
+                       help='gauss filter sigma to compute real rms')
     parser.add_argument('--sg_window', type=float, default=1.0, 
                        help='savgol_filter window_length (MHz)')
     parser.add_argument('--sg_polyorder', type=int, default=7, 
@@ -263,6 +272,8 @@ if __name__ == '__main__':
             os.mkdir(outdir+'/fig/')
         pdfname = os.path.join(outdir+'/fig/','.'.join(os.path.basename(fileout).split('.')[:-1])+ '.pdf')
         pdf = PdfPages(pdfname)
+    else:
+        pdf = None
         
 
     frange = args.frange
@@ -280,6 +291,7 @@ if __name__ == '__main__':
         rep_args['sg_polyorder'] = args.sg_polyorder
         rep_args['mw_lower'] = args.mw_lower
         rep_args['times_lower'] = args.times_lower
+        rep_args['rms_sigma'] = args.rms_sigma
     else:
         raise ValueError("Unsupport replace RFI method.")
     
@@ -336,7 +348,6 @@ if __name__ == '__main__':
     
     # read RFI
     if rfi_fname is not None:
-        rfi = h5py.File(rfi_fname)
         print(f"Use rfi file {rfi_fname}")
     else:
         rfi_dir_default = os.path.dirname(file_spec).split('/')[:-1]
@@ -347,16 +358,19 @@ if __name__ == '__main__':
         from glob import glob
         rfi_fnames = glob(rfi_dir)
         if len(rfi_fnames) == 1:
-            print(f"Find rfi file {rfi_fnames[0]}")
-            rfi = h5py.File(rfi_fnames[0],'r')
+            rfi_fname = rfi_fnames[0]
+            print(f"Find rfi file {rfi_fname}")
         elif len(rfi_fnames) == 0:
             raise FileNotFoundError("Run cli_multi or cli_markRFI first!")
         else:
             raise FileNotFoundError("Which rfi mask do you want? ")
+    rfi = h5py.File(rfi_fname,'r')
     
-    
+    s_rfi = None
     if 'is_rfi' in rfi.keys():
         is_rfi = rfi['is_rfi'][()]
+        if 'short_rfi' in rfi.keys():
+            s_rfi = rfi['is_rfi'][()]
         rfi.close()
         if len(is_rfi.shape) == 3:
             # use 2D rfi mask
@@ -377,9 +391,9 @@ if __name__ == '__main__':
         
     whole_rfi = np.all(is_rfi,axis = 1)
     not_rfi_num = np.arange(T.shape[0])[~whole_rfi]
-    is_rfi_num = np.arange(T.shape[0])[whole_rfi]      
+    is_rfi_num = np.arange(T.shape[0])[whole_rfi]
     
-    
+
     freq = fs['freq'][:]
     fdelta = freq[1] - freq[0]
     if frange is not None:
@@ -388,9 +402,39 @@ if __name__ == '__main__':
         T = T[:,is_]
         is_rfi = is_rfi[:,is_]
     
+    # load data
+    sep_fname = args.sep_fname    
+    if sep_fname is not None:
+        print(f"Use rfi file {sep_fname}")
+    else:
+        '''
+        sep_dir_default = os.path.dirname(file_spec).split('/')[:-1]
+        sep_dir_default.append('sep')
+        sep_dir_default = '/'.join(sep_dir_default)
+        sep_dir = os.path.join(sep_dir_default, '.'.join(os.path.basename(file_spec).split('-bld',1)[0]) + '.hdf5')
+        from glob import glob
+        sep_fnames = glob(sep_dir)
+        if len(sep_fnames) == 1:
+            sep_fname = sep_fnames[0]
+            print(f"Find sep file {sep_fname}")
+        elif len(sep_fnames) == 0:
+            raise FileNotFoundError("Run cli_sep first!")
+        else:
+            raise FileNotFoundError("Which sep file do you want? ")
+        '''
+        sep_fname = os.path.dirname(file_spec)+'/'+ str(os.path.basename(file_spec).split('-bld',1)[0])+'.hdf5'
+        print(f"Find sep file {sep_fname}")
+        
+    sep = h5py.File(sep_fname,'r')
+    from util import get_data
+    T_sep = get_data(sep,polar = 'merged',xrange = frange)
+
+    if T_sep.shape != T.shape:
+        raise ValueError(f"sep data shape {T_sep.shape} is not matched with sub data shape {T.shape}.")
+    
     mw_frange = args.mw_frange
     if mw_frange is None:
-        if (max(freq) < 1419)|(min(freq)>1422):
+        if (max(freq) <= 1419)|(min (freq)>= 1422):
             print("don't contain MW")
         else:
             raise ValueError("--mw_frange is empty!")
@@ -460,13 +504,13 @@ if __name__ == '__main__':
         else:    
             is_rfi = deecopy(is_rfi_no_mw)
     
-    # remove standing waves 
+    #sub remove standing waves 
     if keep_polar: 
         sw_fit = np.append(sw_fit_xx,sw_fit_yy)
         sw_fit = sw_fit.reshape((2,ori_shape[0],ori_shape[1])).transpose((1,2,0))
         rmsw_data = T3 - sw_fit
     else:
-        rmsw_data = T - sw_fit
+        rmsw_data = T_ori - sw_fit
         
     # fill rfi with ?
     if fill_rfi == 'nan':
@@ -511,6 +555,21 @@ if __name__ == '__main__':
         
         pdf.close()
         log.info(f"Plot to {pdfname}")
+        
+        
+    #sep remove standing waves 
+    if keep_polar: 
+        rmsw_data = T_sep - sw_fit
+    else:
+        rmsw_data = np.mean(T_sep,axis = 2) - sw_fit
+        
+    # fill rfi with ?
+    if fill_rfi == 'nan':
+        rmsw_data[is_rfi] = np.nan
+    elif fill_rfi == 'noise':
+        rmsw_data[is_rfi] = data_rmrfi[is_rfi]
+    elif fill_rfi == 'rfi':
+        pass
 
     print(f"Saving...")
     dict_out= {}
