@@ -73,9 +73,7 @@ def plot_waterfall(f,corvel=None,data = None,xtype = 'freq',polar = 'xx',cmap = 
                 data = T[:,:,0]
             elif polar == 'yy':                  
                 data = T[:,:,1]
-    
 
-    
     if xrange != None:
         x1,x2 = np.min(xrange),np.max(xrange)
         is_use = (x>=x1)&(x<=x2)
