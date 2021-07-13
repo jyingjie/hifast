@@ -38,9 +38,11 @@ def date2mjd(date):
     return t.mjd
 
 def plot_waterfall(f,corvel=None,data = None,xtype = 'freq',polar = 'xx',cmap = 'rainbow',per_vmin_max = None,
-                   vmin_max = None,xylim = None,outdir = './',xrange = None,ynsmall = None,
+                   vmin_max = None,xylim = None,outdir = './',xrange = None,ynsmall = None,interp_method = 'none',
                    plot = True,pdf = None,time_label = False, figsize=(18,9),title = None,**kwargs):
     from matplotlib import pyplot as plt
+    #import matplotlib
+    #matplotlib.rcParams['image.interpolation'] = 'none'
     
     if pdf is not None:
         plt.switch_backend('agg')
@@ -103,16 +105,17 @@ def plot_waterfall(f,corvel=None,data = None,xtype = 'freq',polar = 'xx',cmap = 
 
         if vmin_max != None:
             im=ax.imshow(data,vmin=vmin_max[0],vmax=vmin_max[1],origin='lower', cmap = cmap,
-                         aspect='auto',extent = extent)
+                         aspect='auto',extent = extent,interpolation=interp_method,)
         else:
             if per_vmin_max == None:   
-                im=ax.imshow(data,origin='lower', cmap = cmap,aspect='auto',extent = extent)
+                im=ax.imshow(data,origin='lower', cmap = cmap,aspect='auto',extent = extent,
+                             interpolation=interp_method,)
             else:
                 #from Fits_Inspect_Overlap.utils import percent_vminmax
 
                 vmin,vmax = percent_vminmax(data,percent = per_vmin_max)
                 im=ax.imshow(data,vmin=vmin,vmax=vmax,origin='lower', cmap = cmap,
-                            aspect='auto',extent = extent)
+                            aspect='auto',extent = extent,interpolation=interp_method,)
 
         ax.set_xlabel(xtype)
         ax.set_ylabel("specs")
