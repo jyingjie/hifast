@@ -272,13 +272,15 @@ def check_repeat_center(item,freq_step=8.1,x_start = '1st point',peaks = None):
             delete_loc = []
             for i in range(len(repeat_key)):
                 repeat_loc_in_x = np.where(x == repeat_key[i])[0]
-                peak = np.zeros_like(x)
+                peak = np.full(len(x),-1.)
                 peak[repeat_loc_in_x] = peaks[repeat_loc_in_x]
                 Max = np.max(peak)
-                if np.sum(peak == Max) > 1:
-                    del_loc = np.hstack((np.where((peak > 0)&(peak < np.max(peak)))[0],np.arange(len(peak))[np.argmax(peak)]))
+                rep = np.sum(peak == Max)
+                if rep > 1:
+                    repeat_peak = np.where(peak == np.max(peak))[0]
+                    del_loc = np.hstack((np.where((peak >= 0)&(peak < np.max(peak)))[0],repeat_peak[:-1]))
                 else:
-                    del_loc = np.where((peak > 0)&(peak < np.max(peak)))[0]
+                    del_loc = np.where((peak >= 0)&(peak < Max))[0]
                 delete_loc.append(del_loc)
         else:
             repeat_loc_in_x = np.array([np.where(x == repeat_key[i])[0] for i in range(len(repeat_key))])

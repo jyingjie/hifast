@@ -38,7 +38,7 @@ def date2mjd(date):
     return t.mjd
 
 def plot_waterfall(f,corvel=None,data = None,xtype = 'freq',polar = 'xx',cmap = 'rainbow',per_vmin_max = None,
-                   vmin_max = None,xylim = None,outdir = './',xrange = None,ynsmall = None,interp_method = 'none',
+                   vmin_max = None,xylim = None,outdir = './',xrange = None,ynsmall = None,interp_method = 'nearest',
                    plot = True,pdf = None,time_label = False, figsize=(18,9),title = None,**kwargs):
     from matplotlib import pyplot as plt
     #import matplotlib
