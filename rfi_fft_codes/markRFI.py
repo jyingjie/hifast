@@ -521,13 +521,13 @@ def find_RFI(spec,freq,is_rfi,is_rfi_mw,freq_step=8.1,RMS = None,freq_thr = 0.5,
 
 ####################### time rfi ########################
 
-def find_t(data,freq = None,times = 10,thr = 20,frange = None,rfi_width_lim = 20,
+def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
            ext_add = 0,plot = False,pdf = None,ylim = None):
     t = np.arange(data.shape[0])
     is_timerfi = np.zeros_like(t,dtype = 'bool')
     
-    if (freq is not None)&(frange is not None):
-        pattern_use = frange
+    if (freq is not None)&(len(frange) == 2):
+        pattern_use = (freq>frange[0])&(freq<frange[1])
         
         pat_data = data[:,pattern_use]
     else:
@@ -574,6 +574,7 @@ def find_t(data,freq = None,times = 10,thr = 20,frange = None,rfi_width_lim = 20
         ax.legend()
         ax.set_ylabel('mean along freq axis')
         ax.set_xlabel('spec number (time)')
+        ax.set_title(f'freq in {frange} MHz')
         if ylim is not None:
             ax.set_ylim(ylim[0],ylim[1])
         if pdf is not None:
@@ -581,49 +582,58 @@ def find_t(data,freq = None,times = 10,thr = 20,frange = None,rfi_width_lim = 20
             
     return  is_timerfi
 
+def mask_sf(data,freq,T_thr = None,frange = None,**kwargs):
+    ret = np.zeros_like(data,dtype = 'bool')
+    
+    log.info(f"Looking for short-freq time RFI in {frange} ...")
+    f_use = (freq>frange[0])&(freq<frange[1])
+    
+    is_timerfi = find_t(data,freq,frange =frange, **kwargs)
+    
+    if is_timerfi.any() == False:
+        return ret
+    use1 = np.zeros_like(data,dtype = 'bool')
+    use2 = np.zeros_like(data,dtype = 'bool')
+    use1[is_timerfi,:]  = True
+    use2[:,f_use]  = True
+    use = use1 & use2
+
+    tmp = deepcopy(data[use])
+    ret[use] = (tmp > T_thr)
+    print("Found :D")
+    return ret
 
 def mask_time_rfi(data,freq,T_thr = None,rtype = 'short-freq',frange = None,file = None,**kwargs):
     ret = np.zeros_like(data,dtype = 'bool')
-    
+
     if rtype == 'short-freq':
         if isinstance(file,str):
-            frange = np.load(file)
-            if frange.shape[1] != 2:
+            franges = np.load(file)
+            if franges.shape[1] != 2:
                 raise ValueError("time RFI freq shape must like (n,2)")
 
-            f_use = np.zeros_like(freq,dtype = 'bool')
-            for nf in range(frange.shape[0]):
-                f_use = f_use | (freq>frange[nf,0])&(freq<frange[nf,1])
+            for nf in range(franges.shape[0]):
+                ret = ret | mask_sf(data,freq,T_thr,frange = franges[nf],**kwargs)
 
         elif len(frange) == 2:
-            f_use = (freq>frange[0])&(freq<frange[1])
+            ret = mask_sf(data,freq,T_thr,frange,**kwargs)
+        else:
+            raise ValueError("frange should like [fmin,fmax] or a string (RFI npy filepath).")
 
-        print(f"Looking for short-freq time RFI in {frange} ...")
-        is_timerfi = find_t(data,freq,frange =f_use, **kwargs)
-
-        if is_timerfi.any() == False:
+        if ret.any() == False:
             print("No short-freq time rfi is found.")
-            return ret
-
-        use1 = np.zeros_like(data,dtype = 'bool')
-        use2 = np.zeros_like(data,dtype = 'bool')
-        use1[is_timerfi,:]  = True
-        use2[:,f_use]  = True
-        use = use1 & use2
-
-        tmp = deepcopy(data[use])
-        ret[use] = (tmp > T_thr)
             
     elif rtype == 'long-freq':
-        print(f"Looking for long-freq time RFI ...")
+        log.info(f"Looking for long-freq time RFI ...")
         if len(frange) == 2:
-            f_use = (freq>frange[0])&(freq<frange[1])
-        is_timerfi = find_t(data,freq,frange =f_use, **kwargs)
-        if is_timerfi.any() == False:
-            print("No long-freq time rfi is found.")
-            return ret
-        
-        ret[is_timerfi,:] = True
+            is_timerfi = find_t(data,freq,frange =frange, **kwargs)
+            if is_timerfi.any() == False:
+                print("No long-freq time rfi is found.")
+                return ret
+            ret[is_timerfi,:] = True
+            print("Found :D")
+        else:
+            raise ValueError("frange should like [fmin,fmax].")
     
     print("Finish")
     return ret

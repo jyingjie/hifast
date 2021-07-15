@@ -78,7 +78,9 @@ if __name__ == '__main__':
     parser.add_argument('--s_sigma_t', type=int, default=10,
                        help='smooth spec along time sigma')
     
-    ## freq rfi
+    ## freq period rfi
+    parser.add_argument('--period_rfi', action='store_true',
+                        help='find freq period rfi')
     # find rfi
     parser.add_argument('--rfi_thr', type=float, default=3, 
                        help='default 3 times of rms threshold')
@@ -144,23 +146,6 @@ if __name__ == '__main__':
     fname = args.fname
     outdir = args.outdir
     
-    
-    mask_RFI_method = args.mask_RFI_method
-    small_rfi_times = args.small_rfi_times
-    chan_step = args.chan_step
-    mask_all_theory = args.mask_all_theory
-    freq_from_theory = args.freq_from_theory
-    mask_thr = args.mask_thr
-    
-    find_args = {}
-    find_args['rfi_width_lim'] = args.rfi_width_lim
-    find_args['ext_sec'] = args.ext_sec
-    freq_thr = args.freq_thr
-
-    freq_step = args.freq_step
-    ext_edge = args.ext_edge
-    rfi_groups = args.rfi_groups
-    
     # flux
     flux = args.flux
     cali_fname=args.cali_fname
@@ -168,13 +153,40 @@ if __name__ == '__main__':
     keep_polar = args.keep_polar
     keep_rfi = args.keep_rfi
     plot = args.plot
-    save_rfi_list = args.save_rfi_list
-    if save_rfi_list:
-        plot = True
     
+    time_rfi = args.time_rfi
+    longf_rfi = args.lf
+    shortf_rfi = args.sf
     
-    outparts = ['pdrfi']
-    if mask_all_theory: outparts += ['strict']
+    if (longf_rfi == True) or (shortf_rfi == True):
+        time_rfi = True
+    
+    period_rfi = args.period_rfi
+    if period_rfi:
+        find_args = {}
+        find_args['rfi_width_lim'] = args.rfi_width_lim
+        find_args['ext_sec'] = args.ext_sec
+        freq_thr = args.freq_thr
+
+        freq_step = args.freq_step
+        ext_edge = args.ext_edge
+        rfi_groups = args.rfi_groups
+        
+        mask_RFI_method = args.mask_RFI_method
+        small_rfi_times = args.small_rfi_times
+        chan_step = args.chan_step
+        mask_all_theory = args.mask_all_theory
+        freq_from_theory = args.freq_from_theory
+        mask_thr = args.mask_thr
+        save_rfi_list = args.save_rfi_list
+        if save_rfi_list:
+            plot = True
+    
+    outparts = []
+    if time_rfi:outparts += ['tr']
+    if period_rfi:
+        outparts += ['pdr']
+        if mask_all_theory: outparts += ['strict']
     if flux: outparts += ['flux']
     
     outpart = '-' + '_'.join(outparts)
@@ -187,8 +199,7 @@ if __name__ == '__main__':
             print(f"File exists {fileout}")
             print('exit... Using -f to overwrite it.')
             sys.exit()
-    
-    
+        
     if plot:
         from matplotlib import pyplot as plt
         plt.switch_backend('agg')
@@ -241,13 +252,6 @@ if __name__ == '__main__':
     T_ori = deepcopy(T)
     ####################### time RFI ################################
     t_rfi = np.zeros_like(T,dtype = 'bool')
-    
-    time_rfi = args.time_rfi
-    longf_rfi = args.lf
-    shortf_rfi = args.sf
-    
-    if (longf_rfi == True) or (shortf_rfi == True):
-        time_rfi = True
     
     if time_rfi:
         
@@ -317,131 +321,141 @@ if __name__ == '__main__':
         T = deepcopy(T_)
         
     ###################### freq period RFI ##########################    
+    if period_rfi:
+        #mark RFI  
+        from markRFI import find_RFI, real_rms
+        rfi_thr = args.rfi_thr
+        rms_frange = args.rms_frange
+        rms_sigma = args.rms_sigma
+        mw_frange = args.mw_frange
+        #print("Calutating RMS.")
+        #RMS = rms(T,freq,rms_frange)
+        #is_rfi = (T > np.full(T.shape[::-1],RMS * rfi_thr).T)
+        if mw_frange is None:
+            protect_use = np.zeros_like(freq,dtype='bool')
+        else:
+            protect_use = (freq>mw_frange[0])&(freq<mw_frange[1])
 
-    #mark RFI  
-    from markRFI import find_RFI, real_rms
-    rfi_thr = args.rfi_thr
-    rms_frange = args.rms_frange
-    rms_sigma = args.rms_sigma
-    mw_frange = args.mw_frange
-    #print("Calutating RMS.")
-    #RMS = rms(T,freq,rms_frange)
-    #is_rfi = (T > np.full(T.shape[::-1],RMS * rfi_thr).T)
-    if mw_frange is None:
-        protect_use = np.zeros_like(freq,dtype='bool')
+        is_rfi = f['is_rfi'][()] if 'is_rfi' in f.keys() else None 
+
+        if plot:
+            ylim = args.ylim
+
+            tn = not_rfi_num[0]
+            spec = deepcopy(T[tn,:])
+            #RMS = rms(spec,freq,rms_frange)
+            RMS = real_rms(spec,freq,rms_sigma,rms_frange)
+            is_rfi_mw = (spec > RMS * rfi_thr)
+            is_rfi_ = is_rfi_mw & (~protect_use)
+            _,theory = find_RFI(
+                spec,freq,is_rfi_,is_rfi_mw,freq_step = freq_step,RMS = RMS,freq_thr = freq_thr,
+                ext_edge = ext_edge,rfi_fit_use = 'two groups',plot = plot,pdf=pdf,ylim=ylim,
+                mask_RFI_method = mask_RFI_method, small_rfi_times = small_rfi_times,chan_step = chan_step,
+                mask_all_theory = mask_all_theory,freq_from_theory = freq_from_theory,mask_thr = mask_thr,
+                **find_args)
+
+        if is_rfi is None:
+            pd_rfi = np.full(T.shape[:2], False, dtype=bool)
+            if save_rfi_list:
+                rfi_freq_list = np.full((T.shape[0],len(theory)+50),np.nan)
+
+            log.info("Looking for period RFI...")
+            for tn in tqdm(range(T.shape[0])):
+                if tn in not_rfi_num:
+                    spec = deepcopy(T[tn,:]) 
+                    #RMS = rms(spec,freq,rms_frange)
+                    RMS = real_rms(spec,freq,rms_sigma,rms_frange)
+                    is_rfi_mw = (spec > RMS * rfi_thr)
+                    is_rfi = (spec > RMS * rfi_thr) & (~protect_use)
+                    try:
+                        pd_rfi[tn,:],rfi_theory = find_RFI(
+                            spec,freq,is_rfi,is_rfi_mw,freq_step = freq_step,RMS = RMS,
+                            freq_thr = freq_thr,ext_edge = ext_edge,rfi_fit_use = rfi_groups ,plot = False,
+                            mask_RFI_method = mask_RFI_method, small_rfi_times = small_rfi_times,chan_step = chan_step,
+                            mask_all_theory = mask_all_theory,freq_from_theory = freq_from_theory,mask_thr = mask_thr,
+                            **find_args)
+
+                        if save_rfi_list:
+                            if len(rfi_theory) < rfi_freq_list.shape[1]:
+                                rfi_theory = np.pad(rfi_theory,(0,rfi_freq_list.shape[1] - len(rfi_theory)))
+                            elif len(rfi_theory) > rfi_freq_list.shape[1]:
+                                rfi_theory = rfi_theory[:rfi_freq_list.shape[1]]
+
+                            rfi_freq_list[tn,:] = rfi_theory
+
+                    except ValueError:
+                        pd_rfi[tn,:] = True
+                        log.warning(f"tn={tn} has a ValueError !")
+                        import traceback
+                        traceback.print_exc()    
+
+
+            log.info("Finish finding period RFI...")
+        else:
+            raise(ValueError(f'is_rfi already exists'))
+    
+    if period_rfi & time_rfi:
+        rfi_mask = pd_rfi | t_rfi
     else:
-        protect_use = (freq>mw_frange[0])&(freq<mw_frange[1])
-    
-    is_rfi = f['is_rfi'][()] if 'is_rfi' in f.keys() else None 
-    
-    if plot:
-        ylim = args.ylim
-        
-        tn = not_rfi_num[0]
-        spec = deepcopy(T[tn,:])
-        #RMS = rms(spec,freq,rms_frange)
-        RMS = real_rms(spec,freq,rms_sigma,rms_frange)
-        is_rfi_mw = (spec > RMS * rfi_thr)
-        is_rfi_ = is_rfi_mw & (~protect_use)
-        _,theory = find_RFI(
-            spec,freq,is_rfi_,is_rfi_mw,freq_step = freq_step,RMS = RMS,freq_thr = freq_thr,
-            ext_edge = ext_edge,rfi_fit_use = 'two groups',plot = plot,pdf=pdf,ylim=ylim,
-            mask_RFI_method = mask_RFI_method, small_rfi_times = small_rfi_times,chan_step = chan_step,
-            mask_all_theory = mask_all_theory,freq_from_theory = freq_from_theory,mask_thr = mask_thr,
-            **find_args)
-    
-    if is_rfi is None:
-        #is_rfi = is_rfi & (~protect_use)
-        pd_rfi = np.full(T.shape[:2], False, dtype=bool)
-        if save_rfi_list:
-            rfi_freq_list = np.full((T.shape[0],len(theory)+50),np.nan)
-        
-        log.info("Looking for RFI...")
-        for tn in tqdm(range(T.shape[0])):
-            if tn in not_rfi_num:
-                spec = deepcopy(T[tn,:]) 
-                #RMS = rms(spec,freq,rms_frange)
-                RMS = real_rms(spec,freq,rms_sigma,rms_frange)
-                is_rfi_mw = (spec > RMS * rfi_thr)
-                is_rfi = (spec > RMS * rfi_thr) & (~protect_use)
-                try:
-                    pd_rfi[tn,:],rfi_theory = find_RFI(
-                        spec,freq,is_rfi,is_rfi_mw,freq_step = freq_step,RMS = RMS,
-                        freq_thr = freq_thr,ext_edge = ext_edge,rfi_fit_use = rfi_groups ,plot = False,
-                        mask_RFI_method = mask_RFI_method, small_rfi_times = small_rfi_times,chan_step = chan_step,
-                        mask_all_theory = mask_all_theory,freq_from_theory = freq_from_theory,mask_thr = mask_thr,
-                        **find_args)
-
-                    if save_rfi_list:
-                        if len(rfi_theory) < rfi_freq_list.shape[1]:
-                            rfi_theory = np.pad(rfi_theory,(0,rfi_freq_list.shape[1] - len(rfi_theory)))
-                        elif len(rfi_theory) > rfi_freq_list.shape[1]:
-                            rfi_theory = rfi_theory[:rfi_freq_list.shape[1]]
-
-                        rfi_freq_list[tn,:] = rfi_theory
-                    
-                except ValueError:
-                    pd_rfi[tn,:] = True
-                    log.warning(f"tn={tn} has a ValueError !")
-                    import traceback
-                    traceback.print_exc()    
-
+        if period_rfi:
+            rfi_mask = deepcopy(pd_rfi)
+        if time_rfi:
+            rfi_mask = deepcopy(t_rfi)
             
-        log.info("Finish finding RFI...")
-    else:
-        raise(ValueError(f'is_rfi already exists'))
-    
-    rfi_mask = pd_rfi | t_rfi
-    
-    time_coherent_per = args.time_coherent_per
-    if (time_coherent_per > 0)&(time_coherent_per <1):
-        per_use = (np.sum(rfi_mask,axis = 0)/rfi_mask.shape[0] > time_coherent_per)
-        rfi_mask[:,per_use] = True
-    
-    if not keep_rfi:
-        if keep_polar: 
-            T_ret = deepcopy(T3)
-            T_ret[rfi_mask,:] = np.nan
-        else:
-            T_ret = deepcopy(T_ori)
-            T_ret[rfi_mask] = np.nan  
-    else:
-        if keep_polar: 
-            T_ret = deepcopy(T3)
-        else:
-            T_ret = deepcopy(T_ori)
+        
+    if np.sum(rfi_mask) > 0:
 
-    if plot:    
-        print(" 'Wait for plotting patiently, you must.' Master Yoda said")
-        
-        from util import plot_waterfall
-        if keep_polar:
-            plot_waterfall(f,data = T_ret[:,:,0], vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
-                           title = os.path.basename(fileout).split('.')[:-1][0] + '_polar xx',pdf = pdf)
-                        
-            plot_waterfall(f,data = T_ret[:,:,1], vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
-                           title = os.path.basename(fileout).split('.')[:-1][0] + '_polar yy',pdf = pdf)
+        time_coherent_per = args.time_coherent_per
+        if (time_coherent_per > 0)&(time_coherent_per <1):
+            per_use = (np.sum(rfi_mask,axis = 0)/rfi_mask.shape[0] > time_coherent_per)
+            rfi_mask[:,per_use] = True
+
+        if not keep_rfi:
+            if keep_polar: 
+                T_ret = deepcopy(T3)
+                T_ret[rfi_mask,:] = np.nan
+            else:
+                T_ret = deepcopy(T_ori)
+                T_ret[rfi_mask] = np.nan  
         else:
-            plot_waterfall(f,data = T_ret, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
-                           title = os.path.basename(fileout).split('.')[:-1][0] + '_polar merged',pdf = pdf)              
-        
-        pdf.close()
-        log.info(f"Plot to {pdfname}")
-    
-        
+            if keep_polar: 
+                T_ret = deepcopy(T3)
+            else:
+                T_ret = deepcopy(T_ori)
+
+        if plot:    
+            print(" 'Wait for plotting patiently, you must.' Master Yoda said.")
+
+            from util import plot_waterfall
+            if keep_polar:
+                plot_waterfall(f,data = T_ret[:,:,0], vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
+                               title = os.path.basename(fileout).split('.')[:-1][0] + '_polar xx',pdf = pdf)
+
+                plot_waterfall(f,data = T_ret[:,:,1], vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
+                               title = os.path.basename(fileout).split('.')[:-1][0] + '_polar yy',pdf = pdf)
+            else:
+                plot_waterfall(f,data = T_ret, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
+                               title = os.path.basename(fileout).split('.')[:-1][0] + '_polar merged',pdf = pdf)              
+
+            pdf.close()
+            log.info(f"Plot to {pdfname}")
+    else:
+        rfi_mask = np.zeros_like(T,dtype='bool')
+        log.info("Nothing is masked.")
+        if plot:
+            pdf.close()
+
     if flux:
         from hifast.core.flux import cali_src
         nB = int(re.findall(r'-M[0-1][0-9]',fname)[-1][2:])
         T_ret = cali_src(T_ret, nB, freq, cali_fname, ra=ra, dec=dec, mjd=mjd)
     
     # out dict
-    dict_out={}  
-        
-    if pd_rfi is not None:
-        dict_out['is_rfi'] = rfi_mask
-    if shortf_rfi:
-        if np.sum(s_rfi) > 0:
-            dict_out['short_rfi'] = s_rfi
+    dict_out={}
+    dict_out['is_rfi'] = rfi_mask
+    #if shortf_rfi:
+    #    if np.sum(s_rfi) > 0:
+    #        dict_out['short_rfi'] = s_rfi
     
     dict_out['freq'] = freq
     if 'ra' in f.keys():
@@ -450,8 +464,8 @@ if __name__ == '__main__':
         
     dict_out['mjd'] = mjd
     dict_out[outfield] = T_ret.astype('float32')
-    if save_rfi_list:
-        dict_out['rfi_list'] = rfi_freq_list
+    if period_rfi:
+        if save_rfi_list: dict_out['rfi_list'] = rfi_freq_list
     #save file
     print('Saving...')
     

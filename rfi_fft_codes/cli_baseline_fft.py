@@ -14,163 +14,7 @@ import numpy as np
 import h5py
 from copy import deepcopy
 from tqdm import tqdm
-from fft import FFT
     
-def replace_rfi(data, is_rfi, method,**rep_args):
-    """
-    replace big RFI to reduce the impact in FFT
-    
-    Parameters:
-    data: np array
-    sg_window: scipy.signal.savgol_filter window length (unit MHz)
-    sg_polyorder: scipy.signal.savgol_filter polyorder
-    mw_lower: lower milky way area by divide a number
-    """
-    global mw_use,fdelta,is_rfi_num,not_rfi_num,s_rfi
-    
-    sg_window = rep_args['sg_window']
-    sg_polyorder = rep_args['sg_polyorder']
-    mw_lower = rep_args['mw_lower']
-    times_lower = rep_args['times_lower']
-    rms_sigma = rep_args['rms_sigma'] 
-    
-    if method == 'subtract':
-
-        is_rfi_no_mw = deepcopy(is_rfi)
-        is_rfi_no_mw[:,mw_use] = False
-        is_rfi_no_mw[is_rfi_num,:] = True
-        data_no_mw = deepcopy(data)
-        data_no_mw[:,mw_use] = 0
-        data_rmrfi = deepcopy(data)
-        data_rmrfi[is_rfi_num,:] = np.nan
-        
-        from util import _round_up_to_odd_integer
-        window_length = _round_up_to_odd_integer(sg_window/fdelta)
-        #print(window_length,sg_polyorder,data_no_mw.shape)
-        
-        log.info(f"Replace RFI with {method} method ...")
-        from scipy.signal import savgol_filter
-        for tn in tqdm(range(data.shape[0])):
-            if tn in not_rfi_num:
-                sg = savgol_filter(data_no_mw[tn,:],window_length = window_length ,polyorder=sg_polyorder,)
-                data_rmrfi[tn,is_rfi_no_mw[tn]] = data[tn,is_rfi_no_mw[tn]] - sg[is_rfi_no_mw[tn]]
-
-        from markRFI import real_rms
-        RMS = real_rms(data_rmrfi[0,:],freq,sigma=rms_sigma,rms_vrange=[freq[0],freq[0]+10])
-        
-        if s_rfi is not None:
-            data_rmrfi[s_rfi] = 0
-        
-        thr_lower = RMS*times_lower
-        low_use = (np.abs(data_rmrfi) > thr_lower)
-        from hifast.utils.misc import extend_Trues
-        low_use = extend_Trues(low_use,ext_add =10,leng_lim = 20,axis = -1)
-          
-        data_rmrfi_low_mw = deepcopy(data_rmrfi)
-        data_rmrfi_low_mw[low_use] = data[low_use]/mw_lower
-        data_rmrfi_low_mw[is_rfi_num,:] = np.nan      
-
-    return data_rmrfi, data_rmrfi_low_mw, is_rfi_no_mw
-    
-
-def fit_ripple(data_rmrfi_low_mw, method, plot = False,pdf = None,title = None,**fit_args): 
-    """
-    fit baseline ripple (standing wave) by FFT
-    Parameter:
-    data_rmrfi_low_mw: data array (after lower mw)
-    sw_freq: standing wave 'frequence' in Fourier space, unit \mu s
-    rfi_freq_step: big RFI residual influence in Fourier space, nearly 1/16.2 \mu s.
-                    (period is 16.2 MHz)
-    amp_thr: above amptitude threshold will be chosed.
-    sw_n: channel number next to sw_freq will be chosed all.
-    
-    """
-    
-    global freq,fdelta,is_rfi_num,not_rfi_num,ori_shape
-    sw_freq = fit_args['sw_freq']
-    amp_thr = fit_args['amp_thr'] 
-    sw_n = fit_args['sw_n'] 
-    rfi_8mhz = fit_args['rfi_8mhz']
-    rfi_freq_step = fit_args['rfi_freq_step'] 
-    
-    if method == 'rfft':
-        log.info(f"Fit baseline ripple with {method} method ...")
-        
-        if len(is_rfi_num) > 0:
-            data_rmrfi_low_mw = np.delete(data_rmrfi_low_mw,is_rfi_num,axis = 0)
-        
-        fftf = FFT(data_rmrfi_low_mw, freq)
-        x = fftf.x
-        amp_data = fftf.amp
-        loc1 = np.argmin(np.abs((x - sw_freq)))
-        use = (np.abs(np.arange(len(x))-loc1) < sw_n) & (amp_data >= amp_thr) 
-        
-        amp_data_inpd = deepcopy(amp_data)
-        
-        if rfi_8mhz:
-            x_loc16 = np.arange(0,x[-1],rfi_freq_step)
-            
-            N = freq.shape[0]
-            fs = 1/fdelta
-            loc16 = np.around(x_loc16 / (fs/N)).astype('int')
-            # two sides
-            #loc16_ = np.hstack((loc16 - 1,loc16,loc16 + 1))
-            #loc16_.sort()
-
-            use16 = np.full(len(x),False)
-            use16[loc16] = True;use16[loc1] = False ; use16[0] = False
-            use16 = use16 &  (amp_data >= amp_thr) 
-            
-            from scipy.interpolate import interp1d
-            x_ = deepcopy(x)
-            # interplate
-            for ti in tqdm(range(amp_data.shape[0])):
-                x_mask = x_[~use16[ti]]
-                amp_data_mask = amp_data[ti][~use16[ti]]
-                amp_data_interp = interp1d(x_mask,amp_data_mask,kind='linear')#,fill_value="extrapolate")
-                amp_data_inpd[ti][use16[ti]] = amp_data_interp(x_[use16[ti]])
-        
-        amp_data_inpd = amp_data - amp_data_inpd
-        amp_data_inpd[:,0] = amp_data[:,0]
-          
-        amp_data_inpd[use] = amp_data[use]
-        amp_data_inpd[amp_data_inpd < 0] = 0
-
-
-        if plot:
-            tn = not_rfi_num[10]
-            if pdf is not None:
-                plt.switch_backend('agg')
-            is_ = (x >= 0) & (x <= 3)
-            fig = plt.figure(figsize=(22,5))
-            ax = fig.add_subplot(111) 
-            ax.stem(x[is_],amp_data[tn,is_],linefmt='--',markerfmt ='C0o',label = 'whole fft')
-            ax.stem(x[is_],amp_data_inpd[tn,is_],linefmt='--',markerfmt ='C1o',label = 'sw fft')
-            ax.text(x[loc1],.1,f'{loc1}')
-            ax.plot(x[use[tn]],np.zeros_like(x[use[tn]]),'co',label = f'near {x[loc1]:.4f} $\mu$s ')
-            if rfi_8mhz:
-                ax.plot(x[loc16],np.zeros_like(loc16),'gs',label = f'step {rfi_freq_step:.4f} $\mu$s ')
-            ax.axhline(amp_thr,color = 'k',linestyle='--')
-            ax.grid();ax.set_xlim(0,3)
-            ax.set_xlabel('k [$\mu$s]')
-            plt.legend()
-            plt.tight_layout()
-            if title is not None:
-                ax.set_title(title)
-            if pdf is not None:
-                pdf.savefig();plt.close()
-
-        A_data_inpd =  amp_data_inpd * np.exp(1j*fftf.phi)
-        A_data_ifft = np.real(np.fft.irfft(A_data_inpd,n=data_rmrfi_low_mw.shape[1]))
-        
-        if len(is_rfi_num)>0:
-            A_data_ifft_ = np.full(ori_shape,np.nan)
-            A_data_ifft_[not_rfi_num,:] = A_data_ifft
-            A_data_ifft = deepcopy(A_data_ifft_)
-        
-        return A_data_ifft
-
-
 if __name__ == '__main__':
     import warnings 
     warnings.filterwarnings("ignore",r'overflow encountered in exp')
@@ -196,26 +40,28 @@ if __name__ == '__main__':
                        help='quasar calibration file name')
     
     ## replace big RFI
-    parser.add_argument('--rfi_method', default='subtract', choices=['subtract'],
+    parser.add_argument('--rfi_method', default='set zeros', choices=['subtract','lower','set zeros'],
                        help='method to replace big RFI')
     parser.add_argument('--mw_frange', type=float, nargs=2,
-                       help='milky way freq range')
-    parser.add_argument('--protect_mw', action= 'store_true',
-                       help='protect mw')    
+                       help='milky way freq range')  
     parser.add_argument('--rms_sigma', type=float, default = 6,
                        help='gauss filter sigma to compute real rms')
+    # subtract method use sg filter
     parser.add_argument('--sg_window', type=float, default=1.0, 
                        help='savgol_filter window_length (MHz)')
     parser.add_argument('--sg_polyorder', type=int, default=7, 
                        help='savgol_filter polyorder')
-    parser.add_argument('--mw_lower', type=float, default=1.0e4, 
+    # lower & set zeros methods need
+    parser.add_argument('--times_lower_thr', type=float, default=3, 
+                       help='above 3 times of rms will be lowered')
+    parser.add_argument('--times_lower', type=float, default=1.0e4, 
                        help='lower mw area when fft, default mw/1e4')
-    parser.add_argument('--times_lower', type=float, default=5, 
-                       help='above 5 times of rms will be lowered')
+    
     
     ## fft remove ripple
     parser.add_argument('--fft_method', default='rfft', choices=['rfft'],
                        help='method to remove ripples')
+    # fft method
     parser.add_argument('--sw_freq', type=float, default=0.9254, 
                        help='standing waves freq(\mu s) in Fourier space')
     parser.add_argument('--amp_thr', type=float, default=35, 
@@ -227,13 +73,15 @@ if __name__ == '__main__':
                        help='remove 8.1 mhz components ?')
     parser.add_argument('--rfi_freq_step', type=float, 
                        help='big RFI linspace step, freq(\mu s) in Fourier space, nearly 1/16')
-    
+    # mean specs method
+    #parser.add_argument('--nspec',type=int, default=10,
+    #                    help='average how many specs to fit baseline.')
     
     parser.add_argument('-T', '--trans', action='store_true',
                        help='trans')
     parser.add_argument('--keep_polar', action='store_true',
                        help='keep two polarizations')
-    parser.add_argument('--fill_rfi', default='nan', choices=['nan','noise','rfi'],
+    parser.add_argument('--fill_rfi', default='nan', choices=['nan','rfi'],
                        help='keep rfi')
     parser.add_argument('--plot', action= 'store_true',
                        help='plot')
@@ -251,8 +99,52 @@ if __name__ == '__main__':
     keep_polar = args.keep_polar
     plot = args.plot
     
+    frange = args.frange
+    nB_radec = args.nB_radec
+    cali_fname = args.cali_fname
+    rfi_fname = args.rfi_fname
+    
+    fft_method = args.fft_method
+    rfi_method = args.rfi_method
+    
+    # replace args
+    rep_args = {}
+    if rfi_method in ['subtract','lower','set zeros']:
+        rep_args['times_lower'] = args.times_lower
+        rep_args['times_lower_thr'] = args.times_lower_thr
+        rep_args['rms_sigma'] = args.rms_sigma
+        if rfi_method =='subtract':
+            rep_args['sg_window'] = args.sg_window
+            rep_args['sg_polyorder'] = args.sg_polyorder
+        else:
+            rfi_fname = 'none'
+    else:
+        raise ValueError("Unsupport replace RFI method.")
+
+    #fit args
+    fit_args = {}
+    if fft_method =='rfft':
+        fit_args['sw_freq'] = args.sw_freq
+        fit_args['amp_thr'] = args.amp_thr
+        fit_args['sw_n'] = args.sw_n
+        fit_args['rfi_8mhz'] = args.rfi_8mhz 
+        fit_args['rfi_freq_step'] = args.rfi_freq_step
+        if args.rfi_freq_step is not None:
+            fit_args['rfi_8mhz'] = True
+    else:
+        raise ValueError("Unsupport fit baseline ripple method.")
+    
     fpart = '-flux_' if args.flux else '-'
-    fpart += 'fft_rfi_bld'
+    if fft_method == 'rfft': 
+        fpart += 'fft_bld'
+        
+    if rfi_method =='subtract':
+        fpart += 's'
+    elif rfi_method =='lower':
+        fpart += 'l'
+    elif rfi_method =='set zeros':
+        fpart += 'z'
+
     if args.trans: fpart += '_T'
     if outdir is None: outdir = os.path.dirname(file_spec)
     fileout = os.path.join(outdir, '.'.join(os.path.basename(file_spec).split('.')[:-1]) + f'{fpart}.hdf5')
@@ -274,41 +166,7 @@ if __name__ == '__main__':
         pdf = PdfPages(pdfname)
     else:
         pdf = None
-        
-
-    frange = args.frange
-    nB_radec = args.nB_radec
-    cali_fname = args.cali_fname
-    rfi_fname = args.rfi_fname
-    
-    fft_method = args.fft_method
-    rfi_method = args.rfi_method
-
-    # replace args
-    rep_args = {}
-    if rfi_method in ['subtract']:
-        rep_args['sg_window'] = args.sg_window
-        rep_args['sg_polyorder'] = args.sg_polyorder
-        rep_args['mw_lower'] = args.mw_lower
-        rep_args['times_lower'] = args.times_lower
-        rep_args['rms_sigma'] = args.rms_sigma
-    else:
-        raise ValueError("Unsupport replace RFI method.")
-    
-    
-    #fit args
-    fit_args = {}
-    if fft_method in ['rfft']:
-        fit_args['sw_freq'] = args.sw_freq
-        fit_args['amp_thr'] = args.amp_thr
-        fit_args['sw_n'] = args.sw_n
-        fit_args['rfi_8mhz'] = args.rfi_8mhz 
-        fit_args['rfi_freq_step'] = args.rfi_freq_step
-        if args.rfi_freq_step is not None:
-            fit_args['rfi_8mhz'] = True
-    else:
-        raise ValueError("Unsupport fit baseline ripple method.")
-        
+ 
     nB = int(re.findall(r'-M[0-1][0-9]',file_spec)[-1][2:])
 
     # load data
@@ -336,9 +194,6 @@ if __name__ == '__main__':
         outfield = 'flux'
         if flux:
             raise(ValueError(f'flux already exists, please remove \"--flux\"'))
-    
-    if flux:
-        outfield = 'flux'
 
     ind_sort = np.argsort(mjd)
     mjd = mjd[ind_sort]
@@ -348,50 +203,61 @@ if __name__ == '__main__':
     
     # read RFI
     if rfi_fname is not None:
-        print(f"Use rfi file {rfi_fname}")
+        if rfi_fname == 'none':
+            print("Don't use rfi file.")
     else:
         rfi_dir_default = os.path.dirname(file_spec).split('/')[:-1]
-        rfi_dir_default.append('cor_vel_once')
+        rfi_dir_default.append('rfi')
         rfi_dir_default = '/'.join(rfi_dir_default)
-        outpart = '*-pdrfi*'
+        outpart = '*-tr*.hdf5'
         rfi_dir = os.path.join(rfi_dir_default, '.'.join(os.path.basename(file_spec).split('.')[:-1]) + f'{outpart}')
         from glob import glob
         rfi_fnames = glob(rfi_dir)
         if len(rfi_fnames) == 1:
             rfi_fname = rfi_fnames[0]
-            print(f"Find rfi file {rfi_fname}")
         elif len(rfi_fnames) == 0:
-            raise FileNotFoundError("Run cli_multi or cli_markRFI first!")
+            rfi_dir = os.path.join(os.path.dirname(file_spec),'.'.join(os.path.basename(file_spec).split('.')[:-1]) + f'{outpart}')
+            rfi_fnames = glob(rfi_dir)
+            if len(rfi_fnames) == 1:
+                rfi_fname = rfi_fnames[0]
+            else:
+                raise FileNotFoundError("Where is rfi mask?")
         else:
             raise FileNotFoundError("Which rfi mask do you want? ")
-    rfi = h5py.File(rfi_fname,'r')
     
-    s_rfi = None
-    if 'is_rfi' in rfi.keys():
-        is_rfi = rfi['is_rfi'][()]
-        if 'short_rfi' in rfi.keys():
-            s_rfi = rfi['is_rfi'][()]
-        rfi.close()
-        if len(is_rfi.shape) == 3:
-            # use 2D rfi mask
-            is_rfi = is_rfi[:,:,0]|is_rfi[:,:,1]
-    else:
-        if 'T' in rfi.keys():
-            Tr = rfi['T'][()]
-        elif 'Ta' in rfi.keys():
-            Tr = rfi['Ta'][()]
-        elif 'flux' in rfi.keys():
-            Tr = rfi['flux'][()]
+    if rfi_fname != 'none':
+        rfi = h5py.File(rfi_fname,'r')
+        print(f"Find rfi file {rfi_fname}")
+        #s_rfi = None
+        if 'is_rfi' in rfi.keys():
+            is_rfi = rfi['is_rfi'][()]
+            #if 'short_rfi' in rfi.keys():
+            #    s_rfi = rfi['is_rfi'][()]
+            rfi.close()
+            if len(is_rfi.shape) == 3:
+                # use 2D rfi mask
+                is_rfi = is_rfi[:,:,0]|is_rfi[:,:,1]
         else:
-            print(f"{rfi.keys()}")
-            raise ValueError(f"rfi keys don't have 'T','Ta' or 'flux'.")
-        if len(Tr.shape) == 3:
-            Tr = np.mean(Tr, axis=2, dtype='float64')
-        is_rfi = np.isnan(Tr)
+            if 'T' in rfi.keys():
+                Tr = rfi['T'][()]
+            elif 'Ta' in rfi.keys():
+                Tr = rfi['Ta'][()]
+            elif 'flux' in rfi.keys():
+                Tr = rfi['flux'][()]
+            else:
+                print(f"{rfi.keys()}")
+                raise ValueError(f"rfi keys don't have 'T','Ta' or 'flux'.")
+            if len(Tr.shape) == 3:
+                Tr = np.mean(Tr, axis=2, dtype='float64')
+            is_rfi = np.isnan(Tr)
         
-    whole_rfi = np.all(is_rfi,axis = 1)
-    not_rfi_num = np.arange(T.shape[0])[~whole_rfi]
-    is_rfi_num = np.arange(T.shape[0])[whole_rfi]
+        whole_rfi = np.all(is_rfi,axis = 1)
+        not_rfi_num = np.arange(T.shape[0])[~whole_rfi]
+        is_rfi_num = np.arange(T.shape[0])[whole_rfi]
+    else:
+        is_rfi = None
+        not_rfi_num = np.arange(T.shape[0])
+        is_rfi_num = np.array([])
     
 
     freq = fs['freq'][:]
@@ -399,33 +265,32 @@ if __name__ == '__main__':
     if frange is not None:
         is_ = (freq >= frange[0]) & (freq <= frange[1])
         freq = freq[is_]
-        T = T[:,is_]
-        is_rfi = is_rfi[:,is_]
+        T = T[:,is_,:]
+        if rfi_fname != 'none':
+            is_rfi = is_rfi[:,is_]
     
     # load data
     sep_fname = args.sep_fname    
     if sep_fname is not None:
         print(f"Use rfi file {sep_fname}")
     else:
-        '''
         sep_dir_default = os.path.dirname(file_spec).split('/')[:-1]
         sep_dir_default.append('sep')
         sep_dir_default = '/'.join(sep_dir_default)
-        sep_dir = os.path.join(sep_dir_default, '.'.join(os.path.basename(file_spec).split('-bld',1)[0]) + '.hdf5')
+        sep_dir = os.path.join(sep_dir_default, '.'.join(os.path.basename(file_spec).split('-bld',1)[:-1]) + '.hdf5')
         from glob import glob
         sep_fnames = glob(sep_dir)
         if len(sep_fnames) == 1:
             sep_fname = sep_fnames[0]
-            print(f"Find sep file {sep_fname}")
+            
         elif len(sep_fnames) == 0:
-            raise FileNotFoundError("Run cli_sep first!")
+            sep_fname = os.path.join(os.path.dirname(file_spec),'.'.join(os.path.basename(file_spec).split('-bld',1)[:-1]) +'.hdf5')
+            
         else:
             raise FileNotFoundError("Which sep file do you want? ")
-        '''
-        sep_fname = os.path.dirname(file_spec)+'/'+ str(os.path.basename(file_spec).split('-bld',1)[0])+'.hdf5'
-        print(f"Find sep file {sep_fname}")
-        
+
     sep = h5py.File(sep_fname,'r')
+    print(f"Find sep file {sep_fname}") 
     from util import get_data
     T_sep = get_data(sep,polar = 'merged',xrange = frange)
 
@@ -436,10 +301,14 @@ if __name__ == '__main__':
     if mw_frange is None:
         if (max(freq) <= 1419)|(min (freq)>= 1422):
             print("don't contain MW")
+            mw_use = np.zeros_like(freq,dtype='bool')
         else:
-            raise ValueError("--mw_frange is empty!")
-        #mw_use = np.full(len(freq),False)
-    mw_use = (freq>=mw_frange[0])&(freq<=mw_frange[1])
+            if rfi_method == 'subtract':
+                raise ValueError("--mw_range is None!")
+            else:
+                mw_use = None
+    else:
+        mw_use = (freq>=mw_frange[0])&(freq<=mw_frange[1])
     
     # try to load header
     if 'Header' in fs.keys():
@@ -464,6 +333,8 @@ if __name__ == '__main__':
         print('Flux calibrating ...')
         T = cali_src(T, nB, freq, cali_fname, ra=ra, dec=dec, mjd=mjd)
     
+    
+    from baseline_2 import replace_rfi,fit_ripple
     if len(T.shape) == 3:
         if keep_polar:
             T3 = deepcopy(T)
@@ -472,37 +343,28 @@ if __name__ == '__main__':
             ori_shape = T_xx.shape
             print("polar xx ...")
             # replace big rfi
-            data_rmrfi_xx , data_rmrfi_low_mw_xx, is_rfi_no_mw_xx = replace_rfi(T_xx,is_rfi,method = rfi_method,**rep_args)
+            data_rmrfi_low_mw_xx = replace_rfi(T_xx,freq,is_rfi,method = rfi_method,mw_use =mw_use,**rep_args)
             # get standing waves
-            sw_fit_xx = fit_ripple(data_rmrfi_low_mw_xx,method = fft_method,plot = plot,pdf=pdf,title='polar xx',
-                                   **fit_args)
+            sw_fit_xx = fit_ripple(data_rmrfi_low_mw_xx, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
+                                   plot = plot,pdf=pdf,title='polar xx',**fit_args)
             print("polar yy ...")
-            data_rmrfi_yy , data_rmrfi_low_mw_yy, is_rfi_no_mw_yy = replace_rfi(T_yy,is_rfi,method = rfi_method,**rep_args)
+            data_rmrfi_low_mw_yy = replace_rfi(T_yy,freq,is_rfi,method = rfi_method,mw_use =mw_use,**rep_args)
             
-            sw_fit_yy = fit_ripple(data_rmrfi_low_mw_yy,method = fft_method,plot = plot,pdf=pdf,title='polar yy',
-                                   **fit_args)
+            sw_fit_yy = fit_ripple(data_rmrfi_low_mw_yy, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
+                                   plot = plot,pdf=pdf,title='polar yy',**fit_args)
             
         else:
             T = np.mean(T, axis=2, dtype='float64')   
             ori_shape = T.shape
             
             # replace big rfi
-            data_rmrfi , data_rmrfi_low_mw, is_rfi_no_mw = replace_rfi(T,is_rfi,method = rfi_method,**rep_args)
+            data_rmrfi_low_mw, is_rfi_no_mw = replace_rfi(T,freq,is_rfi,method = rfi_method,mw_use =mw_use,**rep_args)
             # get standing waves
-            sw_fit = fit_ripple(data_rmrfi_low_mw,method = fft_method,plot = plot,pdf=pdf,title='polar merged',
-                                **fit_args)
+            sw_fit = fit_ripple(data_rmrfi_low_mw, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
+                                   plot = plot,pdf=pdf,title='polar merged',**fit_args)
     else:
         raise ValueError('data should be 3D, and has 2 polars') 
 
-        
-    # protect_mw
-    protect_mw = args.protect_mw
-    if protect_mw:
-        if keep_polar:
-            is_rfi_no_mw = np.append(is_rfi_no_mw_xx,is_rfi_no_mw_yy)
-            is_rfi = is_rfi_no_mw.reshape((2,ori_shape[0],ori_shape[1])).transpose((1,2,0))
-        else:    
-            is_rfi = deecopy(is_rfi_no_mw)
     
     #sub remove standing waves 
     if keep_polar: 
@@ -514,12 +376,8 @@ if __name__ == '__main__':
         
     # fill rfi with ?
     if fill_rfi == 'nan':
-        rmsw_data[is_rfi] = np.nan
-    elif fill_rfi == 'noise':
-        if keep_polar:
-            data_rmrfi = np.append(data_rmrfi_xx,data_rmrfi_yy)
-            data_rmrfi = data_rmrfi.reshape((2,ori_shape[0],ori_shape[1])).transpose((1,2,0))
-        rmsw_data[is_rfi] = data_rmrfi[is_rfi]
+        if rfi_fname != 'none':
+            rmsw_data[is_rfi] = np.nan
     elif fill_rfi == 'rfi':
         pass
            
@@ -542,7 +400,7 @@ if __name__ == '__main__':
 
             from util import plot_waterfall
             plot_waterfall(fs,data = T, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
-                           title = os.path.basename(file_spec).split('.')[:-1],pdf = pdf)
+                           title = os.path.basename(file_spec).split('.')[:-1][0],pdf = pdf)
 
             plot_waterfall(fs,data = rmsw_data, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),pdf = pdf,
                            title = f'remove standing waves, polar {polar}')
@@ -565,9 +423,8 @@ if __name__ == '__main__':
         
     # fill rfi with ?
     if fill_rfi == 'nan':
-        rmsw_data[is_rfi] = np.nan
-    elif fill_rfi == 'noise':
-        rmsw_data[is_rfi] = data_rmrfi[is_rfi]
+        if rfi_fname != 'none':
+            rmsw_data[is_rfi] = np.nan
     elif fill_rfi == 'rfi':
         pass
 
@@ -577,17 +434,18 @@ if __name__ == '__main__':
     dict_out['ra'] = ra
     dict_out['dec'] = dec
     dict_out[outfield] = rmsw_data.astype('float32')
-    dict_out['ripple'] = sw_fit.astype('float32')
+    #dict_out['ripple'] = sw_fit.astype('float32')
     dict_out['freq'] = freq
-    dict_out['is_rfi'] = is_rfi
+    if rfi_fname != 'none':
+        dict_out['is_rfi'] = is_rfi
+        rfi.close()
     if is_extrapo is not None:
         dict_out['is_extrapo'] = is_extrapo
     #save file
     from hifast.utils.io import rec_his, save_dict_hdf5,add_extra
     add_extra(fs, dict_out)
     fs.close()
-    rfi.close()
-    header=rec_his(args=args)
+    header=rec_his(args=args);
     if header_in is not None: header.update(header_in)
     save_dict_hdf5(fileout, dict_out, header=header)
     log.info(f"Saved to {fileout}")
