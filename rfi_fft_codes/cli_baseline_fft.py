@@ -40,24 +40,28 @@ if __name__ == '__main__':
                        help='quasar calibration file name')
     
     ## replace big RFI
-    parser.add_argument('--rfi_method', default='set zeros', choices=['subtract','lower','set zeros'],
-                       help='method to replace big RFI')
+    parser.add_argument('--rfi_method', default='subtract trpdr', choices=['subtract trpdr',
+                      'subtract tr','subtract rfi', 'lower','set zeros'],
+                        help='method to replace big RFI')
     parser.add_argument('--mw_frange', type=float, nargs=2,
                        help='milky way freq range')  
     parser.add_argument('--rms_sigma', type=float, default = 6,
                        help='gauss filter sigma to compute real rms')
-    # subtract method use sg filter
+    parser.add_argument('--rms_frange', type=float, nargs=2,
+                       help='freq range to compute rms')
+    # subtract methods use sg filter and gauss smooth
     parser.add_argument('--sg_window', type=float, default=1.0, 
                        help='savgol_filter window_length (MHz)')
     parser.add_argument('--sg_polyorder', type=int, default=7, 
                        help='savgol_filter polyorder')
+    parser.add_argument('--gauss_sigma',type=float, default=1.0,
+                       help='gauss smooth sigma')
     # lower & set zeros methods need
-    parser.add_argument('--times_lower_thr', type=float, default=3, 
+    parser.add_argument('--times_lower_thr', type=float, default=2, 
                        help='above 3 times of rms will be lowered')
     parser.add_argument('--times_lower', type=float, default=1.0e4, 
                        help='lower mw area when fft, default mw/1e4')
-    
-    
+        
     ## fft remove ripple
     parser.add_argument('--fft_method', default='rfft', choices=['rfft'],
                        help='method to remove ripples')
@@ -73,9 +77,6 @@ if __name__ == '__main__':
                        help='remove 8.1 mhz components ?')
     parser.add_argument('--rfi_freq_step', type=float, 
                        help='big RFI linspace step, freq(\mu s) in Fourier space, nearly 1/16')
-    # mean specs method
-    #parser.add_argument('--nspec',type=int, default=10,
-    #                    help='average how many specs to fit baseline.')
     
     parser.add_argument('-T', '--trans', action='store_true',
                        help='trans')
@@ -109,15 +110,26 @@ if __name__ == '__main__':
     
     # replace args
     rep_args = {}
-    if rfi_method in ['subtract','lower','set zeros']:
-        rep_args['times_lower'] = args.times_lower
-        rep_args['times_lower_thr'] = args.times_lower_thr
+    if rfi_method in ['subtract trpdr',
+                      'subtract tr','subtract rfi', 'lower','set zeros']:
         rep_args['rms_sigma'] = args.rms_sigma
-        if rfi_method =='subtract':
+        rep_args['rms_frange'] = args.rms_frange
+        if 'subtract' in rfi_method:
             rep_args['sg_window'] = args.sg_window
             rep_args['sg_polyorder'] = args.sg_polyorder
+            if 'subtract tr' in rfi_method:
+                rep_args['s_sigma'] = args.gauss_sigma
+            if rfi_method == 'subtract tr':
+                rep_args['times_low_thr'] = args.times_lower_thr
+            elif rfi_method == 'subtract rfi':
+                rep_args['times_lower'] = args.times_lower
+                rep_args['times_lower_thr'] = args.times_lower_thr
         else:
+            rep_args['times_lower'] = args.times_lower
+            rep_args['times_lower_thr'] = args.times_lower_thr
             rfi_fname = 'none'
+            
+        print("rep_args:",rep_args)    
     else:
         raise ValueError("Unsupport replace RFI method.")
 
@@ -131,6 +143,7 @@ if __name__ == '__main__':
         fit_args['rfi_freq_step'] = args.rfi_freq_step
         if args.rfi_freq_step is not None:
             fit_args['rfi_8mhz'] = True
+        print("fit_args:",fit_args) 
     else:
         raise ValueError("Unsupport fit baseline ripple method.")
     
@@ -138,8 +151,12 @@ if __name__ == '__main__':
     if fft_method == 'rfft': 
         fpart += 'fft_bld'
         
-    if rfi_method =='subtract':
-        fpart += 's'
+    if rfi_method =='subtract trpdr':
+        fpart += 'p'
+    elif rfi_method =='subtract tr':
+        fpart += 't'
+    elif rfi_method =='subtract rfi':
+        fpart += 'r'
     elif rfi_method =='lower':
         fpart += 'l'
     elif rfi_method =='set zeros':
@@ -208,8 +225,12 @@ if __name__ == '__main__':
     else:
         rfi_dir_default = os.path.dirname(file_spec).split('/')[:-1]
         rfi_dir_default.append('rfi')
+        
         rfi_dir_default = '/'.join(rfi_dir_default)
-        outpart = '*-tr*.hdf5'
+        if rfi_method =='subtract trpdr' or rfi_method =='subtract rfi':
+            outpart = '*-tr_pdr.hdf5'
+        elif rfi_method =='subtract tr':
+            outpart = '*-tr.hdf5'
         rfi_dir = os.path.join(rfi_dir_default, '.'.join(os.path.basename(file_spec).split('.')[:-1]) + f'{outpart}')
         from glob import glob
         rfi_fnames = glob(rfi_dir)
@@ -228,11 +249,17 @@ if __name__ == '__main__':
     if rfi_fname != 'none':
         rfi = h5py.File(rfi_fname,'r')
         print(f"Find rfi file {rfi_fname}")
-        #s_rfi = None
+        
         if 'is_rfi' in rfi.keys():
             is_rfi = rfi['is_rfi'][()]
-            #if 'short_rfi' in rfi.keys():
-            #    s_rfi = rfi['is_rfi'][()]
+            if 'short_rfi' in rfi.keys():
+                s_rfi = rfi['short_rfi'][()]
+            else:
+                if rfi_method =='subtract tr':
+                    s_rfi = is_rfi
+                else:
+                    s_rfi = np.full(is_rfi.shape,False)
+                    log.warning("rfi file doesn't contain key 'short_rfi',so ignore short time rfi.")
             rfi.close()
             if len(is_rfi.shape) == 3:
                 # use 2D rfi mask
@@ -255,7 +282,7 @@ if __name__ == '__main__':
         not_rfi_num = np.arange(T.shape[0])[~whole_rfi]
         is_rfi_num = np.arange(T.shape[0])[whole_rfi]
     else:
-        is_rfi = None
+        is_rfi = None;s_rfi = None
         not_rfi_num = np.arange(T.shape[0])
         is_rfi_num = np.array([])
     
@@ -267,7 +294,7 @@ if __name__ == '__main__':
         freq = freq[is_]
         T = T[:,is_,:]
         if rfi_fname != 'none':
-            is_rfi = is_rfi[:,is_]
+            is_rfi = is_rfi[:,is_];s_rfi = is_rfi[:,is_];
     
     # load data
     sep_fname = args.sep_fname    
@@ -285,7 +312,6 @@ if __name__ == '__main__':
             
         elif len(sep_fnames) == 0:
             sep_fname = os.path.join(os.path.dirname(file_spec),'.'.join(os.path.basename(file_spec).split('-bld',1)[:-1]) +'.hdf5')
-            
         else:
             raise FileNotFoundError("Which sep file do you want? ")
 
@@ -343,12 +369,14 @@ if __name__ == '__main__':
             ori_shape = T_xx.shape
             print("polar xx ...")
             # replace big rfi
-            data_rmrfi_low_mw_xx = replace_rfi(T_xx,freq,is_rfi,method = rfi_method,mw_use =mw_use,**rep_args)
+            data_rmrfi_low_mw_xx = replace_rfi(T_xx,freq,is_rfi,short_rfi=s_rfi,
+                                               method = rfi_method,mw_use =mw_use,**rep_args)
             # get standing waves
             sw_fit_xx = fit_ripple(data_rmrfi_low_mw_xx, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
                                    plot = plot,pdf=pdf,title='polar xx',**fit_args)
             print("polar yy ...")
-            data_rmrfi_low_mw_yy = replace_rfi(T_yy,freq,is_rfi,method = rfi_method,mw_use =mw_use,**rep_args)
+            data_rmrfi_low_mw_yy = replace_rfi(T_yy,freq,is_rfi,short_rfi=s_rfi,
+                                               method = rfi_method,mw_use =mw_use,**rep_args)
             
             sw_fit_yy = fit_ripple(data_rmrfi_low_mw_yy, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
                                    plot = plot,pdf=pdf,title='polar yy',**fit_args)
@@ -358,7 +386,8 @@ if __name__ == '__main__':
             ori_shape = T.shape
             
             # replace big rfi
-            data_rmrfi_low_mw, is_rfi_no_mw = replace_rfi(T,freq,is_rfi,method = rfi_method,mw_use =mw_use,**rep_args)
+            data_rmrfi_low_mw, is_rfi_no_mw = replace_rfi(T,freq,is_rfi,short_rfi=s_rfi,
+                                                          method = rfi_method,mw_use =mw_use,**rep_args)
             # get standing waves
             sw_fit = fit_ripple(data_rmrfi_low_mw, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
                                    plot = plot,pdf=pdf,title='polar merged',**fit_args)

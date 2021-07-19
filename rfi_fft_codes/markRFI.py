@@ -39,7 +39,8 @@ def real_rms(data,vel,sigma,rms_vrange=None):
     
     return ans
 
-def mean(data,vel, vrange=None):
+def real_std(data,vel,sigma,rms_vrange=None):
+    from scipy.ndimage import gaussian_filter1d
     if rms_vrange is not None:
         is_use = (vel > rms_vrange[0])&(vel < rms_vrange[1])
         if len(data.shape) == 1:
@@ -47,8 +48,11 @@ def mean(data,vel, vrange=None):
         elif len(data.shape) ==2:
             data = data[:,is_use]
             
-    ans = np.nanmean(data,axis = -1)  
+    g = gaussian_filter1d(data, sigma, axis = -1)
+    ans = np.std(data - g,axis = -1)    
+    
     return ans
+
 
 def find_local_peak(rfi1,freq1,RMS,distance=5,):
     from scipy import signal
@@ -582,7 +586,7 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
             
     return  is_timerfi
 
-def mask_sf(data,freq,T_thr = None,frange = None,**kwargs):
+def mask_sf(data,freq,T_thr_times = None,frange = None,RMS = None,**kwargs):
     ret = np.zeros_like(data,dtype = 'bool')
     
     log.info(f"Looking for short-freq time RFI in {frange} ...")
@@ -599,11 +603,18 @@ def mask_sf(data,freq,T_thr = None,frange = None,**kwargs):
     use = use1 & use2
 
     tmp = deepcopy(data[use])
+    T_thr = RMS * T_thr_times
     ret[use] = (tmp > T_thr)
+    
+    ext_add = kwargs['ext_add']
+    if ext_add is not None:
+        from hifast.utils.misc import extend_Trues
+        ret = extend_Trues(ret,axis = -1,ext_add = ext_add)
+
     print("Found :D")
     return ret
 
-def mask_time_rfi(data,freq,T_thr = None,rtype = 'short-freq',frange = None,file = None,**kwargs):
+def mask_time_rfi(data,freq,T_thr_times = None,rtype = 'short-freq',frange = None,file = None,RMS = None,**kwargs):
     ret = np.zeros_like(data,dtype = 'bool')
 
     if rtype == 'short-freq':
@@ -613,10 +624,10 @@ def mask_time_rfi(data,freq,T_thr = None,rtype = 'short-freq',frange = None,file
                 raise ValueError("time RFI freq shape must like (n,2)")
 
             for nf in range(franges.shape[0]):
-                ret = ret | mask_sf(data,freq,T_thr,frange = franges[nf],**kwargs)
+                ret = ret | mask_sf(data,freq,T_thr_times,frange = franges[nf],RMS = RMS,**kwargs)
 
         elif len(frange) == 2:
-            ret = mask_sf(data,freq,T_thr,frange,**kwargs)
+            ret = mask_sf(data,freq,T_thr_times,frange,RMS = RMS,**kwargs)
         else:
             raise ValueError("frange should like [fmin,fmax] or a string (RFI npy filepath).")
 

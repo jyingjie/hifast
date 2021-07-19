@@ -10,8 +10,22 @@ from astropy import log
 from copy import deepcopy
 from tqdm import tqdm
 
-def replace_rfi_substract(data,freq,is_rfi,mw_use,sg_window,sg_polyorder, 
-                          times_lower,times_lower_thr,rms_sigma):
+def filter_smooth(spec,fdelta,method = 'savgol',**kwargs):
+    if method == 'savgol':
+        from util import _round_up_to_odd_integer
+        from scipy.signal import savgol_filter
+        sg_window = kwargs['sg_window']
+        sg_polyorder = kwargs['sg_polyorder']
+        window_length = _round_up_to_odd_integer(sg_window/fdelta)
+        sm = savgol_filter(spec,window_length = window_length ,polyorder=sg_polyorder,)
+    elif method == 'gaussian':
+        from hifast.utils.misc import smooth1d
+        s_sigma = kwargs['s_sigma']
+        sm = smooth1d(spec,axis = 0,sigma = s_sigma, method = 'gaussian')
+    return sm
+
+def replace_rfi_substract_old(data,freq,is_rfi,mw_use,sg_window,sg_polyorder, 
+                          times_lower,times_lower_thr,rms_sigma,rms_frange):
     """
     replace big RFI to reduce the impact in FFT
     
@@ -26,14 +40,8 @@ def replace_rfi_substract(data,freq,is_rfi,mw_use,sg_window,sg_polyorder,
     whole_rfi = np.all(is_rfi,axis = 1)
     is_rfi_num = np.arange(data.shape[0])[whole_rfi]
     not_rfi_num = np.arange(data.shape[0])[~whole_rfi]
-    
-    is_rfi_no_mw = deepcopy(is_rfi)
-    is_rfi_no_mw[:,mw_use] = False
-    is_rfi_no_mw[is_rfi_num,:] = True
-    data_no_mw = deepcopy(data)
-    data_no_mw[:,mw_use] = 0
-    data_rmrfi = deepcopy(data)
-    data_rmrfi[is_rfi_num,:] = np.nan
+
+    data_rmrfi = np.full(data.shape,np.nan)
 
     from util import _round_up_to_odd_integer
     window_length = _round_up_to_odd_integer(sg_window/fdelta)
@@ -41,27 +49,131 @@ def replace_rfi_substract(data,freq,is_rfi,mw_use,sg_window,sg_polyorder,
     from scipy.signal import savgol_filter
     for tn in tqdm(range(data.shape[0])):
         if tn in not_rfi_num:
-            sg = savgol_filter(data_no_mw[tn,:],window_length = window_length ,polyorder=sg_polyorder,)
-            data_rmrfi[tn,is_rfi_no_mw[tn]] = data[tn,is_rfi_no_mw[tn]] - sg[is_rfi_no_mw[tn]]
+            spec = data[tn,:]
+            newspec = deepcopy(spec)
+            newspec[mw_use] = 0
+            sg = savgol_filter(newspec,window_length = window_length ,polyorder=sg_polyorder,)
+            newspec[is_rfi[tn]] = spec[is_rfi[tn]] - sg[is_rfi[tn]]
+            data_rmrfi[tn,:] = newspec
 
     from markRFI import real_rms
-    RMS = real_rms(data_rmrfi[0,:],freq,sigma=rms_sigma,rms_vrange=[freq[0],freq[0]+10])
+    RMS = real_rms(data_rmrfi[0,:],freq,sigma=rms_sigma,rms_vrange=rms_frange)
 
     thr_lower = RMS*times_lower_thr
     low_use = (np.abs(data_rmrfi) > thr_lower)
     from hifast.utils.misc import extend_Trues
     low_use = extend_Trues(low_use,ext_add =10,leng_lim = 20,axis = -1)
 
-    data_rmrfi_low_mw = deepcopy(data_rmrfi)
-    data_rmrfi_low_mw[low_use] = data[low_use]/times_lower
-    data_rmrfi_low_mw[is_rfi_num,:] = np.nan 
+    data_rmrfi_low = deepcopy(data_rmrfi)
+    data_rmrfi_low[low_use] = data[low_use]/times_lower
     
-    return data_rmrfi_low_mw
+    return data_rmrfi_low
 
-def replace_rfi_lower(data,freq,method,times_lower_thr=3,times_lower=None,rms_sigma = 6):
+
+def replace_rfi_substract(data,freq,is_rfi,short_rfi,mw_use,sg_window,sg_polyorder, s_sigma,
+                          rms_sigma,rms_frange):
+    """
+    replace big RFI to reduce the impact in FFT
+    
+    Parameters:
+    data: np array
+    sg_window: scipy.signal.savgol_filter window length (unit MHz)
+    sg_polyorder: scipy.signal.savgol_filter polyorder
+    """
+    fdelta = freq[1]-freq[0] 
+    
+    from markRFI import real_rms
+
+    whole_rfi = np.all(is_rfi,axis = 1)
+    is_rfi_num = np.arange(data.shape[0])[whole_rfi]
+    not_rfi_num = np.arange(data.shape[0])[~whole_rfi]
+    
+    data_rmrfi = np.full(data.shape,np.nan)
+    for tn in tqdm(range(data.shape[0])):
+        if tn in not_rfi_num:
+            spec = data[tn,:]
+            RMS = real_rms(spec,freq,sigma=rms_sigma,rms_vrange=rms_frange)
+            
+            newspec = deepcopy(spec)
+            gauss_sm = filter_smooth(spec,fdelta,method ='gaussian',s_sigma = s_sigma)
+            newspec[mw_use] = 0
+            sg_sm = filter_smooth(spec,fdelta,method = 'savgol',sg_window=sg_window,
+                                  sg_polyorder=sg_polyorder)
+            
+            # period rfi and source
+            newspec[is_rfi[tn]] = spec[is_rfi[tn]] - sg_sm[is_rfi[tn]]
+            # mw 
+            newspec[mw_use] = spec[mw_use] - gauss_sm[mw_use]
+            if np.sum(short_rfi[tn]) > 0:
+                # time RFI 
+                newspec[short_rfi[tn]] = (spec[short_rfi[tn]] / gauss_sm[short_rfi[tn]] - 1)
+                cond = short_rfi[tn] & (np.abs(newspec) > RMS * 3)
+                newspec[cond] = spec[cond]
+            strange = np.where(np.abs(newspec) > 3 * RMS)[0]
+            newspec[strange] = np.random.normal(scale=RMS, size=len(strange))
+
+            data_rmrfi[tn] = newspec
+
+    return data_rmrfi
+
+def replace_rfi_substract2(data,freq,short_rfi,mw_use,sg_window,sg_polyorder, s_sigma,
+                          rms_sigma,rms_frange,times_low_thr,):
+    """
+    replace big RFI to reduce the impact in FFT
+    
+    Parameters:
+    data: np array
+    sg_window: scipy.signal.savgol_filter window length (unit MHz)
+    sg_polyorder: scipy.signal.savgol_filter polyorder
+    
+    """
+    fdelta = freq[1]-freq[0] 
+    
+    from markRFI import real_rms
+
+    whole_rfi = np.all(short_rfi,axis = 1)
+    is_rfi_num = np.arange(data.shape[0])[whole_rfi]
+    not_rfi_num = np.arange(data.shape[0])[~whole_rfi]
+    
+    data_rmrfi = np.full(data.shape,np.nan)
+    from hifast.utils.misc import extend_Trues
+
+    for tn in tqdm(range(data.shape[0])):
+        if tn in not_rfi_num:
+            spec = data[tn,:]
+            RMS = real_rms(spec,freq,sigma=rms_sigma,rms_vrange=rms_frange)
+            
+            thr = RMS*times_low_thr
+            low_use = (spec > thr)    
+            low_use = extend_Trues(low_use,ext_add =10,leng_lim = 20,axis = -1)
+            
+            newspec = deepcopy(spec)
+            gauss_sm = filter_smooth(spec,fdelta,method ='gaussian',s_sigma = s_sigma)
+            newspec[mw_use] = 0
+            sg_sm = filter_smooth(spec,fdelta,method = 'savgol',sg_window=sg_window,
+                                  sg_polyorder=sg_polyorder)
+            
+            # period rfi and source
+            newspec[low_use] = spec[low_use] - sg_sm[low_use]
+            # mw 
+            newspec[mw_use] = spec[mw_use] - gauss_sm[mw_use]
+            if np.sum(short_rfi[tn]) > 0:
+                # time RFI 
+                newspec[short_rfi[tn]] = (spec[short_rfi[tn]] / gauss_sm[short_rfi[tn]] - 1)
+                cond = short_rfi[tn] & (np.abs(newspec) > thr * 2)
+                newspec[cond] = spec[cond]
+            strange = np.where(np.abs(newspec) > 3 * RMS)[0]
+            newspec[strange] = np.random.normal(scale=RMS, size=len(strange))
+
+            data_rmrfi[tn] = newspec
+
+    return data_rmrfi
+
+def replace_rfi_lower(data,freq,method,times_lower_thr=3,times_lower=None,
+                      rms_sigma = 5,rms_frange=None):
 
     from markRFI import real_rms
-    RMS = real_rms(data[0,:],freq,sigma=rms_sigma,rms_vrange=[freq[0],freq[0]+10])
+    RMS = real_rms(data[0,:],freq,sigma=rms_sigma,rms_vrange=rms_frange)
 
     thr_lower = RMS*times_lower_thr
     low_use = (np.abs(data) > thr_lower)
@@ -76,28 +188,31 @@ def replace_rfi_lower(data,freq,method,times_lower_thr=3,times_lower=None,rms_si
         
     return data_low
 
-def replace_rfi(data,freq,is_rfi = None, method='set zeros',mw_use = None, **rep_args):
+def replace_rfi(data,freq,is_rfi = None,short_rfi = None, method='subtract with pd',
+                mw_use = None, **rep_args):
 
     log.info(f"Replace RFI with {method} method ...")
     
-    if method == 'subtract':
-        if is_rfi is None:
-            raise ValueError("is_rfi is not defined!")
-        data_rmrfi_low_mw = replace_rfi_substract(data,freq,is_rfi,mw_use,**rep_args)
-        
+    if method == 'subtract trpdr':
+        data_rmrfi = replace_rfi_substract(data,freq,is_rfi,short_rfi,mw_use,**rep_args)
+    elif method == 'subtract tr':
+        data_rmrfi = replace_rfi_substract2(data,freq,short_rfi,mw_use,**rep_args)
     elif (method == 'lower') or (method == 'set zeros'):
-        data_rmrfi_low_mw = replace_rfi_lower(data,freq,method=method,**rep_args)
-        
-    return data_rmrfi_low_mw  
+        data_rmrfi = replace_rfi_lower(data,freq,method=method,**rep_args)
+    elif method == 'subtract rfi':
+        data_rmrfi = replace_rfi_substract_old(data,freq,is_rfi,mw_use,**rep_args)
+    else:
+        raise ValueError("Unsupport replace RFI method!")
+    return data_rmrfi  
 
 
-def fft_fit_ripple(data_rmrfi_low_mw, freq,is_rfi_num,not_rfi_num,ori_shape,
+def fft_fit_ripple(data_rmrfi, freq,is_rfi_num,not_rfi_num,ori_shape,
                    sw_freq= 0.9254,amp_thr= None,sw_n = 5,rfi_8mhz = False,rfi_freq_step = None,
                    plot = False,pdf = None,title = None):
     """
     fit baseline ripple (standing wave) by FFT
     Parameter:
-    data_rmrfi_low_mw: data array (after lower mw, RFI)
+    data_rmrfi: data array (after replace RFI)
     sw_freq: standing wave 'frequence' in Fourier space, unit \mu s
     rfi_freq_step: big RFI residual influence in Fourier space, nearly 1/16.2 \mu s.
                     (period is 16.2 MHz)
@@ -108,9 +223,9 @@ def fft_fit_ripple(data_rmrfi_low_mw, freq,is_rfi_num,not_rfi_num,ori_shape,
     fdelta = freq[1]-freq[0]
     
     if len(is_rfi_num) > 0:
-        data_rmrfi_low_mw = np.delete(data_rmrfi_low_mw,is_rfi_num,axis = 0)
+        data_rmrfi = np.delete(data_rmrfi,is_rfi_num,axis = 0)
 
-    fftf = FFT(data_rmrfi_low_mw, freq)
+    fftf = FFT(data_rmrfi, freq)
     x = fftf.x
     amp_data = fftf.amp
     loc1 = np.argmin(np.abs((x - sw_freq)))
@@ -148,7 +263,7 @@ def fft_fit_ripple(data_rmrfi_low_mw, freq,is_rfi_num,not_rfi_num,ori_shape,
     amp_data_inpd[amp_data_inpd < 0] = 0
     
     A_data_inpd =  amp_data_inpd * np.exp(1j*fftf.phi)
-    A_data_ifft = np.real(np.fft.irfft(A_data_inpd,n=data_rmrfi_low_mw.shape[1]))
+    A_data_ifft = np.real(np.fft.irfft(A_data_inpd,n=data_rmrfi.shape[1]))
     
     if plot:
         tn = not_rfi_num[10]
