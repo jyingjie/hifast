@@ -252,8 +252,9 @@ def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,check = True,
                 fcenter3 += [vc,]; peak3 +=[peaks[j]]
         fcenter3 = np.array(fcenter3)
         if check:
-            peak3 = np.array(peak3)       
-            _,fcenter3 = check_repeat_center(fcenter3,freq_step=8.1,x_start = '1st point',peaks = peak3)  
+            if fcenter3.size > 0:
+                peak3 = np.array(peak3)       
+                _,fcenter3 = check_repeat_center(fcenter3,freq_step=8.1,x_start = '1st point',peaks = peak3)
     else:
         fcenter3 = np.array(fcenter3)
     fc0 = np.array(fc0).flatten()
@@ -261,6 +262,8 @@ def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,check = True,
     return fcenter1,fcenter2,fcenter3,fc0
 
 def check_repeat_center(item,freq_step=8.1,x_start = '1st point',peaks = None):
+    if len(item) <= 0:
+        raise ValueError(f"Input item length is {len(item)}!")
     if x_start == 'zero':
         x = np.around(item/freq_step)
     elif x_start == '1st point':
@@ -298,7 +301,6 @@ def check_repeat_center(item,freq_step=8.1,x_start = '1st point',peaks = None):
 
 
 def polyfit1order(item,plot = False,pdf = None,**kwargs):
-
     x,item = check_repeat_center(item,**kwargs)
         
     if len(x) <= 1:
