@@ -449,7 +449,7 @@ def center_theory(freq,fcenter1,fcenter2,fcenter3,freq_step,plot,pdf,rfi_fit_use
     
 def find_RFI(spec,freq,is_rfi,is_rfi_mw,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge = 0,
              plot = False,pdf = None,ylim = None,rfi_fit_use = 'two groups',
-             mask_RFI_method = '2 sides',small_rfi_times = 2,chan_step = 3,
+             mask_RFI_method = 'fixed freq',small_rfi_times = 2,chan_step = 3,
              mask_all_theory = False,freq_from_theory = None,mask_thr = 15,
              ret_type = 'all theory',**kwargs):
          
@@ -540,10 +540,24 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
         pat_data = data
 
     pat_mean = np.nanmean(pat_data,axis = 1)
-    pat_med = np.median(pat_mean)
+    pat_med = np.nanmedian(pat_mean)
 
     is_pat = pat_mean > pat_med * times
     if is_pat.any() == False:
+        if plot:  
+            if pdf is not None:
+                plt.switch_backend('agg')
+            fig,ax = plt.subplots(figsize = (15,3))
+            ax.plot(t,pat_mean)
+            ax.axhline(pat_med*times,c = 'k',linestyle = '--',label='median')
+            ax.grid()
+            ax.set_ylabel('mean along freq axis')
+            ax.set_xlabel('spec number (time)')
+            ax.set_title(f'freq in {frange} MHz')
+            if ylim is not None:
+                ax.set_ylim(ylim[0],ylim[1])
+            if pdf is not None:
+                pdf.savefig();plt.close()
         return  is_timerfi
     
     #from markRFI import get_startend

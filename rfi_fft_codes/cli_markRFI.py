@@ -335,6 +335,8 @@ if __name__ == '__main__':
         T = deepcopy(T_)
         
     ###################### freq period RFI ##########################    
+    is_rfio = f['is_rfi'][()] if 'is_rfi' in f.keys() else None 
+    
     if period_rfi:
         #mark RFI 
         from markRFI import find_RFI
@@ -345,8 +347,6 @@ if __name__ == '__main__':
             protect_use = np.zeros_like(freq,dtype='bool')
         else:
             protect_use = (freq>mw_frange[0])&(freq<mw_frange[1])
-
-        is_rfio = f['is_rfi'][()] if 'is_rfi' in f.keys() else None 
         
         if plot:
             ylim = args.ylim
@@ -409,8 +409,12 @@ if __name__ == '__main__':
             rfi_mask = deepcopy(t_rfi)
             
     if is_rfio is not None:
-        rfi_mask = rfi_mask | is_rfio
-        log.warning("'is_rfi' alredy exists, found again and use union set.")
+        if period_rfi | time_rfi:
+            rfi_mask = rfi_mask | is_rfio
+            log.warning("'is_rfi' alredy exists, found again and use union set.")
+        else:
+            rfi_mask = is_rfio
+            print("Use 'is_rfi' in itself.")
 
     
     if np.sum(rfi_mask) > 0:

@@ -82,7 +82,7 @@ if __name__ == '__main__':
                        help='trans')
     parser.add_argument('--keep_polar', action='store_true',
                        help='keep two polarizations')
-    parser.add_argument('--fill_rfi', default='nan', choices=['nan','rfi'],
+    parser.add_argument('--fill_rfi', default='rfi', choices=['nan','rfi'],
                        help='keep rfi')
     parser.add_argument('--plot', action= 'store_true',
                        help='plot')
@@ -298,9 +298,7 @@ if __name__ == '__main__':
     
     # load data
     sep_fname = args.sep_fname    
-    if sep_fname is not None:
-        print(f"Use rfi file {sep_fname}")
-    else:
+    if sep_fname is None:
         sep_dir_default = os.path.dirname(file_spec).split('/')[:-1]
         sep_dir_default.append('sep')
         sep_dir_default = '/'.join(sep_dir_default)
@@ -402,13 +400,14 @@ if __name__ == '__main__':
         rmsw_data = T3 - sw_fit
     else:
         rmsw_data = T_ori - sw_fit
-        
+    
     # fill rfi with ?
     if fill_rfi == 'nan':
         if rfi_fname != 'none':
             rmsw_data[is_rfi] = np.nan
     elif fill_rfi == 'rfi':
         pass
+    
            
     if plot:
         print(" 'Wait for plotting patiently, you must.' Master Yoda said")
@@ -423,7 +422,7 @@ if __name__ == '__main__':
             ax.plot(freq,np.mean(sw_fit[tn-5:tn+5,:],axis = 0),label='ripple')
             ax.plot(freq,np.mean(rmsw_data[tn-5:tn+5,:],axis = 0) - .5,label='result')
             ax.grid();ax.legend();ax.set_title(f'ten specs mean, polar {polar}')
-            ax.set_xlim(1320,1440)
+            ax.set_xlim(freq[0],freq[-1])
             ax.set_ylim(-1,.5)
             pdf.savefig();plt.close()
 
@@ -456,7 +455,7 @@ if __name__ == '__main__':
             rmsw_data[is_rfi] = np.nan
     elif fill_rfi == 'rfi':
         pass
-
+    
     print(f"Saving...")
     dict_out= {}
     dict_out['mjd'] = mjd

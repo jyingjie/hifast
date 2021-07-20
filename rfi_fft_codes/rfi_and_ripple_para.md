@@ -15,7 +15,7 @@ python cli_markRFI.py $subname --outdir ./data \
         --rfi_thr 3 --rms_frange 1400 1403 --mw_frange 1419 1425 --rfi_groups 'two groups' \
         --rfi_width_lim 20 --ext_sec 20 --freq_thr .3 --freq_step 8.1 \
         --mask_RFI_method 'fixed freq' --ext_edge 3 --mask_thr 2 --mask_all_theory --freq_from_theory .5 \
-        --plot -f  || exit 1 
+        --plot -f --save_sf || exit 1 
 ```
 ### 时域
 
@@ -54,6 +54,8 @@ Finish
 * --lf_rfi_last: 持续出现的谱线数
 * --lf_ext: 选定区域后，扩展边缘
 
+* --save_sf: 将sf单独保存为```dict_out['short_rfi']```
+
 输出文件名含tr
 
 ### 频域
@@ -82,13 +84,13 @@ Finish
 * --ext_edge: 结果扩展边缘的通道数
 * --mask_thr: 只mask超过rms的几倍。很小的rfi会保留。
 * --mask_RFI_method: 'fixed freq' 对于小rfi，固定mask宽度
-* --mask_all_theory: 是否理论的全mask，会非常干净(输出文件名含strict)
-  --freq_from_theory: 很小的去掉多少频率(固定宽度)
+* --mask_all_theory: 是否理论的全mask，这样会非常干净(输出文件名含strict)
+      --freq_from_theory: 很小的去掉多少频率(固定宽度)
   
 * --mask_RFI_method: '2 sides' 从中心向两边按step循环，确定mask边界，比较慢
-* --small_rfi_times: 小于RMS这个倍数的不标记
-  --chan_step: step通道数
-  --freq_from_theory: mask rfi最大的宽度
+      --small_rfi_times: 小于RMS这个倍数的不标记
+      --chan_step: step通道数
+      --freq_from_theory: mask rfi最大的宽度
   例如
   ```
   python ../../cli_markRFI.py $subname --outdir ./data \
@@ -101,10 +103,11 @@ Finish
         --rfi_width_lim 20 --ext_sec 20 --freq_thr .3 --freq_step 8.1 \
         --mask_RFI_method '2 sides' --ext_edge 10 --mask_thr 2 --freq_from_theory 3\
         --small_rfi_times 2 --chan_step 5 \
-        --plot -f  || exit 1 
+        --plot -f  --save_sf|| exit 1 
   ```
+  
 * --time_coherent_per: 如果该频率，例如90%都被标记了，那么整条都被标记为RFI。不怎么用。
-* --save_rfi_list: 是否保存各条谱线rfi理论值，```dict_out['rfi_list']```
+* --save_rfi_list: 是否保存各条谱线周期rfi理论值，```dict_out['rfi_list']```
 
 输出的文件中```dict_out['is_rfi']```为二维的mask
 
@@ -122,40 +125,84 @@ Finish
 ## cli_baseline_fft去驻波
 
 ### 对RFI
-* --rfi_method: 防止大rfi/强源干扰fft，提供三种方法：'lower','set zeros','subtract'
-* --times_lower_thr: 大于RMS这么多倍的会被降低
-* --times_lower: 把高流量压低，比如原来的1/1e4
-* --rms_sigma: 如果区间有干扰，还是用该频率减去一个高斯平滑，得到准确的rms。此为高斯滤波的sigma。
+* --rfi_method: 防止大rfi/强源干扰fft，提供5种方法：'subtract trpdr','subtract tr','subtract rfi', 'lower','set zeros'
 
-1. 'lower'降低高流量。不需要rfi文件。例如
+
+* --rms_sigma: 如果区间有干扰，还是用该频率减去一个高斯平滑，得到准确的rms。此为高斯滤波的sigma。
+* -rfi, --rfi_fname: 指定标记rfi的文件。无则自动到输入文件的上一级名为/rfi/的文件夹里找含-tr的文件，找不到则在当前路径找。
+
+* --mw_frange: 银河系存在的区域
+1. 'subtract trpdr'用原始值减去滤波值。例如
     ```
-    python cli_baseline_fft.py $subname --outdir ./data \
+    python ../../cli_baseline_fft.py $subname --outdir ./data \
+        --mw_frange 1420 1421 --rms_sigma 6 --rms_frange 1390 1400 \
+        --rfi_method 'subtract trpdr' --sg_window 1.0 --sg_polyorder 7 --gauss_sigma 1 \
+        --fft_method rfft --sw_freq 0.9254   --amp_thr 35  --sw_n 5 \
+        --plot -f --fill_rfi nan --keep_polar || exit 1 
+    ```
+    * 需要已知周期rfi和时域rfi的文件，即*-tr_pdr*
+    * --sg_window --sg_polyorder: savgol_filter的窗口大小(MHz)和阶数. 存在周期rfi区域减去sg滤波值替代。存在时域RFI区域除以sg滤波值替代。
+    * --gauss_sigma: 银河系存在的地方临时用一个高斯平滑减下去
+    * 最后会除去所有超过3$\sigma$的强源或者异常点。
+    
+    输出文件名含fft_bldp.
+    
+2. 'subtract tr'用原始值减去滤波值。例如
+    ```
+    python ../../cli_baseline_fft.py $subname --outdir ./data \
+        --mw_frange 1420 1421 --rms_sigma 6 --rms_frange 1390 1400 \
+        --rfi_method 'subtract tr' --sg_window 1.0 --sg_polyorder 7 --gauss_sigma 1 \
+        --times_lower_thr 1.7   \
+        --fft_method rfft --sw_freq 0.9254   --amp_thr 35  --sw_n 5 \
+        --plot -f --fill_rfi nan --keep_polar || exit 1 
+    ```
+    * 只需要已知时域rfi的文件，即*-tr*
+    * --times_lower_thr: 大于RMS这么多倍的会被处理，低一些会干净。所以不需要已知pdr。
+    * --sg_window --sg_polyorder: savgol_filter的窗口大小(MHz)和阶数.存在减去sg滤波值替代
+    * --gauss_sigma: 银河系存在的地方临时用一个高斯平滑减下去
+
+    输出文件名含fft_bldt.
+    
+ 3. 'subtract rfi'用原始值减去滤波值。例如
+    ```
+    python ../../cli_baseline_fft.py $subname --outdir ./data \
+        --mw_frange 1420 1421 --rms_sigma 6 --rms_frange 1390 1400 \
+        --rfi_method 'subtract rfi' --sg_window 1.0 --sg_polyorder 7 \
+        --times_lower 1.0e4 --times_lower_thr 2   \
+        --fft_method rfft --sw_freq 0.9254   --amp_thr 35  --sw_n 5 \
+        --plot -f --fill_rfi nan --keep_polar || exit 1 
+    ```
+    * 需要已知周期rfi的文件，即*pdr*
+    * --sg_window --sg_polyorder: savgol_filter的窗口大小(MHz)和阶数.存在减去sg滤波值替代
+    * --times_lower_thr: 减去滤波值后，大于RMS这么多倍的会被降低
+    * --times_lower: 把高流量压低，比如原来的1/1e4
+    
+    输出文件名含fft_bldr.
+ 
+4. 'lower'降低高流量。不需要rfi文件。例如
+    ```
+    python cli_baseline_fft.py $subname  --rms_frange 1390 1400 \
         --rfi_method 'lower' --times_lower 1.0e4 --times_lower_thr 2 \
         --fft_method rfft --sw_freq 0.9254   --amp_thr 35  --sw_n 5 \
         --plot -f --keep_polar || exit 1 
     ```
+    * --times_lower_thr:大于RMS这么多倍的会被降低
+    * --times_lower: 把高流量压低，比如原来的1/1e4
+    
     输出文件名含fft_bldl.
     
-2. 'set zeros'高流量全部置零。不需要rfi文件。例如
+5. 'set zeros'高流量全部置零。不需要rfi文件。例如
     ```
-    python ../../cli_baseline_fft.py $subname --outdir ./data \
-        --rfi_method 'set zeros' --times_lower 1.0e4 --times_lower_thr 2 \
+    python ../../cli_baseline_fft.py $subname --outdir ./data --rms_frange 1390 1400 \
+        --rfi_method 'set zeros'  --times_lower_thr 2 \
+        --fft_method rfft --sw_freq 0.9254   --amp_thr 35  --sw_n 5 \
         --plot -f --keep_polar || exit 1 
     ```
+    * --times_lower_thr:大于RMS这么多倍的会被降低
+    
     输出文件名含fft_bldz.
     
-3. 'subtract'用原始值减去滤波值。例如
-    ```
-    python ../../cli_baseline_fft.py $subname --outdir ./data \
-            -rfi $rfiname --mw_frange 1420.2 1420.55 \
-            --rfi_method subtract --sg_window 1.0 --sg_polyorder 7 --times_lower 1.0e4 --times_lower_thr 2 \
-            --fft_method rfft --sw_freq 0.9254   --amp_thr 35  --sw_n 5 \
-            --plot -f --fill_rfi nan --keep_polar || exit 1 
-    ```
-    * -rfi, --rfi_fname: 指定标记rfi的文件。无则自动到输入文件的上一级名为/rfi/的文件夹里找含-tr的文件，找不到则在当前路径找。
-    * --mw_frange: 银河系存在的区域
-    * --sg_window --sg_polyorder: savgol_filter的窗口大小(MHz)和阶数
-    输出文件名含fft_blds.
+
 
 ### fft去驻波
 
