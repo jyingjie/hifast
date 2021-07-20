@@ -93,7 +93,7 @@ Finish
       --freq_from_theory: mask rfi最大的宽度
   例如
   ```
-  python ../../cli_markRFI.py $subname --outdir ./data \
+  python cli_markRFI.py $subname --outdir ./data \
         --sf --lf --lf_beams ['05','06','13'] \
         --sf_frange 1380 1382 --sf_times 10 --sf_thr 10 --sf_rfi_last 20 --sf_T_thr .3 \
         --lf_frange 1400 1450 --lf_times 1.5 --lf_thr 0 --lf_rfi_last 50 --lf_ext 10 \
@@ -127,14 +127,13 @@ Finish
 ### 对RFI
 * --rfi_method: 防止大rfi/强源干扰fft，提供5种方法：'subtract trpdr','subtract tr','subtract rfi', 'lower','set zeros'
 
-
 * --rms_sigma: 如果区间有干扰，还是用该频率减去一个高斯平滑，得到准确的rms。此为高斯滤波的sigma。
 * -rfi, --rfi_fname: 指定标记rfi的文件。无则自动到输入文件的上一级名为/rfi/的文件夹里找含-tr的文件，找不到则在当前路径找。
 
 * --mw_frange: 银河系存在的区域
 1. 'subtract trpdr'用原始值减去滤波值。例如
     ```
-    python ../../cli_baseline_fft.py $subname --outdir ./data \
+    python cli_baseline_fft.py $subname --outdir ./data \
         --mw_frange 1420 1421 --rms_sigma 6 --rms_frange 1390 1400 \
         --rfi_method 'subtract trpdr' --sg_window 1.0 --sg_polyorder 7 --gauss_sigma 1 \
         --fft_method rfft --sw_freq 0.9254   --amp_thr 35  --sw_n 5 \
@@ -149,7 +148,7 @@ Finish
     
 2. 'subtract tr'用原始值减去滤波值。例如
     ```
-    python ../../cli_baseline_fft.py $subname --outdir ./data \
+    python cli_baseline_fft.py $subname --outdir ./data \
         --mw_frange 1420 1421 --rms_sigma 6 --rms_frange 1390 1400 \
         --rfi_method 'subtract tr' --sg_window 1.0 --sg_polyorder 7 --gauss_sigma 1 \
         --times_lower_thr 1.7   \
@@ -165,7 +164,7 @@ Finish
     
  3. 'subtract rfi'用原始值减去滤波值。例如
     ```
-    python ../../cli_baseline_fft.py $subname --outdir ./data \
+    python cli_baseline_fft.py $subname --outdir ./data \
         --mw_frange 1420 1421 --rms_sigma 6 --rms_frange 1390 1400 \
         --rfi_method 'subtract rfi' --sg_window 1.0 --sg_polyorder 7 \
         --times_lower 1.0e4 --times_lower_thr 2   \
@@ -193,7 +192,7 @@ Finish
     
 5. 'set zeros'高流量全部置零。不需要rfi文件。例如
     ```
-    python ../../cli_baseline_fft.py $subname --outdir ./data --rms_frange 1390 1400 \
+    python cli_baseline_fft.py $subname --outdir ./data --rms_frange 1390 1400 \
         --rfi_method 'set zeros'  --times_lower_thr 2 \
         --fft_method rfft --sw_freq 0.9254   --amp_thr 35  --sw_n 5 \
         --plot -f --keep_polar || exit 1 
