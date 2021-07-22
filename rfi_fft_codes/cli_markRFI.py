@@ -190,6 +190,7 @@ if __name__ == '__main__':
     if period_rfi:
         outparts += ['pdr']
         if mask_all_theory: outparts += ['strict']
+
     if flux: outparts += ['flux']
     
     outpart = '-' + '_'.join(outparts)
@@ -307,8 +308,7 @@ if __name__ == '__main__':
             s_rfi = mask_time_rfi(T,freq, rtype = 'short-freq',plot = plot,pdf = pdf,RMS = RMS,**shortf_args)
             
             t_rfi = t_rfi | s_rfi
-    
-        if shortf_rfi:
+
             T[s_rfi] = 0
 
     if len(is_rfi_num)>0:

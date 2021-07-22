@@ -294,7 +294,7 @@ if __name__ == '__main__':
         freq = freq[is_]
         T = T[:,is_,:]
         if rfi_fname != 'none':
-            is_rfi = is_rfi[:,is_];s_rfi = is_rfi[:,is_];
+            is_rfi = is_rfi[:,is_];s_rfi = is_rfi[:,is_]
     
     # load data
     sep_fname = args.sep_fname    
@@ -450,11 +450,11 @@ if __name__ == '__main__':
         rmsw_data = np.mean(T_sep,axis = 2) - sw_fit
         
     # fill rfi with ?
-    if fill_rfi == 'nan':
-        if rfi_fname != 'none':
-            rmsw_data[is_rfi] = np.nan
-    elif fill_rfi == 'rfi':
-        pass
+    #if fill_rfi == 'nan':
+    #    if rfi_fname != 'none':
+    #        rmsw_data[is_rfi] = np.nan
+    #elif fill_rfi == 'rfi':
+    #    pass
     
     print(f"Saving...")
     dict_out= {}

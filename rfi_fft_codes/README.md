@@ -1,6 +1,6 @@
 # parameters meaning
 
-先用cli_baseline多项式去基线，然后，以后再说
+先用cli_baseline多项式去基线，然后的顺序看g15_pipe.sh
 
 ## cli_markRFI标记rfi
 
