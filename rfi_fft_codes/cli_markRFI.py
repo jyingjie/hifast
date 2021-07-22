@@ -189,7 +189,7 @@ if __name__ == '__main__':
     if time_rfi:outparts += ['tr']
     if period_rfi:
         outparts += ['pdr']
-        if mask_all_theory: outparts += ['strict']
+        #if mask_all_theory: outparts += ['strict']
 
     if flux: outparts += ['flux']
     

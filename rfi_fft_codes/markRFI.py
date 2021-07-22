@@ -146,7 +146,8 @@ def get_startend(is_rfi,rfi_width_lim = None,ext_sec= 0):
     return start,end
 
 
-def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,check = True,**kwargs):
+def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,check = True,
+                rfi_fit_use = 'two groups',**kwargs):
 
     start,end = get_startend(is_rfi,**kwargs)
     # big rfi position
@@ -235,28 +236,30 @@ def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,check = True,
         # find another one 
         fcenter2,fcenter3_loc = rfi_set2(fc0,fc1,fc01,freq,freq_step,freq_thr,peaks)
     
-    # guess rfi set 3 besides set 1 & 2 
-    peak_use = np.full(len(peaks),False)
-    peak_use[fcenter3_loc] = True
-    peaks[~peak_use] = 0
     fcenter3 = []
-    if (peaks == 0.).all() == False:
-        fc02 = fc0[np.argmax(peaks)]
-        
-        former = int((fc02 - freq[0])//freq_step + 10)
-        fc3 = np.arange(fc02-freq_step*former,1440,freq_step)  
-        peak3 = []
-        for j in range(len(fc0)):
-            vc = fc0[j]
-            if np.min(np.abs(vc - fc3)) < freq_thr:
-                fcenter3 += [vc,]; peak3 +=[peaks[j]]
-        fcenter3 = np.array(fcenter3)
-        if check:
-            if fcenter3.size > 0:
-                peak3 = np.array(peak3)       
-                _,fcenter3 = check_repeat_center(fcenter3,freq_step=8.1,x_start = '1st point',peaks = peak3)
-    else:
-        fcenter3 = np.array(fcenter3)
+    if rfi_fit_use == 'three groups':  
+        # guess rfi set 3 besides set 1 & 2 
+        peak_use = np.full(len(peaks),False)
+        peak_use[fcenter3_loc] = True
+        peaks[~peak_use] = 0
+
+        if (peaks == 0.).all() == False:
+            fc02 = fc0[np.argmax(peaks)]
+
+            former = int((fc02 - freq[0])//freq_step + 10)
+            fc3 = np.arange(fc02-freq_step*former,1440,freq_step)  
+            peak3 = []
+            for j in range(len(fc0)):
+                vc = fc0[j]
+                if np.min(np.abs(vc - fc3)) < freq_thr:
+                    fcenter3 += [vc,]; peak3 +=[peaks[j]]
+            fcenter3 = np.array(fcenter3)
+            if check:
+                if fcenter3.size > 0:
+                    peak3 = np.array(peak3)       
+                    _,fcenter3 = check_repeat_center(fcenter3,freq_step=8.1,x_start = '1st point',peaks = peak3)
+    
+    fcenter3 = np.array(fcenter3)
     fc0 = np.array(fc0).flatten()
     
     return fcenter1,fcenter2,fcenter3,fc0
@@ -279,16 +282,18 @@ def check_repeat_center(item,freq_step=8.1,x_start = '1st point',peaks = None):
             delete_loc = []
             for i in range(len(repeat_key)):
                 repeat_loc_in_x = np.where(x == repeat_key[i])[0]
-                peak = np.full(len(x),-1.)
+                peak = np.full(len(x),-1)
                 peak[repeat_loc_in_x] = peaks[repeat_loc_in_x]
                 Max = np.max(peak)
                 rep = np.sum(peak == Max)
                 if rep > 1:
                     repeat_peak = np.where(peak == np.max(peak))[0]
-                    del_loc = np.hstack((np.where((peak >= 0)&(peak < np.max(peak)))[0],repeat_peak[:-1]))
+                    del_loc = np.hstack((repeat_peak[:-1],
+                                        np.where((peak >= 0)&(peak < np.max(peak)))[0]))
                 else:
                     del_loc = np.where((peak >= 0)&(peak < Max))[0]
                 delete_loc.append(del_loc)
+            delete_loc = np.hstack(delete_loc)
         else:
             repeat_loc_in_x = np.array([np.where(x == repeat_key[i])[0] for i in range(len(repeat_key))])
             delete_loc = repeat_loc_in_x[:,1:].flatten()
@@ -461,7 +466,7 @@ def find_RFI(spec,freq,is_rfi,is_rfi_mw,freq_step=8.1,RMS = None,freq_thr = 0.5,
     fdelta = freq[1] - freq[0]
 
     fcenter1,fcenter2,fcenter3,fc0 = find_center(spec,freq,is_rfi,RMS,freq_step=freq_step,
-                                                 freq_thr =freq_thr,**kwargs)
+                                                 freq_thr =freq_thr,rfi_fit_use = rfi_fit_use,**kwargs)
     theory0,theory1,theory2,theory3 = center_theory(freq,fcenter1,fcenter2,fcenter3,freq_step =freq_step,
                             plot = plot,pdf = pdf,rfi_fit_use =rfi_fit_use)
 
