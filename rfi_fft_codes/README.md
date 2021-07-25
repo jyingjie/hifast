@@ -1,6 +1,10 @@
 # parameters meaning
 
+Author: Xu Chen, NAOC, 2021.07
+
 先用cli_baseline多项式去基线，然后的顺序看g15_pipe.sh
+
+有bug请联系stellarxu@qq.com
 
 ## cli_markRFI标记rfi
 
@@ -228,3 +232,31 @@ Finish
 输出文件名含mean_bld.
 
 需要注意，由于不同谱线基线不同，还需要使用cli_baseline.py多项式去一次基线。
+
+
+## cli_RFIshape利用同一谱线不同频率的RFI波形
+
+利用同一谱线不同频率的RFI波形，分离污染了M31的RFI
+
+eg.
+```
+python cli_RFIshape.py $subname --outdir ./data \
+        --m31_frange 1421 1425 --m31_times 1.5 --m31_thr 0 --m31_rfi_last 50 --m31_ext 3 \
+        --no_m31_frange 1420 1423 \
+        --rfi_thr 2 --rms_sigma 6 --rms_frange 1390 1400 --mw_frange 1419 1425 --rfi_groups 'three groups' \
+        --rfi_width_lim 3 --ext_sec 4 --freq_thr .7 --freq_step 8.1 \
+        --mask_RFI_method 'fixed freq' --ext_edge 0 --mask_thr 3 --freq_from_theory .5 \
+        --plot --ylim -1 5 -f || exit 1 
+```
+
+* 其中``` --m31_frange 1421 1425 --m31_times 1.5 --m31_thr 0 --m31_rfi_last 50 --m31_ext 3 ```与cli_markRFI的lf含义相同，用来确定哪些谱线有M31。
+
+* 下面这些与cli_markRFI的找周期RFI并mask的含义相同，用来收集其他频率的RFI波形
+```   --rfi_thr 2 --rms_sigma 6 --rms_frange 1390 1400 --mw_frange 1419 1425 --rfi_groups 'three groups' \
+        --rfi_width_lim 3 --ext_sec 4 --freq_thr .7 --freq_step 8.1 \
+        --mask_RFI_method 'fixed freq' --ext_edge 0 --mask_thr 3 --freq_from_theory .5 \
+```
+* 用这些波形对齐峰值频率，插值成相同长度后取中值，用以代替不同频率的RFI
+* --no_m31_frange: 周期RFI的区间里包含了M31，这里为了选出RFI的峰值用于对齐，需要把不使用的M31、MW设为False。
+* --only_M31: 只把M31邻近处减去插值波形。指no_m31_frange及其左右3MHz
+* 需要注意，很难完全减干净的

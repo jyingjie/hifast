@@ -452,7 +452,7 @@ def center_theory(freq,fcenter1,fcenter2,fcenter3,freq_step,plot,pdf,rfi_fit_use
         
     
     
-def find_RFI(spec,freq,is_rfi,is_rfi_mw,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge = 0,
+def find_RFI(spec,freq,is_rfi,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge = 0,
              plot = False,pdf = None,ylim = None,rfi_fit_use = 'two groups',
              mask_RFI_method = 'fixed freq',small_rfi_times = 2,chan_step = 3,
              mask_all_theory = False,freq_from_theory = None,mask_thr = 15,

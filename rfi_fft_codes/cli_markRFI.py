@@ -357,7 +357,7 @@ if __name__ == '__main__':
             is_rfi_mw = (spec > RMS * rfi_thr)
             is_rfi_ = is_rfi_mw & (~protect_use)
             _,theory = find_RFI(
-                spec,freq,is_rfi_,is_rfi_mw,freq_step = freq_step,RMS = RMS,freq_thr = freq_thr,
+                spec,freq,is_rfi_,freq_step = freq_step,RMS = RMS,freq_thr = freq_thr,
                 ext_edge = ext_edge,rfi_fit_use = 'two groups',plot = plot,pdf=pdf,ylim=ylim,
                 mask_RFI_method = mask_RFI_method, small_rfi_times = small_rfi_times,chan_step = chan_step,
                 mask_all_theory = mask_all_theory,freq_from_theory = freq_from_theory,mask_thr = mask_thr,
@@ -377,7 +377,7 @@ if __name__ == '__main__':
                 is_rfi = (spec > RMS * rfi_thr) & (~protect_use)
                 try:
                     pd_rfi[tn,:],rfi_theory = find_RFI(
-                        spec,freq,is_rfi,is_rfi_mw,freq_step = freq_step,RMS = RMS,
+                        spec,freq,is_rfi,freq_step = freq_step,RMS = RMS,
                         freq_thr = freq_thr,ext_edge = ext_edge,rfi_fit_use = rfi_groups ,plot = False,
                         mask_RFI_method = mask_RFI_method, small_rfi_times = small_rfi_times,chan_step = chan_step,
                         mask_all_theory = mask_all_theory,freq_from_theory = freq_from_theory,mask_thr = mask_thr,
