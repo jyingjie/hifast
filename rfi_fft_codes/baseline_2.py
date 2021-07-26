@@ -9,6 +9,7 @@ import numpy.fft as fft
 from astropy import log
 from copy import deepcopy
 from tqdm import tqdm
+from matplotlib import pyplot as plt
 
 def filter_smooth(spec,fdelta,method = 'savgol',**kwargs):
     if method == 'savgol':
@@ -45,20 +46,22 @@ def replace_rfi_substract_old(data,freq,is_rfi,mw_use,sg_window,sg_polyorder,
 
     from util import _round_up_to_odd_integer
     window_length = _round_up_to_odd_integer(sg_window/fdelta)
-    
+    from markRFI import real_rms
     from scipy.signal import savgol_filter
     for tn in tqdm(range(data.shape[0])):
         if tn in not_rfi_num:
             spec = data[tn,:]
+            RMS = real_rms(spec,freq,sigma=rms_sigma,rms_vrange=rms_frange)
             newspec = deepcopy(spec)
             newspec[mw_use] = 0
             sg = savgol_filter(newspec,window_length = window_length ,polyorder=sg_polyorder,)
             newspec[is_rfi[tn]] = spec[is_rfi[tn]] - sg[is_rfi[tn]]
+            newspec[mw_use] = np.random.normal(scale=RMS,size = np.sum(mw_use)) 
             data_rmrfi[tn,:] = newspec
 
-    from markRFI import real_rms
-    RMS = real_rms(data_rmrfi[0,:],freq,sigma=rms_sigma,rms_vrange=rms_frange)
-
+    
+    #RMS = real_rms(data_rmrfi[0,:],freq,sigma=rms_sigma,rms_vrange=rms_frange)
+    
     thr_lower = RMS*times_lower_thr
     low_use = (np.abs(data_rmrfi) > thr_lower)
     from hifast.utils.misc import extend_Trues
@@ -71,7 +74,7 @@ def replace_rfi_substract_old(data,freq,is_rfi,mw_use,sg_window,sg_polyorder,
 
 
 def replace_rfi_substract(data,freq,is_rfi,short_rfi,mw_use,sg_window,sg_polyorder, s_sigma,
-                          rms_sigma,rms_frange):
+                          rms_sigma,rms_frange,times_lower_thr = 5):
     """
     replace big RFI to reduce the impact in FFT
     
@@ -95,21 +98,21 @@ def replace_rfi_substract(data,freq,is_rfi,short_rfi,mw_use,sg_window,sg_polyord
             RMS = real_rms(spec,freq,sigma=rms_sigma,rms_vrange=rms_frange)
             
             newspec = deepcopy(spec)
-            gauss_sm = filter_smooth(spec,fdelta,method ='gaussian',s_sigma = s_sigma)
+            
             newspec[mw_use] = 0
             sg_sm = filter_smooth(spec,fdelta,method = 'savgol',sg_window=sg_window,
                                   sg_polyorder=sg_polyorder)
-            
             # period rfi and source
             newspec[is_rfi[tn]] = spec[is_rfi[tn]] - sg_sm[is_rfi[tn]]
             # mw 
-            newspec[mw_use] = spec[mw_use] - gauss_sm[mw_use]
+            newspec[mw_use] = np.random.normal(scale=RMS,size = np.sum(mw_use)) 
             if np.sum(short_rfi[tn]) > 0:
+                gauss_sm = filter_smooth(spec,fdelta,method ='gaussian',s_sigma = s_sigma)
                 # time RFI 
                 newspec[short_rfi[tn]] = (spec[short_rfi[tn]] / gauss_sm[short_rfi[tn]] - 1)
-                cond = short_rfi[tn] & (np.abs(newspec) > RMS * 3)
+                cond = short_rfi[tn] & (np.abs(newspec) > RMS * 2)
                 newspec[cond] = spec[cond]
-            strange = np.where(np.abs(newspec) > 3 * RMS)[0]
+            strange = np.where(np.abs(newspec) > times_lower_thr* RMS)[0]
             newspec[strange] = np.random.normal(scale=RMS, size=len(strange))
 
             data_rmrfi[tn] = newspec
@@ -117,7 +120,7 @@ def replace_rfi_substract(data,freq,is_rfi,short_rfi,mw_use,sg_window,sg_polyord
     return data_rmrfi
 
 def replace_rfi_substract2(data,freq,short_rfi,mw_use,sg_window,sg_polyorder, s_sigma,
-                          rms_sigma,rms_frange,times_low_thr,):
+                          rms_sigma,rms_frange,times_low_thr,times_lower_thr = 5):
     """
     replace big RFI to reduce the impact in FFT
     
@@ -148,21 +151,20 @@ def replace_rfi_substract2(data,freq,short_rfi,mw_use,sg_window,sg_polyorder, s_
             low_use = extend_Trues(low_use,ext_add =10,leng_lim = 20,axis = -1)
             
             newspec = deepcopy(spec)
-            gauss_sm = filter_smooth(spec,fdelta,method ='gaussian',s_sigma = s_sigma)
             newspec[mw_use] = 0
             sg_sm = filter_smooth(spec,fdelta,method = 'savgol',sg_window=sg_window,
                                   sg_polyorder=sg_polyorder)
-            
             # period rfi and source
             newspec[low_use] = spec[low_use] - sg_sm[low_use]
             # mw 
-            newspec[mw_use] = spec[mw_use] - gauss_sm[mw_use]
+            newspec[mw_use] = np.random.normal(scale=RMS,size = np.sum(mw_use)) 
             if np.sum(short_rfi[tn]) > 0:
+                gauss_sm = filter_smooth(spec,fdelta,method ='gaussian',s_sigma = s_sigma)
                 # time RFI 
                 newspec[short_rfi[tn]] = (spec[short_rfi[tn]] / gauss_sm[short_rfi[tn]] - 1)
                 cond = short_rfi[tn] & (np.abs(newspec) > thr * 2)
                 newspec[cond] = spec[cond]
-            strange = np.where(np.abs(newspec) > 3 * RMS)[0]
+            strange = np.where(np.abs(newspec) > times_lower_thr * RMS)[0]
             newspec[strange] = np.random.normal(scale=RMS, size=len(strange))
 
             data_rmrfi[tn] = newspec
@@ -268,7 +270,6 @@ def fft_fit_ripple(data_rmrfi, freq,is_rfi_num,not_rfi_num,ori_shape,
     if plot:
         tn = not_rfi_num[10]
         if pdf is not None:
-            from matplotlib import pyplot as plt
             plt.switch_backend('agg')
         is_ = (x >= 0) & (x <= 3)
         fig = plt.figure(figsize=(22,5))

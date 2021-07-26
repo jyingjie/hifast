@@ -78,6 +78,11 @@ if __name__ == '__main__':
     parser.add_argument('--rfi_freq_step', type=float, 
                        help='big RFI linspace step, freq(\mu s) in Fourier space, nearly 1/16')
     
+    
+    parser.add_argument('--ylim', type=float, nargs=2,
+                        help='set ylim in plot')
+    parser.add_argument('--one_spec', action='store_true',
+                       help='plot only one spec or mean specs')
     parser.add_argument('-T', '--trans', action='store_true',
                        help='trans')
     parser.add_argument('--keep_polar', action='store_true',
@@ -117,13 +122,14 @@ if __name__ == '__main__':
         if 'subtract' in rfi_method:
             rep_args['sg_window'] = args.sg_window
             rep_args['sg_polyorder'] = args.sg_polyorder
+            rep_args['times_lower_thr'] = args.times_lower_thr
             if 'subtract tr' in rfi_method:
                 rep_args['s_sigma'] = args.gauss_sigma
             if rfi_method == 'subtract tr':
                 rep_args['times_low_thr'] = args.times_lower_thr
             elif rfi_method == 'subtract rfi':
                 rep_args['times_lower'] = args.times_lower
-                rep_args['times_lower_thr'] = args.times_lower_thr
+                
         else:
             rep_args['times_lower'] = args.times_lower
             rep_args['times_lower_thr'] = args.times_lower_thr
@@ -410,20 +416,34 @@ if __name__ == '__main__':
     
            
     if plot:
+        ylim = args.ylim
+        one_spec = args.one_spec
         print(" 'Wait for plotting patiently, you must.' Master Yoda said")
         tn = not_rfi_num[10]
-        def plot_in_pdf(data_rmrfi_low_mw,T,sw_fit,rmsw_data,polar,pdf = None):
+        def plot_in_pdf(data_rmrfi_low_mw,T,sw_fit,rmsw_data,polar,pdf = None,one_spec = False,ylim = None):
             global tn, freq
             fig = plt.figure(figsize=(40,4))
             ax = fig.add_subplot(111)
-            ax.hlines([0,-.5],1320,1440,alpha = .8)
-            ax.plot(freq,np.mean(data_rmrfi_low_mw[tn-5:tn+5,:],axis = 0),'b',label='rm rfi',alpha = .5)
-            ax.plot(freq,np.mean(T[tn-5:tn+5,:],axis = 0),label='original')
-            ax.plot(freq,np.mean(sw_fit[tn-5:tn+5,:],axis = 0),label='ripple')
-            ax.plot(freq,np.mean(rmsw_data[tn-5:tn+5,:],axis = 0) - .5,label='result')
-            ax.grid();ax.legend();ax.set_title(f'ten specs mean, polar {polar}')
+            if not one_spec:
+                ax.hlines([0,-.5],freq[0],freq[-1],alpha = .8)
+                ax.plot(freq,np.mean(data_rmrfi_low_mw[tn-5:tn+5,:],axis = 0),'b',label='rm rfi',alpha = .5)
+                ax.plot(freq,np.mean(T[tn-5:tn+5,:],axis = 0),label='original')
+                ax.plot(freq,np.mean(sw_fit[tn-5:tn+5,:],axis = 0),label='ripple')
+                ax.plot(freq,np.mean(rmsw_data[tn-5:tn+5,:],axis = 0) - .5,label='result')
+                ax.set_title(f'ten specs mean, polar {polar}')
+                if ylim is not None:
+                    ax.set_ylim(ylim[0],ylim[1])
+            else:
+                ax.hlines([0,-2],freq[0],freq[-1],alpha = .8)
+                ax.plot(freq,data_rmrfi_low_mw[tn,:],'b',label='rm rfi',alpha = .5)
+                ax.plot(freq,T[tn,:],label='original')
+                ax.plot(freq,sw_fit[tn,:],label='ripple')
+                ax.plot(freq,rmsw_data[tn,:] - 2,label='result')
+                ax.set_title(f'single spec, polar {polar}')
+                if ylim is not None:
+                    ax.set_ylim(ylim[0],ylim[1])
+            ax.grid();ax.legend();
             ax.set_xlim(freq[0],freq[-1])
-            ax.set_ylim(-1,.5)
             pdf.savefig();plt.close()
 
             from util import plot_waterfall
@@ -434,8 +454,10 @@ if __name__ == '__main__':
                            title = f'remove standing waves, polar {polar}')
             
         if keep_polar:
-            plot_in_pdf(data_rmrfi_low_mw_xx,T_xx,sw_fit_xx,rmsw_data[:,:,0],polar='xx',pdf = pdf)
-            plot_in_pdf(data_rmrfi_low_mw_yy,T_yy,sw_fit_yy,rmsw_data[:,:,1],polar='yy',pdf = pdf)
+            plot_in_pdf(data_rmrfi_low_mw_xx,T_xx,sw_fit_xx,rmsw_data[:,:,0],polar='xx',pdf = pdf,
+                        one_spec = one_spec, ylim = ylim)
+            plot_in_pdf(data_rmrfi_low_mw_yy,T_yy,sw_fit_yy,rmsw_data[:,:,1],polar='yy',pdf = pdf,
+                       one_spec = one_spec, ylim = ylim)
         else:
             plot_in_pdf(data_rmrfi_low_mw,T,sw_fit,rmsw_data,polar='merged',pdf = pdf)
         
@@ -465,7 +487,7 @@ if __name__ == '__main__':
     #dict_out['ripple'] = sw_fit.astype('float32')
     dict_out['freq'] = freq
     if rfi_fname != 'none':
-        dict_out['is_rfi'] = is_rfi
+    #    dict_out['is_rfi'] = is_rfi
         rfi.close()
     if is_extrapo is not None:
         dict_out['is_extrapo'] = is_extrapo

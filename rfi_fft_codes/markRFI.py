@@ -546,7 +546,9 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
 
     pat_mean = np.nanmean(pat_data,axis = 1)
     pat_med = np.nanmedian(pat_mean)
-
+    
+    pat_mean[np.isnan(pat_mean)] = 0
+    
     is_pat = pat_mean > pat_med * times
     if is_pat.any() == False:
         if plot:  

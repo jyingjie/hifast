@@ -106,8 +106,7 @@ if __name__ == '__main__':
     for key in properties.keys():
         dict_out[key]= properties[key].astype('float32')
 
-    from hifast.utils.io import add_extra, rec_his, save_dict_hdf5
-    add_extra(f, dict_out)
+    from hifast.utils.io import  rec_his, save_dict_hdf5
     f.close()
     header=rec_his(args=args)
     

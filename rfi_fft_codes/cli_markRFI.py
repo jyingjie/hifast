@@ -104,18 +104,18 @@ if __name__ == '__main__':
                         help='divide rfi into 2 or 3 groups')
     
     ## mask rfi
-    parser.add_argument('--freq_from_theory', type=float,default = 3,
+    parser.add_argument('--freq_from_theory', type=float,
                         help='mask width from theory center')
-    parser.add_argument('--mask_thr', type=float, default=3, 
+    parser.add_argument('--mask_thr', type=float, 
                        help='default below 3 times of rms threshold will be masked')
     parser.add_argument('--ext_edge', type=int, default= 0, 
                        help=' extend result channel on freq axis')
     parser.add_argument('--mask_RFI_method',default='fixed freq',choices=['2 sides','fixed freq'],
                          help='from center to two sides, or use a fixed freq width')
     # 2 sides  
-    parser.add_argument('--small_rfi_times',type=float, default = 2,
-                        help='small rfi below 2*RMS will not be masked')
-    parser.add_argument('--chan_step' ,type=int, default= 5,
+    parser.add_argument('--small_rfi_times',type=float, 
+                        help='small rfi below, eg.2*RMS will not be masked')
+    parser.add_argument('--chan_step' ,type=int, 
                         help='channel step when walk from center to two sides')
     # fixed freq
     parser.add_argument('--mask_all_theory', action= 'store_true',
@@ -169,21 +169,22 @@ if __name__ == '__main__':
         find_args = {}
         find_args['rfi_width_lim'] = args.rfi_width_lim
         find_args['ext_sec'] = args.ext_sec
-        freq_thr = args.freq_thr
+        find_args['freq_thr'] = args.freq_thr
 
-        freq_step = args.freq_step
-        ext_edge = args.ext_edge
+        find_args['freq_step'] = args.freq_step
+        find_args['ext_edge'] = args.ext_edge
         rfi_groups = args.rfi_groups
         
         mask_RFI_method = args.mask_RFI_method
-        small_rfi_times = args.small_rfi_times
-        chan_step = args.chan_step
-        mask_all_theory = args.mask_all_theory
-        freq_from_theory = args.freq_from_theory
-        mask_thr = args.mask_thr
+        find_args['small_rfi_times'] = args.small_rfi_times
+        find_args['chan_step'] = args.chan_step
+        find_args['mask_all_theory'] = args.mask_all_theory
+        find_args['freq_from_theory'] = args.freq_from_theory
+        find_args['mask_thr'] = args.mask_thr
         save_rfi_list = args.save_rfi_list
         if save_rfi_list:
             plot = True
+        print("find_args:",find_args)
     
     outparts = []
     if time_rfi:outparts += ['tr']
@@ -261,7 +262,7 @@ if __name__ == '__main__':
     rms_sigma = args.rms_sigma
     
     ####################### time RFI ################################
-    t_rfi = np.zeros_like(T,dtype = 'bool')
+    t_rfi = np.isnan(T)
     
     if time_rfi:
         lf_beams = args.lf_beams
@@ -273,7 +274,6 @@ if __name__ == '__main__':
             else:
                 print(f"M{nB} in beam {lf_beams}")
   
-        t_rfi = np.zeros_like(T,dtype = 'bool')
         from markRFI import mask_time_rfi
         if longf_rfi:
             longf_args = {}
@@ -282,9 +282,9 @@ if __name__ == '__main__':
             longf_args['thr'] = args.lf_thr
             longf_args['rfi_width_lim'] = args.lf_rfi_last
             longf_args['ext_add'] = args.lf_ext
-            
+            print("long freq args:",longf_args)
             l_rfi = mask_time_rfi(T,freq, rtype = 'long-freq',plot = plot,pdf = pdf,**longf_args)
-            t_rfi = l_rfi
+            t_rfi = t_rfi | l_rfi
             
     whole_rfi = np.all(t_rfi,axis = 1)
     not_rfi_num = np.arange(T.shape[0])[~whole_rfi]
@@ -304,7 +304,7 @@ if __name__ == '__main__':
             shortf_args['rfi_width_lim'] = args.sf_rfi_last
             shortf_args['T_thr_times'] = args.sf_T_thr_times
             shortf_args['ext_add'] = args.sf_ext
-            
+            print("short freq args:",shortf_args)
             s_rfi = mask_time_rfi(T,freq, rtype = 'short-freq',plot = plot,pdf = pdf,RMS = RMS,**shortf_args)
             
             t_rfi = t_rfi | s_rfi
@@ -356,13 +356,10 @@ if __name__ == '__main__':
             RMS = real_rms(spec,freq,rms_sigma,rms_frange)
             is_rfi_mw = (spec > RMS * rfi_thr)
             is_rfi_ = is_rfi_mw & (~protect_use)
-            _,theory = find_RFI(
-                spec,freq,is_rfi_,freq_step = freq_step,RMS = RMS,freq_thr = freq_thr,
-                ext_edge = ext_edge,rfi_fit_use = 'two groups',plot = plot,pdf=pdf,ylim=ylim,
-                mask_RFI_method = mask_RFI_method, small_rfi_times = small_rfi_times,chan_step = chan_step,
-                mask_all_theory = mask_all_theory,freq_from_theory = freq_from_theory,mask_thr = mask_thr,
-                **find_args)
-        ###    
+            _,theory = find_RFI(spec,freq,is_rfi_,RMS = RMS,
+                rfi_fit_use = 'two groups',plot = plot,pdf=pdf,ylim=ylim,**find_args)
+            
+        ##############iter#################    
         pd_rfi = np.full(T.shape[:2], False, dtype=bool)
         if save_rfi_list:
             rfi_freq_list = np.full((T.shape[0],len(theory)+50),np.nan)
@@ -376,12 +373,8 @@ if __name__ == '__main__':
                 is_rfi_mw = (spec > RMS * rfi_thr)
                 is_rfi = (spec > RMS * rfi_thr) & (~protect_use)
                 try:
-                    pd_rfi[tn,:],rfi_theory = find_RFI(
-                        spec,freq,is_rfi,freq_step = freq_step,RMS = RMS,
-                        freq_thr = freq_thr,ext_edge = ext_edge,rfi_fit_use = rfi_groups ,plot = False,
-                        mask_RFI_method = mask_RFI_method, small_rfi_times = small_rfi_times,chan_step = chan_step,
-                        mask_all_theory = mask_all_theory,freq_from_theory = freq_from_theory,mask_thr = mask_thr,
-                        **find_args)
+                    pd_rfi[tn,:],rfi_theory = find_RFI(spec,freq,is_rfi,RMS = RMS,
+                        rfi_fit_use = rfi_groups ,plot = False,**find_args)
 
                     if save_rfi_list:
                         if len(rfi_theory) < rfi_freq_list.shape[1]:
