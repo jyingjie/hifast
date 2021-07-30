@@ -141,7 +141,7 @@ if __name__ == '__main__':
                         help='set ylim in plot')
     parser.add_argument('--save_rfi_list', action= 'store_true',
                        help='save rfi freq list in hdf5')
-    parser.add_argument('--save_sf', action= 'store_true',
+    parser.add_argument('--save_tf', action= 'store_true',
                        help='save short time rfi in hdf5')
     
     
@@ -461,11 +461,11 @@ if __name__ == '__main__':
     dict_out={}
     dict_out['is_rfi'] = rfi_mask
     print("saved 'is_rfi'")
-    if shortf_rfi:
-        save_sf = args.save_sf
-        if save_sf and (np.sum(s_rfi) > 0):
-            dict_out['short_rfi'] = s_rfi
-            print("saved 'short_rfi'")
+    if time_rfi:
+        save_tf = args.save_tf
+        if save_tf and (np.sum(t_rfi) > 0):
+            dict_out['time_rfi'] = t_rfi
+            print("saved 'time_rfi'")
     dict_out['freq'] = freq
     if 'ra' in f.keys():
         dict_out['ra'] = ra

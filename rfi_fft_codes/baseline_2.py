@@ -50,7 +50,7 @@ def replace_rfi_substract_old(data,freq,is_rfi,mw_use,sg_window,sg_polyorder,
     from scipy.signal import savgol_filter
     for tn in tqdm(range(data.shape[0])):
         if tn in not_rfi_num:
-            spec = data[tn,:]
+            spec = deepcopy(data[tn,:])
             RMS = real_rms(spec,freq,sigma=rms_sigma,rms_vrange=rms_frange)
             newspec = deepcopy(spec)
             newspec[mw_use] = 0
@@ -73,7 +73,7 @@ def replace_rfi_substract_old(data,freq,is_rfi,mw_use,sg_window,sg_polyorder,
     return data_rmrfi_low
 
 
-def replace_rfi_substract(data,freq,is_rfi,short_rfi,mw_use,sg_window,sg_polyorder, s_sigma,
+def replace_rfi_substract(data,freq,is_rfi,time_rfi,mw_use,sg_window,sg_polyorder, s_sigma,
                           rms_sigma,rms_frange,times_lower_thr = 5):
     """
     replace big RFI to reduce the impact in FFT
@@ -94,7 +94,7 @@ def replace_rfi_substract(data,freq,is_rfi,short_rfi,mw_use,sg_window,sg_polyord
     data_rmrfi = np.full(data.shape,np.nan)
     for tn in tqdm(range(data.shape[0])):
         if tn in not_rfi_num:
-            spec = data[tn,:]
+            spec = deepcopy(data[tn,:])
             RMS = real_rms(spec,freq,sigma=rms_sigma,rms_vrange=rms_frange)
             
             newspec = deepcopy(spec)
@@ -106,11 +106,11 @@ def replace_rfi_substract(data,freq,is_rfi,short_rfi,mw_use,sg_window,sg_polyord
             newspec[is_rfi[tn]] = spec[is_rfi[tn]] - sg_sm[is_rfi[tn]]
             # mw 
             newspec[mw_use] = np.random.normal(scale=RMS,size = np.sum(mw_use)) 
-            if np.sum(short_rfi[tn]) > 0:
+            if np.sum(time_rfi[tn]) > 0:
                 gauss_sm = filter_smooth(spec,fdelta,method ='gaussian',s_sigma = s_sigma)
                 # time RFI 
-                newspec[short_rfi[tn]] = (spec[short_rfi[tn]] / gauss_sm[short_rfi[tn]] - 1)
-                cond = short_rfi[tn] & (np.abs(newspec) > RMS * 2)
+                newspec[time_rfi[tn]] = (spec[time_rfi[tn]] / gauss_sm[time_rfi[tn]] - 1)
+                cond = time_rfi[tn] & (np.abs(newspec) > RMS * 2)
                 newspec[cond] = spec[cond]
             strange = np.where(np.abs(newspec) > times_lower_thr* RMS)[0]
             newspec[strange] = np.random.normal(scale=RMS, size=len(strange))
@@ -119,7 +119,7 @@ def replace_rfi_substract(data,freq,is_rfi,short_rfi,mw_use,sg_window,sg_polyord
 
     return data_rmrfi
 
-def replace_rfi_substract2(data,freq,short_rfi,mw_use,sg_window,sg_polyorder, s_sigma,
+def replace_rfi_substract2(data,freq,time_rfi,mw_use,sg_window,sg_polyorder, s_sigma,
                           rms_sigma,rms_frange,times_low_thr,times_lower_thr = 5):
     """
     replace big RFI to reduce the impact in FFT
@@ -133,23 +133,23 @@ def replace_rfi_substract2(data,freq,short_rfi,mw_use,sg_window,sg_polyorder, s_
     fdelta = freq[1]-freq[0] 
     
     from markRFI import real_rms
-
-    whole_rfi = np.all(short_rfi,axis = 1)
+    
+    whole_rfi = np.all(time_rfi,axis = 1)
     is_rfi_num = np.arange(data.shape[0])[whole_rfi]
     not_rfi_num = np.arange(data.shape[0])[~whole_rfi]
-    
+
     data_rmrfi = np.full(data.shape,np.nan)
     from hifast.utils.misc import extend_Trues
 
     for tn in tqdm(range(data.shape[0])):
         if tn in not_rfi_num:
-            spec = data[tn,:]
+            spec = deepcopy(data[tn,:])
             RMS = real_rms(spec,freq,sigma=rms_sigma,rms_vrange=rms_frange)
-            
+
             thr = RMS*times_low_thr
             low_use = (spec > thr)    
             low_use = extend_Trues(low_use,ext_add =10,leng_lim = 20,axis = -1)
-            
+
             newspec = deepcopy(spec)
             newspec[mw_use] = 0
             sg_sm = filter_smooth(spec,fdelta,method = 'savgol',sg_window=sg_window,
@@ -158,17 +158,96 @@ def replace_rfi_substract2(data,freq,short_rfi,mw_use,sg_window,sg_polyorder, s_
             newspec[low_use] = spec[low_use] - sg_sm[low_use]
             # mw 
             newspec[mw_use] = np.random.normal(scale=RMS,size = np.sum(mw_use)) 
-            if np.sum(short_rfi[tn]) > 0:
+            if np.sum(time_rfi[tn]) > 0:
                 gauss_sm = filter_smooth(spec,fdelta,method ='gaussian',s_sigma = s_sigma)
                 # time RFI 
-                newspec[short_rfi[tn]] = (spec[short_rfi[tn]] / gauss_sm[short_rfi[tn]] - 1)
-                cond = short_rfi[tn] & (np.abs(newspec) > thr * 2)
+                newspec[time_rfi[tn]] = (spec[time_rfi[tn]] / gauss_sm[time_rfi[tn]] - 1)
+                cond = time_rfi[tn] & (np.abs(newspec) > thr * 2)
                 newspec[cond] = spec[cond]
             strange = np.where(np.abs(newspec) > times_lower_thr * RMS)[0]
             newspec[strange] = np.random.normal(scale=RMS, size=len(strange))
 
             data_rmrfi[tn] = newspec
 
+    return data_rmrfi
+
+def repalce_near(data,freq,time_rfi,times_lower_thr=None,rms_sigma = None,
+                 ext_freq = None,rms_frange=None,rfi_width_lim=None, ext_sec=None):
+    fdelta = freq[1]-freq[0] 
+    N = len(freq)
+    ext = int(np.around(ext_freq / fdelta))
+    
+    from markRFI import real_rms,rms,get_startend
+    
+    whole_rfi = np.all(time_rfi,axis = 1)
+    is_rfi_num = np.arange(data.shape[0])[whole_rfi]
+    not_rfi_num = np.arange(data.shape[0])[~whole_rfi]
+
+    data_rmrfi = np.full(data.shape,np.nan)
+    from hifast.utils.misc import extend_Trues
+
+    for tn in tqdm(range(data.shape[0])):
+        if tn in not_rfi_num:
+            spec = deepcopy(data[tn,:])
+            spec[time_rfi[tn]] = 0
+            RMS = real_rms(spec,freq,sigma=rms_sigma,rms_vrange=rms_frange)
+
+            thr = RMS*times_lower_thr
+            low_use = (spec > thr)    
+            start,end = get_startend(low_use,rfi_width_lim, ext_sec)
+
+            newspec = deepcopy(spec)
+            newspec_ = deepcopy(spec)
+            #usespec = np.zeros_like(spec)
+            for s,e in zip(start,end):
+                spec1 = np.zeros_like(freq)
+                s0 = s - ext
+                if s0 < 0:s0 = 0
+                e0 = e + ext
+                if e0 > N - 1:e0 = N -1
+                spec1[s0:e0] = spec[s0:e0]
+
+                peak = np.max(spec[s:e])
+                peak_loc = np.where(spec1 == peak)[0][0]
+                spec1l = deepcopy(spec1);spec1l[peak_loc:] = 20
+                l1 = np.argmin(spec1l)
+                spec1r = deepcopy(spec1);spec1r[:peak_loc] = 20
+                r1 = np.argmin(spec1r)
+
+                L = r1 - l1
+                if l1 - L < 0:
+                    direc = 'right'
+                elif r1 + L > N - 1:
+                    direc = 'left'
+                else:
+                    rmsl = rms(spec[l1 - L:l1],freq[l1 - L:l1])
+                    rmsr = rms(spec[r1:r1 + L],freq[r1:r1 + L])
+                    if rmsl < rmsr:
+                        direc = 'left' 
+                    else:
+                        direc = 'right'
+                if direc == 'left':
+                    s1 = l1 - L
+                    e1 = l1
+                elif direc == 'right':
+                    s1 = r1
+                    e1 = r1 + L
+
+                try:
+                    newspec_[l1:r1] = newspec[s1:e1]
+                    newspec[s:e] = newspec_[s:e]
+                    #usespec[s1:e1] = 1
+                except ValueError:
+                    log.info(f"tn = {tn} has a ValueError")
+                    import traceback
+                    traceback.print_exc()  
+                    newspec[s:e] = np.random.normal(scale=RMS, size=int(e-s))
+
+            strange = np.where(np.abs(newspec) > 6 * RMS)[0]
+            newspec[strange] = np.random.normal(scale=RMS, size=len(strange))
+
+            data_rmrfi[tn,:] = newspec
+            
     return data_rmrfi
 
 def replace_rfi_lower(data,freq,method,times_lower_thr=3,times_lower=None,
@@ -187,24 +266,27 @@ def replace_rfi_lower(data,freq,method,times_lower_thr=3,times_lower=None,
         data_low[low_use] = data[low_use]/times_lower
     elif method == 'set zeros':
         data_low[low_use] = 0
-        
+    elif method == 'set noise':
+        data_low[low_use] = np.random.normal(scale=RMS, size=data.shape)[low_use]
     return data_low
 
-def replace_rfi(data,freq,is_rfi = None,short_rfi = None, method='subtract with pd',
+def replace_rfi(data,freq,is_rfi = None,time_rfi = None, method='subtract with pd',
                 mw_use = None, **rep_args):
-
-    log.info(f"Replace RFI with {method} method ...")
     
-    if method == 'subtract trpdr':
-        data_rmrfi = replace_rfi_substract(data,freq,is_rfi,short_rfi,mw_use,**rep_args)
+    log.info(f"Replace RFI with {method} method ...")
+    if method == 'near ripple':
+        data_rmrfi = repalce_near(data,freq,time_rfi,**rep_args)
+    elif method == 'subtract trpdr':
+        data_rmrfi = replace_rfi_substract(data,freq,is_rfi,time_rfi,mw_use,**rep_args)
     elif method == 'subtract tr':
-        data_rmrfi = replace_rfi_substract2(data,freq,short_rfi,mw_use,**rep_args)
-    elif (method == 'lower') or (method == 'set zeros'):
+        data_rmrfi = replace_rfi_substract2(data,freq,time_rfi,mw_use,**rep_args)
+    elif (method == 'lower') or (method == 'set zeros') or (method == 'set noise'):
         data_rmrfi = replace_rfi_lower(data,freq,method=method,**rep_args)
     elif method == 'subtract rfi':
         data_rmrfi = replace_rfi_substract_old(data,freq,is_rfi,mw_use,**rep_args)
     else:
         raise ValueError("Unsupport replace RFI method!")
+        
     return data_rmrfi  
 
 

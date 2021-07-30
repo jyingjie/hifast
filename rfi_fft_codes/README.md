@@ -107,11 +107,12 @@ Finish
         --rfi_width_lim 20 --ext_sec 20 --freq_thr .3 --freq_step 8.1 \
         --mask_RFI_method '2 sides' --ext_edge 10 --mask_thr 2 --freq_from_theory 3\
         --small_rfi_times 2 --chan_step 5 \
-        --plot -f  --save_sf|| exit 1 
+        --plot -f  --save_tf|| exit 1 
   ```
   
 * --time_coherent_per: 如果该频率，例如90%都被标记了，那么整条都被标记为RFI。不怎么用。
 * --save_rfi_list: 是否保存各条谱线周期rfi理论值，```dict_out['rfi_list']```
+* --save_tf:是否保存 time rfi，```dict_out['time_rfi']```
 
 输出的文件中```dict_out['is_rfi']```为二维的mask
 
@@ -194,7 +195,7 @@ Finish
     
     输出文件名含fft_bldl.
     
-5. 'set zeros'高流量全部置零。不需要rfi文件。例如
+5. 'set zeros','set noise'高流量全部置零/标准差为RMS的正态分布噪声。不需要rfi文件。例如
     ```
     python cli_baseline_fft.py $subname --outdir ./data --rms_frange 1390 1400 \
         --rfi_method 'set zeros'  --times_lower_thr 2 \
@@ -203,9 +204,22 @@ Finish
     ```
     * --times_lower_thr:大于RMS这么多倍的会被降低
     
-    输出文件名含fft_bldz.
+    输出文件名含fft_bldz/fft_bldn.
     
-
+6. 'near ripple'使用高流量处附近的驻波替代。例如
+    ```
+    python cli_baseline_fft.py $subname --outdir ./data --rms_frange 1390 1400 \
+        --rfi_method 'near ripple'  --times_lower_thr 2.9 \
+        --rfi_width_lim 25 --ext_sec 20 --ext_freq 1.3 \
+        --fft_method rfft --sw_freq 0.9254   --amp_thr 35  --sw_n 5 \
+        --plot -f --keep_polar || exit 1 
+    ```
+    * 只需要已知时域rfi的文件，即*-tr*
+    * --times_lower_thr:大于RMS这么多倍的会被替代
+    * --rfi_width_lim,--ext_sec: 以上处理的范围，宽度阈值和扩展通道数(同周期rfi里的含义)
+    * --ext_freq: 扩展边缘(MHz)，再寻找强流量两边的最低点，先使用左/右边的一段代替强流量处
+    
+    输出文件名含fft_blde.
 
 ### fft去驻波
 
