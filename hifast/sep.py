@@ -54,6 +54,8 @@ if __name__ == '__main__':
                         help='save power of cal to file')
     parser.add_argument('--not_cali', action='store_true',
                         help='save power of cal to file')
+    parser.add_argument('--check_cal', choices=['none', 'A', 'B'], default='none',
+                        help='save power of cal to file')
     
     args = parser.parse_args()
     
@@ -123,9 +125,13 @@ if __name__ == '__main__':
     print('freq range: ', frange)
     #record history
     from .utils.io import rec_his
-    from .core.cal import CalOnOff
+    from .core.cal import CalOnOff, CalOnOffA
     header = rec_his(args=args)
-    spec = CalOnOff(fname_part=fname_part, n_delay=n_delay, n_on=n_on, n_off=n_off, 
+    if args.check_cal == 'none':
+        Cal_cls = CalOnOff
+    elif args.check_cal == 'A':
+        Cal_cls = CalOnOffA
+    spec = Cal_cls(fname_part=fname_part, n_delay=n_delay, n_on=n_on, n_off=n_off, 
                       start=start_all, stop=stop_all, 
                       frange=frange, verbose=True, 
                       smooth=smooth, s_para=s_para, dfactor=dfactor,
