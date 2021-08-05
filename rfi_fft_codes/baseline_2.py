@@ -38,10 +38,12 @@ def replace_rfi_substract_old(data,freq,is_rfi,mw_use,sg_window,sg_polyorder,
     """
     fdelta = freq[1]-freq[0] 
     
-    whole_rfi = np.all(is_rfi,axis = 1)
-    is_rfi_num = np.arange(data.shape[0])[whole_rfi]
-    not_rfi_num = np.arange(data.shape[0])[~whole_rfi]
-
+    if time_rfi is not None:
+        whole_rfi = np.all(time_rfi,axis = 1)
+        is_rfi_num = np.arange(data.shape[0])[whole_rfi]
+        not_rfi_num = np.arange(data.shape[0])[~whole_rfi]
+    else:
+        not_rfi_num = np.arange(data.shape[0])
     data_rmrfi = np.full(data.shape,np.nan)
 
     from util import _round_up_to_odd_integer
@@ -86,10 +88,12 @@ def replace_rfi_substract(data,freq,is_rfi,time_rfi,mw_use,sg_window,sg_polyorde
     fdelta = freq[1]-freq[0] 
     
     from markRFI import real_rms
-
-    whole_rfi = np.all(is_rfi,axis = 1)
-    is_rfi_num = np.arange(data.shape[0])[whole_rfi]
-    not_rfi_num = np.arange(data.shape[0])[~whole_rfi]
+    if time_rfi is not None:
+        whole_rfi = np.all(time_rfi,axis = 1)
+        is_rfi_num = np.arange(data.shape[0])[whole_rfi]
+        not_rfi_num = np.arange(data.shape[0])[~whole_rfi]
+    else:
+        not_rfi_num = np.arange(data.shape[0])
     
     data_rmrfi = np.full(data.shape,np.nan)
     for tn in tqdm(range(data.shape[0])):
@@ -133,10 +137,12 @@ def replace_rfi_substract2(data,freq,time_rfi,mw_use,sg_window,sg_polyorder, s_s
     fdelta = freq[1]-freq[0] 
     
     from markRFI import real_rms
-    
-    whole_rfi = np.all(time_rfi,axis = 1)
-    is_rfi_num = np.arange(data.shape[0])[whole_rfi]
-    not_rfi_num = np.arange(data.shape[0])[~whole_rfi]
+    if time_rfi is not None:
+        whole_rfi = np.all(time_rfi,axis = 1)
+        is_rfi_num = np.arange(data.shape[0])[whole_rfi]
+        not_rfi_num = np.arange(data.shape[0])[~whole_rfi]
+    else:
+        not_rfi_num = np.arange(data.shape[0])
 
     data_rmrfi = np.full(data.shape,np.nan)
     from hifast.utils.misc import extend_Trues
@@ -171,29 +177,34 @@ def replace_rfi_substract2(data,freq,time_rfi,mw_use,sg_window,sg_polyorder, s_s
 
     return data_rmrfi
 
-def repalce_near(data,freq,time_rfi,times_lower_thr=None,rms_sigma = None,
+def repalce_near(data,freq,time_rfi,mw_use=None,times_lower_thr=None,rms_sigma = None,
                  ext_freq = None,rms_frange=None,rfi_width_lim=None, ext_sec=None):
     fdelta = freq[1]-freq[0] 
     N = len(freq)
     ext = int(np.around(ext_freq / fdelta))
     
     from markRFI import real_rms,rms,get_startend
-    
-    whole_rfi = np.all(time_rfi,axis = 1)
-    is_rfi_num = np.arange(data.shape[0])[whole_rfi]
-    not_rfi_num = np.arange(data.shape[0])[~whole_rfi]
+    if time_rfi is not None:
+        whole_rfi = np.all(time_rfi,axis = 1)
+        is_rfi_num = np.arange(data.shape[0])[whole_rfi]
+        not_rfi_num = np.arange(data.shape[0])[~whole_rfi]
+    else:
+        not_rfi_num = np.arange(data.shape[0])
+        time_rfi = np.full(data.shape,False)
 
+    if mw_use is None:
+        mw = np.full(freq.shape,False)
+        
     data_rmrfi = np.full(data.shape,np.nan)
     from hifast.utils.misc import extend_Trues
 
     for tn in tqdm(range(data.shape[0])):
         if tn in not_rfi_num:
             spec = deepcopy(data[tn,:])
-            spec[time_rfi[tn]] = 0
             RMS = real_rms(spec,freq,sigma=rms_sigma,rms_vrange=rms_frange)
 
             thr = RMS*times_lower_thr
-            low_use = (spec > thr)    
+            low_use = (spec > thr) | time_rfi[tn] | mw_use
             start,end = get_startend(low_use,rfi_width_lim, ext_sec)
 
             newspec = deepcopy(spec)
@@ -213,15 +224,15 @@ def repalce_near(data,freq,time_rfi,times_lower_thr=None,rms_sigma = None,
                 l1 = np.argmin(spec1l)
                 spec1r = deepcopy(spec1);spec1r[:peak_loc] = 20
                 r1 = np.argmin(spec1r)
-
+                #print(l1,r1)
                 L = r1 - l1
                 if l1 - L < 0:
                     direc = 'right'
                 elif r1 + L > N - 1:
                     direc = 'left'
                 else:
-                    rmsl = rms(spec[l1 - L:l1],freq[l1 - L:l1])
-                    rmsr = rms(spec[r1:r1 + L],freq[r1:r1 + L])
+                    rmsl = rms(newspec[l1 - L:l1],freq[l1 - L:l1])
+                    rmsr = rms(newspec[r1:r1 + L],freq[r1:r1 + L])
                     if rmsl < rmsr:
                         direc = 'left' 
                     else:
@@ -232,6 +243,7 @@ def repalce_near(data,freq,time_rfi,times_lower_thr=None,rms_sigma = None,
                 elif direc == 'right':
                     s1 = r1
                     e1 = r1 + L
+                #print(direc,s1,e1)
 
                 try:
                     newspec_[l1:r1] = newspec[s1:e1]
@@ -243,7 +255,7 @@ def repalce_near(data,freq,time_rfi,times_lower_thr=None,rms_sigma = None,
                     traceback.print_exc()  
                     newspec[s:e] = np.random.normal(scale=RMS, size=int(e-s))
 
-            strange = np.where(np.abs(newspec) > 6 * RMS)[0]
+            strange = np.where(np.abs(newspec) > 3 * RMS)[0]
             newspec[strange] = np.random.normal(scale=RMS, size=len(strange))
 
             data_rmrfi[tn,:] = newspec
@@ -275,7 +287,7 @@ def replace_rfi(data,freq,is_rfi = None,time_rfi = None, method='subtract with p
     
     log.info(f"Replace RFI with {method} method ...")
     if method == 'near ripple':
-        data_rmrfi = repalce_near(data,freq,time_rfi,**rep_args)
+        data_rmrfi = repalce_near(data,freq,time_rfi=time_rfi,mw_use=mw_use,**rep_args)
     elif method == 'subtract trpdr':
         data_rmrfi = replace_rfi_substract(data,freq,is_rfi,time_rfi,mw_use,**rep_args)
     elif method == 'subtract tr':

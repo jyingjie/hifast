@@ -88,7 +88,9 @@ if __name__ == '__main__':
     
     
     parser.add_argument('--ylim', type=float, nargs=2,
-                        help='set ylim in plot')
+                        help='set ylim in plotting')
+    parser.add_argument('--vmin_max', type=float, nargs=2,
+                        help='vmin vmax in plotting waterfall')
     parser.add_argument('--one_spec', action='store_true',
                        help='plot only one spec or mean specs')
     parser.add_argument('-T', '--trans', action='store_true',
@@ -244,6 +246,8 @@ if __name__ == '__main__':
     T = T[ind_sort]
     
     # read RFI
+    from glob import glob
+    
     if rfi_fname is not None:
         if rfi_fname == 'none':
             print("Don't use rfi file.")
@@ -257,7 +261,7 @@ if __name__ == '__main__':
         if rfi_method =='subtract tr' or rfi_method =='near ripple':
             outpart = '*-tr*.hdf5'
         rfi_dir = os.path.join(rfi_dir_default, '.'.join(os.path.basename(file_spec).split('.')[:-1]) + f'{outpart}')
-        from glob import glob
+
         rfi_fnames = glob(rfi_dir)
         if len(rfi_fnames) == 1:
             rfi_fname = rfi_fnames[0]
@@ -322,7 +326,7 @@ if __name__ == '__main__':
         rfi_dir_default = '/'.join(rfi_dir_default)
         outpart = '*-tr*.hdf5'
         rfi_dir = os.path.join(rfi_dir_default, '.'.join(os.path.basename(file_spec).split('.')[:-1]) + f'{outpart}')
-        from glob import glob
+
         rfi_fnames = glob(rfi_dir)
         if len(rfi_fnames) == 1:
             save_rfi_fname = rfi_fnames[0]
@@ -374,19 +378,27 @@ if __name__ == '__main__':
     # load data
     sep_fname = args.sep_fname    
     if sep_fname is None:
+        # find higher class folder
         sep_dir_default = os.path.dirname(file_spec).split('/')[:-1]
         sep_dir_default.append('sep')
         sep_dir_default = '/'.join(sep_dir_default)
         sep_dir = os.path.join(sep_dir_default, '.'.join(os.path.basename(file_spec).split('-bld',1)[:-1]) + '.hdf5')
-        from glob import glob
+        
         sep_fnames = glob(sep_dir)
         if len(sep_fnames) == 1:
             sep_fname = sep_fnames[0]
-            
         elif len(sep_fnames) == 0:
+            #find in same class folder
             sep_fname = os.path.join(os.path.dirname(file_spec),'.'.join(os.path.basename(file_spec).split('-bld',1)[:-1]) +'.hdf5')
         else:
             raise FileNotFoundError("Which sep file do you want? ")
+    else:
+        sep_fnames = glob(sep_fname)
+        if len(sep_fnames) == 1:
+            sep_fname = sep_fnames[0]
+        else:
+            filedir = os.path.dirname(sep_fname)
+            sep_fname = os.path.join(filedir, os.path.basename(file_spec).split('-bld')[0] + '.hdf5')
 
     sep = h5py.File(sep_fname,'r')
     print(f"Find sep file {sep_fname}") 
@@ -486,10 +498,12 @@ if __name__ == '__main__':
            
     if plot:
         ylim = args.ylim
+        vmin_max = args.vmin_max
         one_spec = args.one_spec
         print(" 'Wait for plotting patiently, you must.' Master Yoda said")
         tn = not_rfi_num[10]
-        def plot_in_pdf(data_rmrfi_low_mw,T,sw_fit,rmsw_data,polar,pdf = None,one_spec = False,ylim = None):
+        def plot_in_pdf(data_rmrfi_low_mw,T,sw_fit,rmsw_data,polar,pdf = None,one_spec = False,
+                        ylim = None,vmin_max=None):
             global tn, freq
             fig = plt.figure(figsize=(40,4))
             ax = fig.add_subplot(111)
@@ -516,17 +530,17 @@ if __name__ == '__main__':
             pdf.savefig();plt.close()
 
             from util import plot_waterfall
-            plot_waterfall(fs,data = T, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
+            plot_waterfall(fs,data = T, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),
                            title = os.path.basename(file_spec).split('.')[:-1][0],pdf = pdf)
 
-            plot_waterfall(fs,data = rmsw_data, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),pdf = pdf,
+            plot_waterfall(fs,data = rmsw_data, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),pdf = pdf,
                            title = f'remove standing waves, polar {polar}')
             
         if keep_polar:
             plot_in_pdf(data_rmrfi_low_mw_xx,T_xx,sw_fit_xx,rmsw_data[:,:,0],polar='xx',pdf = pdf,
-                        one_spec = one_spec, ylim = ylim)
+                        one_spec = one_spec, ylim = ylim,vmin_max=vmin_max)
             plot_in_pdf(data_rmrfi_low_mw_yy,T_yy,sw_fit_yy,rmsw_data[:,:,1],polar='yy',pdf = pdf,
-                       one_spec = one_spec, ylim = ylim)
+                       one_spec = one_spec, ylim = ylim,vmin_max=vmin_max)
         else:
             plot_in_pdf(data_rmrfi_low_mw,T,sw_fit,rmsw_data,polar='merged',pdf = pdf)
         
@@ -542,7 +556,8 @@ if __name__ == '__main__':
         
     # fill rfi with ?
     if fill_rfi == 'nan':
-        rmsw_data[is_srfi] = np.nan
+        if rfi_fname != 'none':
+            rmsw_data[is_srfi] = np.nan
     elif fill_rfi == 'rfi':
         pass
     
