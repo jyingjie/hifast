@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.interpolate as interp
 import h5py
+import re
 
 def _tight_ra(ra):
     ra_s= np.sort(ra)
@@ -153,6 +154,10 @@ if __name__ == '__main__':
                        help='')
     parser.add_argument('--show', action='store_true',
                        help='')
+    parser.add_argument('--inter', default='none',
+                       help='interpolation parameter in plt.imshow')
+    parser.add_argument('--ftype', default='png',
+                       help='png or pdf')
 
     args = parser.parse_args()
     fnames = args.fnames
@@ -167,8 +172,7 @@ if __name__ == '__main__':
     if len(fnames)==1:
         single = True
     imshow_kwargs = {}
-    imshow_kwargs['vmax'] = args.vmax
-    imshow_kwargs['vmin'] = args.vmin
+    imshow_kwargs['interpolation'] = args.inter
 
     from tqdm import tqdm
     if not single:
@@ -183,7 +187,7 @@ if __name__ == '__main__':
             axs = axs.flatten()
             for i, (fname, ax) in enumerate(zip(_files['fname'], axs[:19])):
                 im = plot(fname, ax, polar=0, ytick1=args.ytick1, ytick2=args.ytick2, vmin=args.vmin, vmax=args.vmax,
-                          x_plot_range=xrange, vlines=vlines, colorbar=False)
+                          x_plot_range=xrange, vlines=vlines, colorbar=False, **imshow_kwargs)
             fig.colorbar(im, ax= axs[-1])
             ax = axs[-1]
             ax.plot([], [], label=key)
@@ -193,7 +197,7 @@ if __name__ == '__main__':
             if args.show:
                 fig.show()
                 input()
-            fig.savefig(f'{outdir}/{key}.19.pdf')
+            fig.savefig(f'{outdir}/{key}.19.{args.ftype}')
             fig.clear()
     else:
         for fname in tqdm(fnames):
@@ -202,7 +206,7 @@ if __name__ == '__main__':
             ncols=1
             fig, ax = plt.subplots(nrows, ncols, figsize=(15,12), sharex=True, sharey=True)
             im = plot(fname, ax, polar=0, ytick1=args.ytick1, ytick2=args.ytick2, vmin=args.vmin, vmax=args.vmax,
-                          x_plot_range=xrange, vlines=vlines, colorbar=False)
+                          x_plot_range=xrange, vlines=vlines, colorbar=False, **imshow_kwargs)
             fig.colorbar(im, ax= ax)
             ax.set_title(fbasename)
 
@@ -210,5 +214,5 @@ if __name__ == '__main__':
             if args.show:
                 fig.show()
                 input()
-            fig.savefig(f'{outdir}/{fbasename}.pdf')
+            fig.savefig(f'{outdir}/{fbasename}.{args.ftype}')
             fig.clear()
