@@ -39,6 +39,17 @@ def real_rms(data,vel,sigma,rms_vrange=None):
     
     return ans
 
+def std(data,vel,vrange=None):
+    if vrange is not None:
+        is_use = (vel > vrange[0])&(vel < vrange[1])
+        if len(data.shape) == 1:
+            data = data[is_use]
+        elif len(data.shape) ==2:
+            data = data[:,is_use]
+            
+    ans = np.std(data,axis = -1)
+    return ans
+
 def real_std(data,vel,sigma,rms_vrange=None):
     from scipy.ndimage import gaussian_filter1d
     if rms_vrange is not None:

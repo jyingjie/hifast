@@ -41,6 +41,16 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--cali_fname',
                        help='quasar calibration file name')
     
+    #smooth
+    parser.add_argument('--s_method_freq', default='None', choices=['gaussian', 'boxcar', 'median', 'None'],
+                       help='smooth spec along freq')
+    parser.add_argument('--s_sigma_freq', type=int, default=3,
+                       help='smooth spec along freq sigma')
+    parser.add_argument('--s_method_t', default='None', choices=['gaussian', 'boxcar', 'median', 'None'],
+                       help='smooth spec along time')
+    parser.add_argument('--s_sigma_t', type=int, default=10,
+                       help='smooth spec along time sigma')
+    
     ## replace big RFI
     parser.add_argument('--rfi_method', default='near ripple', choices=['subtract trpdr',
                       'subtract tr','subtract rfi', 'lower','set zeros','set noise','near ripple'],
@@ -213,7 +223,7 @@ if __name__ == '__main__':
  
     nB = int(re.findall(r'-M[0-1][0-9]',file_spec)[-1][2:])
 
-    # load data
+    ################################ load data ###############################
     fs = h5py.File(file_spec,'r')
     mjd = fs['mjd'][()]
     
@@ -444,6 +454,23 @@ if __name__ == '__main__':
         print('Flux calibrating ...')
         T = cali_src(T, nB, freq, cali_fname, ra=ra, dec=dec, mjd=mjd)
     
+    ########################### smooth ###############################3
+    s_method_freq = args.s_method_freq
+    s_sigma_freq = args.s_sigma_freq
+    s_method_t = args.s_method_t
+    s_sigma_t = args.s_sigma_t
+    def do_smooth(T,s_method_t,s_sigma_t,s_method_freq,s_sigma_freq):
+        from hifast.utils.misc import smooth1d
+        if  s_method_t in ['gaussian', 'boxcar', 'median']:
+            print('Smooth ing ...')
+            T = smooth1d(T,axis = 0,sigma = s_sigma_t, method = s_method_t)
+
+        if  s_method_freq in ['gaussian', 'boxcar', 'median']:
+            print('Smooth ing ...')
+            T = smooth1d(T,axis = 1,sigma = s_sigma_freq, method = s_method_freq)
+        return T
+    
+    ######################### fft ##############################
     
     from baseline_2 import replace_rfi,fit_ripple
     if len(T.shape) == 3:
@@ -456,12 +483,16 @@ if __name__ == '__main__':
             # replace big rfi
             data_rmrfi_low_mw_xx = replace_rfi(T_xx,freq,is_rfi,time_rfi=t_rfi,
                                                method = rfi_method,mw_use =mw_use,**rep_args)
+            data_rmrfi_low_mw_xx = do_smooth(data_rmrfi_low_mw_xx,
+                                             s_method_t,s_sigma_t,s_method_freq,s_sigma_freq)
             # get standing waves
             sw_fit_xx = fit_ripple(data_rmrfi_low_mw_xx, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
                                    plot = plot,pdf=pdf,title='polar xx',**fit_args)
             print("polar yy ...")
             data_rmrfi_low_mw_yy = replace_rfi(T_yy,freq,is_rfi,time_rfi=t_rfi,
                                                method = rfi_method,mw_use =mw_use,**rep_args)
+            data_rmrfi_low_mw_yy = do_smooth(data_rmrfi_low_mw_yy,
+                                             s_method_t,s_sigma_t,s_method_freq,s_sigma_freq)
             
             sw_fit_yy = fit_ripple(data_rmrfi_low_mw_yy, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
                                    plot = plot,pdf=pdf,title='polar yy',**fit_args)

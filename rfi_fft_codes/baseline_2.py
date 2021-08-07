@@ -153,7 +153,7 @@ def replace_rfi_substract2(data,freq,time_rfi,mw_use,sg_window,sg_polyorder, s_s
             RMS = real_rms(spec,freq,sigma=rms_sigma,rms_vrange=rms_frange)
 
             thr = RMS*times_low_thr
-            low_use = (spec > thr)    
+            low_use = (np.abs(spec) > thr)    
             low_use = extend_Trues(low_use,ext_add =10,leng_lim = 20,axis = -1)
 
             newspec = deepcopy(spec)
@@ -204,7 +204,7 @@ def repalce_near(data,freq,time_rfi,mw_use=None,times_lower_thr=None,rms_sigma =
             RMS = real_rms(spec,freq,sigma=rms_sigma,rms_vrange=rms_frange)
 
             thr = RMS*times_lower_thr
-            low_use = (spec > thr) | time_rfi[tn] | mw_use
+            low_use = (np.abs(spec) > thr) | time_rfi[tn] | mw_use
             start,end = get_startend(low_use,rfi_width_lim, ext_sec)
 
             newspec = deepcopy(spec)
