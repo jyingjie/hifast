@@ -31,18 +31,21 @@ def get_K_Jy_cali(cali_fname, nB, freq, ra=None, dec=None, mjd=None):
     """
     
     with  h5py.File(cali_fname,'r') as fs:
-        freq_c= fs['freq'][()]
-        K_Jy= 1/ fs['para'][()] # K/Ky
+        freq_c= fs['freq_key'][()]
+        if f'M{nB:02d}' in fs.keys():
+            K_Jy = fs[f'M{nB:02d}'][()] # K/Jy
+            need_ratio = False
+        else:
+            K_Jy = fs[f'M01'][()] # K/Jy
+            need_ratio = True
 #         mjd= fs['mjd'][()]
 #         ra= fs['ra'][()]
 #         dec= fs['dec'][()]
-    if (freq_c.max()- freq_c.min()) < (freq.max()- freq.min()):
-        K_Jy= np.mean(K_Jy,axis=0)
-        K_Jy= K_Jy[None,None,:]
-    else:
-        K_Jy= interp.interp1d(freq_c, K_Jy, axis=0, kind='linear', fill_value= "extrapolate")(freq)
-        K_Jy= K_Jy[None,:,:]
-    K_Jy=K_Jy*get_ratio(nB, freq)[0][None,:,None]
+    # 
+    K_Jy = interp.interp1d(freq_c, K_Jy, kind='quadratic', fill_value= "extrapolate")(freq)
+    K_Jy = K_Jy[None,:,None]
+    if need_ratio:
+        K_Jy = K_Jy*get_ratio(nB, freq)[0][None,:,None]
     return K_Jy
 
 def cali_src(T, nB, freq, cali_fname=None, ra=None, dec=None, mjd=None):
