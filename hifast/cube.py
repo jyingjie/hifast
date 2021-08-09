@@ -8,7 +8,7 @@ from astropy.io import fits
 from astropy.wcs import WCS
 from astropy import units as u
 import h5py
-from . import grid
+from .core import grid
 
 def _adjust_header(header, ra_range, dec_range):
     """
