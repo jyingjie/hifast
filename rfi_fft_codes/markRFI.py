@@ -15,6 +15,11 @@ from copy import deepcopy
 from tqdm import tqdm
 
 def rms(data,vel,rms_vrange=None):
+    """
+    data: 1D or 2D numpy array
+    vel: velocity or frequency
+    rms_vrange: [a,b], calculate rms from a to b 
+    """
     if rms_vrange is not None:
         is_use = (vel > rms_vrange[0])&(vel < rms_vrange[1])
         if len(data.shape) == 1:
@@ -26,6 +31,12 @@ def rms(data,vel,rms_vrange=None):
     return ans
 
 def real_rms(data,vel,sigma,rms_vrange=None):
+    """
+    data: 1D or 2D numpy array
+    vel: velocity or frequency
+    rms_vrange: [a,b], calculate rms from a to b 
+    sigma: gaussian_filter1d sigma
+    """
     from scipy.ndimage import gaussian_filter1d
     if rms_vrange is not None:
         is_use = (vel > rms_vrange[0])&(vel < rms_vrange[1])
@@ -40,6 +51,11 @@ def real_rms(data,vel,sigma,rms_vrange=None):
     return ans
 
 def std(data,vel,vrange=None):
+    """
+    data: 1D or 2D numpy array
+    vel: velocity or frequency
+    vrange: [a,b], calculate std from a to b 
+    """
     if vrange is not None:
         is_use = (vel > vrange[0])&(vel < vrange[1])
         if len(data.shape) == 1:
@@ -50,10 +66,16 @@ def std(data,vel,vrange=None):
     ans = np.std(data,axis = -1)
     return ans
 
-def real_std(data,vel,sigma,rms_vrange=None):
+def real_std(data,vel,sigma,vrange=None):
+    """
+    data: 1D or 2D numpy array
+    vel: velocity or frequency
+    vrange: [a,b], calculate std from a to b 
+    sigma: gaussian_filter1d sigma
+    """
     from scipy.ndimage import gaussian_filter1d
     if rms_vrange is not None:
-        is_use = (vel > rms_vrange[0])&(vel < rms_vrange[1])
+        is_use = (vel > vrange[0])&(vel < vrange[1])
         if len(data.shape) == 1:
             data = data[is_use]
         elif len(data.shape) ==2:
@@ -66,6 +88,12 @@ def real_std(data,vel,sigma,rms_vrange=None):
 
 
 def find_local_peak(rfi1,freq1,RMS,distance=5,):
+    """
+    rfi1,freq1: part of a spec and freq
+    distance: signal.find_peaks distance
+    
+    return max freq and peak value
+    """
     from scipy import signal
     loc_max = signal.find_peaks(rfi1,distance = distance)[0]
     
@@ -84,6 +112,9 @@ def find_local_peak(rfi1,freq1,RMS,distance=5,):
     return freq_max,flux_peak
 
 def fit_line(rfi,freq,half_factor,**kwargs):
+    """
+    deleted
+    """
     
     freq_peak,flux_peak = find_local_peak(rfi,freq,**kwargs)
     if np.sum(np.isnan([freq_peak,flux_peak])) > 0:
@@ -118,6 +149,12 @@ def fit_line(rfi,freq,half_factor,**kwargs):
     return half_v_left, half_v_righ
 
 def get_startend(is_rfi,rfi_width_lim = None,ext_sec= 0):
+    """
+    get continued start and end in a bool array
+    is_rfi: 1D bool array
+    rfi_width_lim: int, width should above an int channel number
+    ext_sec: int, extend edges channel number
+    """
     if is_rfi.any() == False:
         raise ValueError("Input array has no Trues.")
     
@@ -159,6 +196,15 @@ def get_startend(is_rfi,rfi_width_lim = None,ext_sec= 0):
 
 def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,check = True,
                 rfi_fit_use = 'two groups',**kwargs):
+    """
+    find period RFI
+    spec,freq,is_rfi: 1D array
+    freq_thr: estimate error when looking for peaks to polyfit
+    freq_step: rfi period MHz
+    check: check repeat center?
+    rfi_fit_use: divide rfi into 2 or 3 groups
+    **kwargs: in get_startend
+    """
 
     start,end = get_startend(is_rfi,**kwargs)
     # big rfi position
@@ -276,6 +322,12 @@ def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,check = True,
     return fcenter1,fcenter2,fcenter3,fc0
 
 def check_repeat_center(item,freq_step=8.1,x_start = '1st point',peaks = None):
+    """
+    item: 1D array
+    freq_step: rfi period MHz
+    x_start: 'zero' or '1st point'
+    peaks: help to delete smaller peaks
+    """
     if len(item) <= 0:
         raise ValueError(f"Input item length is {len(item)}!")
     if x_start == 'zero':
@@ -317,6 +369,9 @@ def check_repeat_center(item,freq_step=8.1,x_start = '1st point',peaks = None):
 
 
 def polyfit1order(item,plot = False,pdf = None,**kwargs):
+    """
+    linear polyfit
+    """
     x,item = check_repeat_center(item,**kwargs)
         
     if len(x) <= 1:
@@ -338,6 +393,11 @@ def polyfit1order(item,plot = False,pdf = None,**kwargs):
     return pfunc
 
 def mask_RFI(freq,is_rfi,theory,mask_all_theory = False,freq_from_theory = None,**kwargs):
+    """
+    theory: freqs should have period rfis
+    mask_all_theory: mask all theory freqs?
+    freq_from_theory: mask width from theory center
+    """
     # fix width
     rfi_width_lim = kwargs['rfi_width_lim']
     ext_sec = kwargs['ext_sec']
@@ -361,6 +421,10 @@ def mask_RFI(freq,is_rfi,theory,mask_all_theory = False,freq_from_theory = None,
     return bigrfi,bigrfi3
 
 def find_edge_2sides(spec,vel,peak_position,step,rms_thresh,Print=False,small_rfi_times=2):
+    """
+    find edge from center to two sides
+    small_rfi_times: small rfi below, eg.2*RMS will not be masked
+    """
     start = deepcopy(peak_position)
     part_rms = rms(spec,vel,rms_vrange=[start-step/2,start+step/2])
     
@@ -392,7 +456,12 @@ def find_edge_2sides(spec,vel,peak_position,step,rms_thresh,Print=False,small_rf
     return edge
 
 def mask_RFI_2sides(spec,freq,is_rfi,theory0,mark_rfi_width,small_rfi_times,RMS,
-                    ext_times = 0,chan_step=3,**kwargs):
+                    chan_step=3,**kwargs):
+    """
+    chan_step:channel step when walk from center to two sides
+    Other parameters are the same as previous.
+    """
+    
     flim_l = theory0 - mark_rfi_width/2
     flim_r = theory0 + mark_rfi_width/2
     fdelta = freq[1] - freq[0]
@@ -424,6 +493,10 @@ def mask_RFI_2sides(spec,freq,is_rfi,theory0,mark_rfi_width,small_rfi_times,RMS,
     return bigrfi,bigrfi2       
             
 def center_theory(freq,fcenter1,fcenter2,fcenter3,freq_step,plot,pdf,rfi_fit_use = 'two groups'):
+    """
+    fcenter1,fcenter2,fcenter3: three groups centers
+    Other parameters are the same as previous.
+    """
     if fcenter3.size <= 1:
         rfi_fit_use = 'two groups'
     
@@ -468,7 +541,13 @@ def find_RFI(spec,freq,is_rfi,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge 
              mask_RFI_method = 'fixed freq',small_rfi_times = 2,chan_step = 3,
              mask_all_theory = False,freq_from_theory = None,mask_thr = 15,
              ret_type = 'all theory',**kwargs):
-         
+    """
+    ext_edge : channel number
+    mask_RFI_method: 'fixed freq','2 sides'
+    mask_thr: above ~ times of rms threshold will be masked
+    Other parameters are the same as previous.  
+    ret_type: 'all theory','theory 123'
+    """
     if plot:
              
         if pdf is not None:
@@ -537,14 +616,18 @@ def find_RFI(spec,freq,is_rfi,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge 
     elif ret_type == 'theory 123':
         return bigrfi2,(theory1,theory2,theory3)
 
-
-
-
-
+    
 ####################### time rfi ########################
 
 def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
            ext_add = 0,plot = False,pdf = None,ylim = None):
+    """
+    data: 2D arrays
+    frange: like [a,b]
+    times: thr = median value * times
+    rfi_width_lim: width limit
+    ext_add: extend edge
+    """
     t = np.arange(data.shape[0])
     is_timerfi = np.zeros_like(t,dtype = 'bool')
     
@@ -621,6 +704,10 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
     return  is_timerfi
 
 def mask_sf(data,freq,T_thr_times = None,frange = None,RMS = None,**kwargs):
+    """
+    T_thr_times: above T_thr_times * RMS will be masked.
+    Other parameters are the same as previous.
+    """
     ret = np.zeros_like(data,dtype = 'bool')
     
     log.info(f"Looking for short-freq time RFI in {frange} ...")
@@ -648,22 +735,36 @@ def mask_sf(data,freq,T_thr_times = None,frange = None,RMS = None,**kwargs):
     print("Found :D")
     return ret
 
-def mask_time_rfi(data,freq,T_thr_times = None,rtype = 'short-freq',frange = None,file = None,RMS = None,**kwargs):
+def mask_time_rfi(data,freq,T_thr_times = None,rtype = 'short-freq',frange = None,file = None,
+                  RMS = None,frange_step = 40,**kwargs):
+    """
+    rtype: 'short-freq','long-freq'
+    frange: freq range
+    file: freq range exists short-freq time rfi npy filename
+    frange_step: if frange is None and file is None, cycle in whole freq band
+    Other parameters are the same as previous.
+    """
+    
     ret = np.zeros_like(data,dtype = 'bool')
 
     if rtype == 'short-freq':
-        if isinstance(file,str):
-            franges = np.load(file)
-            if franges.shape[1] != 2:
-                raise ValueError("time RFI freq shape must like (n,2)")
+        if isinstance(file,str) or ((file is None) & (frange is None)):
+            if isinstance(file,str):
+                franges = np.load(file)
+                if franges.shape[1] != 2:
+                    raise ValueError("time RFI freq shape must like (n,2)")
+            elif (file is None) & (frange is None):
+                frq1 = np.arange(freq[0],freq[-1],frange_step)
+                frq2 = np.hstack((start[1:],freq[-1]))
+                franges = np.vstack((frq1,frq2)).T
 
             for nf in range(franges.shape[0]):
                 ret = ret | mask_sf(data,freq,T_thr_times,frange = franges[nf],RMS = RMS,**kwargs)
-
+        
         elif len(frange) == 2:
             ret = mask_sf(data,freq,T_thr_times,frange,RMS = RMS,**kwargs)
         else:
-            raise ValueError("frange should like [fmin,fmax] or a string (RFI npy filepath).")
+            raise ValueError("frange should like [fmin,fmax] or a string (RFI npy filepath) or both None.")
 
         if ret.any() == False:
             print("No short-freq time rfi is found.")
@@ -682,5 +783,4 @@ def mask_time_rfi(data,freq,T_thr_times = None,rtype = 'short-freq',frange = Non
     
     print("Finish")
     return ret
-
 

@@ -49,6 +49,9 @@ if __name__ == '__main__':
                        help='freq range exists short-freq time rfi ')
     parser.add_argument('--sf_file',         
                         help='freq range exists short-freq time rfi npy filename')
+    parser.add_argument('--sf_frange_step',type = int,
+                        help='if sf_frange is None and sf_file is None, cycle in whole freq band.')
+    
     parser.add_argument('--sf_times', type=float, default=10,
                        help='first threhold, rfi is this times of median value')
     parser.add_argument('--sf_thr', type=float, default=10,
@@ -83,7 +86,7 @@ if __name__ == '__main__':
     parser.add_argument('--s_sigma_t', type=int, default=10,
                        help='smooth spec along time sigma')
     
-    ## freq period rfi
+    ## freq period rfi #################
     parser.add_argument('--period_rfi', action='store_true',
                         help='find freq period rfi')
     # find rfi
@@ -107,7 +110,7 @@ if __name__ == '__main__':
     parser.add_argument('--freq_from_theory', type=float,
                         help='mask width from theory center')
     parser.add_argument('--mask_thr', type=float, 
-                       help='default below 3 times of rms threshold will be masked')
+                       help=' above ~ times of rms threshold will be masked')
     parser.add_argument('--ext_edge', type=int, default= 0, 
                        help=' extend result channel on freq axis')
     parser.add_argument('--mask_RFI_method',default='fixed freq',choices=['2 sides','fixed freq'],
@@ -261,8 +264,17 @@ if __name__ == '__main__':
     rms_frange = args.rms_frange
     rms_sigma = args.rms_sigma
     
+    mw_frange = args.mw_frange
+
+    if mw_frange is None:
+        protect_use = np.zeros_like(freq,dtype='bool')
+    else:
+        protect_use = (freq>mw_frange[0])&(freq<mw_frange[1])
+    
     ####################### time RFI ################################
     t_rfi = np.isnan(T)
+    Tt = deepcopy(T)
+    Tt[:,protect_use] = 0
     
     if time_rfi:
         lf_beams = args.lf_beams
@@ -283,7 +295,8 @@ if __name__ == '__main__':
             longf_args['rfi_width_lim'] = args.lf_rfi_last
             longf_args['ext_add'] = args.lf_ext
             print("long freq args:",longf_args)
-            l_rfi = mask_time_rfi(T,freq, rtype = 'long-freq',plot = plot,pdf = pdf,**longf_args)
+            l_rfi = mask_time_rfi(Tt,freq, rtype = 'long-freq',plot = plot,pdf = pdf,
+                                  **longf_args)
             t_rfi = t_rfi | l_rfi
             
     whole_rfi = np.all(t_rfi,axis = 1)
@@ -291,6 +304,8 @@ if __name__ == '__main__':
     is_rfi_num = np.arange(T.shape[0])[whole_rfi]
     
     if time_rfi:
+        frange_step = args.sf_frange_step
+        
         if shortf_rfi:
             tn = not_rfi_num[0]
             spec = deepcopy(T[tn,:])
@@ -305,7 +320,8 @@ if __name__ == '__main__':
             shortf_args['T_thr_times'] = args.sf_T_thr_times
             shortf_args['ext_add'] = args.sf_ext
             print("short freq args:",shortf_args)
-            s_rfi = mask_time_rfi(T,freq, rtype = 'short-freq',plot = plot,pdf = pdf,RMS = RMS,**shortf_args)
+            s_rfi = mask_time_rfi(Tt,freq, rtype = 'short-freq',plot = plot,pdf = pdf,RMS = RMS,
+                                  frange_step =frange_step, **shortf_args)
             
             t_rfi = t_rfi | s_rfi
 
@@ -341,12 +357,6 @@ if __name__ == '__main__':
         #mark RFI 
         from markRFI import find_RFI
         rfi_thr = args.rfi_thr
-        mw_frange = args.mw_frange
-
-        if mw_frange is None:
-            protect_use = np.zeros_like(freq,dtype='bool')
-        else:
-            protect_use = (freq>mw_frange[0])&(freq<mw_frange[1])
         
         if plot:
             ylim = args.ylim
