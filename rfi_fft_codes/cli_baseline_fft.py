@@ -70,7 +70,7 @@ if __name__ == '__main__':
                        help='gauss smooth sigma')
     # other methods need
     parser.add_argument('--times_lower_thr', type=float, default=2, 
-                       help='above 3 times of rms will be lowered')
+                       help='above * times of rms will be lowered')
     parser.add_argument('--times_lower', type=float, default=1.0e4, 
                        help='lower mw area when fft, default mw/1e4')
     parser.add_argument('--ext_freq',type=float, 
@@ -84,25 +84,39 @@ if __name__ == '__main__':
     parser.add_argument('--fft_method', default='rfft', choices=['rfft'],
                        help='method to remove ripples')
     # fft method
-    parser.add_argument('--sw_freq', type=float, default=0.9254, 
-                       help='standing waves freq(\mu s) in Fourier space')
-    parser.add_argument('--amp_thr', type=float, default=35, 
-                       help='above amptitude threshold will be chosed')
-    parser.add_argument('--sw_n', type=int, default=5, 
-                       help='channel numbers near 1mhz to be chosed')
-    # remove 8.1 mhz RFI in fft ?
-    parser.add_argument('--rfi_8mhz', action='store_true',
-                       help='remove 8.1 mhz components ?')
-    parser.add_argument('--rfi_freq_step', type=float, 
-                       help='big RFI linspace step, freq(\mu s) in Fourier space, nearly 1/16')
+    parser.add_argument('--amp_thr_mean_factor', type=float, default=1.05, 
+                       help='above mean amptitude threshold will be chosed')
+    parser.add_argument('--amp_thr_factor', type=float, default=1.4, 
+                       help='above amptitude threshold will be chosed in every spec')
+    parser.add_argument('--chan_wide', type=int, default=5, 
+                       help='channel numbers near 1mhz to be chosed (wide)')
+    parser.add_argument('--chan_narr', type=int, default=3, 
+                       help='channel numbers near 1mhz to be chosed (narrow)')
+
+    # remove which component in fft ?
+    parser.add_argument('--rip_base', action='store_true',
+                       help='remove constant components')
+    parser.add_argument('--rip_1mhz', action='store_true',
+                       help='remove 1.08mhz ripple')
+    parser.add_argument('--rip_2mhz', action='store_true',
+                       help='remove 1.92mhz ripple')
+    parser.add_argument('--rip_0_04mhz', action='store_true',
+                       help='remove 0.039 mhz ripple')
     
+    parser.add_argument('--rfi_8mhz', action='store_true',
+                       help='remove 8.1 mhz components')
+    parser.add_argument('--rfi_8mhz_step', type=float, 
+                       help='big RFI linspace step, freq(\mu s) in Fourier space, nearly 1/16')
+    parser.add_argument('--fft_ylim', type=float, nargs=2,
+                        help='set ylim in plotting fft components')
     
     parser.add_argument('--ylim', type=float, nargs=2,
-                        help='set ylim in plotting')
+                        help='set ylim in plotting spec')
     parser.add_argument('--vmin_max', type=float, nargs=2,
                         help='vmin vmax in plotting waterfall')
     parser.add_argument('--one_spec', action='store_true',
                        help='plot only one spec or mean specs')
+    
     parser.add_argument('-T', '--trans', action='store_true',
                        help='trans')
     parser.add_argument('--keep_polar', action='store_true',
@@ -169,13 +183,19 @@ if __name__ == '__main__':
     #fit args
     fit_args = {}
     if fft_method =='rfft':
-        fit_args['sw_freq'] = args.sw_freq
-        fit_args['amp_thr'] = args.amp_thr
-        fit_args['sw_n'] = args.sw_n
-        fit_args['rfi_8mhz'] = args.rfi_8mhz 
-        fit_args['rfi_freq_step'] = args.rfi_freq_step
-        if args.rfi_freq_step is not None:
-            fit_args['rfi_8mhz'] = True
+        fit_args['chan_wide'] = args.chan_wide
+        fit_args['chan_narr'] = args.chan_narr
+        fit_args['amp_thr_mean_factor'] = args.amp_thr_mean_factor
+        fit_args['amp_thr_factor'] = args.amp_thr_factor
+
+        fit_args['rip_base'] = args.rip_base
+        fit_args['rip_1mhz'] = args.rip_1mhz
+        fit_args['rip_2mhz'] = args.rip_2mhz
+        fit_args['rip_0_04mhz'] = args.rip_0_04mhz
+        fit_args['fft_ylim'] = args.fft_ylim
+        if args.rfi_8mhz_step is not None:
+            fit_args['rfi_8mhz'] = args.rfi_8mhz
+            fit_args['rfi_8mhz_step'] = args.rfi_8mhz_step
         print("fit_args:",fit_args) 
     else:
         raise ValueError("Unsupport fit baseline ripple method.")
@@ -248,12 +268,18 @@ if __name__ == '__main__':
         outfield = 'flux'
         if flux:
             raise(ValueError(f'flux already exists, please remove \"--flux\"'))
+            
+    if 'is_on' in fs.keys():
+        is_on = fs['is_on'][()]
+    else:
+        raise(ValueError(f'Can not find is_on'))
 
     ind_sort = np.argsort(mjd)
     mjd = mjd[ind_sort]
     ra = ra[ind_sort]
     dec = dec[ind_sort]
     T = T[ind_sort]
+    is_on = is_on[ind_sort]
     
     # read RFI
     from glob import glob
@@ -481,31 +507,31 @@ if __name__ == '__main__':
             ori_shape = T_xx.shape
             print("polar xx ...")
             # replace big rfi
-            data_rmrfi_low_mw_xx = replace_rfi(T_xx,freq,is_rfi,time_rfi=t_rfi,
+            data_rep_xx = replace_rfi(T_xx,freq,is_rfi,time_rfi=t_rfi,
                                                method = rfi_method,mw_use =mw_use,**rep_args)
-            data_rmrfi_low_mw_xx = do_smooth(data_rmrfi_low_mw_xx,
+            data_rep_xx = do_smooth(data_rep_xx,
                                              s_method_t,s_sigma_t,s_method_freq,s_sigma_freq)
             # get standing waves
-            sw_fit_xx = fit_ripple(data_rmrfi_low_mw_xx, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
-                                   plot = plot,pdf=pdf,title='polar xx',**fit_args)
+            sw_fit_xx = fit_ripple(data_rep_xx, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
+                                   is_on = is_on, plot = plot,pdf=pdf,title='polar xx',**fit_args)
             print("polar yy ...")
-            data_rmrfi_low_mw_yy = replace_rfi(T_yy,freq,is_rfi,time_rfi=t_rfi,
+            data_rep_yy = replace_rfi(T_yy,freq,is_rfi,time_rfi=t_rfi,
                                                method = rfi_method,mw_use =mw_use,**rep_args)
-            data_rmrfi_low_mw_yy = do_smooth(data_rmrfi_low_mw_yy,
+            data_rep_yy = do_smooth(data_rep_yy,
                                              s_method_t,s_sigma_t,s_method_freq,s_sigma_freq)
             
-            sw_fit_yy = fit_ripple(data_rmrfi_low_mw_yy, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
-                                   plot = plot,pdf=pdf,title='polar yy',**fit_args)
+            sw_fit_yy = fit_ripple(data_rep_yy, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
+                                   is_on = is_on, plot = plot,pdf=pdf,title='polar yy',**fit_args)
             
         else:
             T = np.mean(T, axis=2, dtype='float64')   
             ori_shape = T.shape
             
             # replace big rfi
-            data_rmrfi_low_mw, is_rfi_no_mw = replace_rfi(T,freq,is_rfi,time_rfi=t_rfi,
+            data_rep, is_rfi_no_mw = replace_rfi(T,freq,is_rfi,time_rfi=t_rfi,
                                                           method = rfi_method,mw_use =mw_use,**rep_args)
             # get standing waves
-            sw_fit = fit_ripple(data_rmrfi_low_mw, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
+            sw_fit = fit_ripple(data_rep, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
                                    plot = plot,pdf=pdf,title='polar merged',**fit_args)
     else:
         raise ValueError('data should be 3D, and has 2 polars') 
@@ -531,16 +557,16 @@ if __name__ == '__main__':
         ylim = args.ylim
         vmin_max = args.vmin_max
         one_spec = args.one_spec
-        print(" 'Wait for plotting patiently, you must.' Master Yoda said")
+        print(" 'Wait for plotting patiently, you must.' Master Yoda said.")
         tn = not_rfi_num[10]
-        def plot_in_pdf(data_rmrfi_low_mw,T,sw_fit,rmsw_data,polar,pdf = None,one_spec = False,
+        def plot_in_pdf(data_rep,T,sw_fit,rmsw_data,polar,pdf = None,one_spec = False,
                         ylim = None,vmin_max=None):
             global tn, freq
             fig = plt.figure(figsize=(40,4))
             ax = fig.add_subplot(111)
             if not one_spec:
                 ax.hlines([0,-.5],freq[0],freq[-1],alpha = .8)
-                ax.plot(freq,np.mean(data_rmrfi_low_mw[tn-5:tn+5,:],axis = 0),'b',label='rm rfi',alpha = .5)
+                ax.plot(freq,np.mean(data_rep[tn-5:tn+5,:],axis = 0),'b',label='rm rfi',alpha = .5)
                 ax.plot(freq,np.mean(T[tn-5:tn+5,:],axis = 0),label='original')
                 ax.plot(freq,np.mean(sw_fit[tn-5:tn+5,:],axis = 0),label='ripple')
                 ax.plot(freq,np.mean(rmsw_data[tn-5:tn+5,:],axis = 0) - .5,label='result')
@@ -549,7 +575,7 @@ if __name__ == '__main__':
                     ax.set_ylim(ylim[0],ylim[1])
             else:
                 ax.hlines([0,-2],freq[0],freq[-1],alpha = .8)
-                ax.plot(freq,data_rmrfi_low_mw[tn,:],'b',label='rm rfi',alpha = .5)
+                ax.plot(freq,data_rep[tn,:],'b',label='rm rfi',alpha = .5)
                 ax.plot(freq,T[tn,:],label='original')
                 ax.plot(freq,sw_fit[tn,:],label='ripple')
                 ax.plot(freq,rmsw_data[tn,:] - 2,label='result')
@@ -568,12 +594,12 @@ if __name__ == '__main__':
                            title = f'remove standing waves, polar {polar}')
             
         if keep_polar:
-            plot_in_pdf(data_rmrfi_low_mw_xx,T_xx,sw_fit_xx,rmsw_data[:,:,0],polar='xx',pdf = pdf,
+            plot_in_pdf(data_rep_xx,T_xx,sw_fit_xx,rmsw_data[:,:,0],polar='xx',pdf = pdf,
                         one_spec = one_spec, ylim = ylim,vmin_max=vmin_max)
-            plot_in_pdf(data_rmrfi_low_mw_yy,T_yy,sw_fit_yy,rmsw_data[:,:,1],polar='yy',pdf = pdf,
+            plot_in_pdf(data_rep_yy,T_yy,sw_fit_yy,rmsw_data[:,:,1],polar='yy',pdf = pdf,
                        one_spec = one_spec, ylim = ylim,vmin_max=vmin_max)
         else:
-            plot_in_pdf(data_rmrfi_low_mw,T,sw_fit,rmsw_data,polar='merged',pdf = pdf)
+            plot_in_pdf(data_rep,T,sw_fit,rmsw_data,polar='merged',pdf = pdf)
         
         pdf.close()
         log.info(f"Plot to {pdfname}")

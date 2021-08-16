@@ -1,10 +1,14 @@
 # parameters meaning
 
-Author: Xu Chen, NAOC, 2021.07
+Author: Xu Chen, NAOC, 2021.Jun ~ Aug
 
 先用cli_baseline多项式去基线，然后的顺序看g15_pipe.sh
 
 有bug请联系stellarxu@qq.com
+
+to do list:
+0.92 MHz 周期脉冲RFI
+
 
 ## cli_markRFI标记rfi
 
@@ -130,112 +134,131 @@ Finish
 ## cli_baseline_fft去驻波
 
 ### 对RFI
-* --rfi_method: 防止大rfi/强源干扰fft，提供5种方法：'subtract trpdr','subtract tr','subtract rfi', 'lower','set zeros'
+* --rfi_method: 防止大rfi/强源干扰fft，提供7种方法：'subtract trpdr',
+                      'subtract tr','subtract rfi', 'lower','set zeros','set noise','near ripple'
+  推荐'near ripple'
 
 * --rms_sigma: 如果区间有干扰，还是用该频率减去一个高斯平滑，得到准确的rms。此为高斯滤波的sigma。
 * -rfi, --rfi_fname: 指定标记rfi的文件。无则自动到输入文件的上一级名为/rfi/的文件夹里找含-tr的文件，找不到则在当前路径找。
 
-* --mw_frange: 银河系存在的区域
-1. 'subtract trpdr'用原始值减去滤波值。例如
+* --mw_frange: 银河系(或者M31，M33都)存在的区域
+
+1. 'near ripple'使用高流量处附近的驻波替代。例如
+    ```
+    python cli_baseline_fft.py $subname --outdir $outdir \
+        -sep $sepname   -rfi 'none' \
+        --mw_frange 1420.2 1420.55 --rms_sigma 6 --rms_frange 1390 1400 \
+        --rfi_method 'near ripple' --times_lower_thr 7 \
+        --rfi_width_lim 15 --ext_sec 20 --ext_freq 1.3 \
+        \
+        --fft_method rfft --chan_wide 5 --chan_narr 3 \
+        --amp_thr_mean_factor 1.05 --amp_thr_factor 1.4 \
+        --rip_base --rip_1mhz --rip_2mhz --rip_0_04mhz --fft_ylim -5 130 \
+        --plot --ylim -1 .5 --vmin_max -.15 .15 -f --fill_rfi nan --keep_polar || exit 1 
+    ```
+    * 只需要已知时域rfi的文件，即*-tr*。    
+      如果没有时域RFI，设置-rfi 'none'即可。
+    * --times_lower_thr:大于RMS这么多倍的会被替代
+    * --rfi_width_lim,--ext_sec: 以上处理的范围，宽度阈值和扩展通道数(同周期rfi里的含义)
+    * --ext_freq: 扩展边缘(MHz)，再寻找强流量两边的最低点，先使用左/右边的一段代替强流量处
+    
+    * 输出文件名含fft_blde.
+
+2. 'subtract trpdr'用原始值减去滤波值。例如
     ```
     python cli_baseline_fft.py $subname --outdir ./data \
         --mw_frange 1420 1421 --rms_sigma 6 --rms_frange 1390 1400 \
         --rfi_method 'subtract trpdr' --sg_window 1.0 --sg_polyorder 7 --gauss_sigma 1 \
-        --fft_method rfft --sw_freq 0.9254   --amp_thr 35  --sw_n 5 \
-        --plot -f --fill_rfi nan --keep_polar || exit 1 
+        # 这里略去相同的fft参数
     ```
     * 需要已知周期rfi和时域rfi的文件，即*-tr_pdr*
     * --sg_window --sg_polyorder: savgol_filter的窗口大小(MHz)和阶数. 存在周期rfi区域减去sg滤波值替代。存在时域RFI区域除以sg滤波值替代。
     * --gauss_sigma: 银河系存在的地方临时用一个高斯平滑减下去
     * 最后会除去所有超过3$\sigma$的强源或者异常点。
     
-    输出文件名含fft_bldp.
+    * 输出文件名含fft_bldp.
     
-2. 'subtract tr'用原始值减去滤波值。例如
+3. 'subtract tr'用原始值减去滤波值。例如
     ```
     python cli_baseline_fft.py $subname --outdir ./data \
         --mw_frange 1420 1421 --rms_sigma 6 --rms_frange 1390 1400 \
         --rfi_method 'subtract tr' --sg_window 1.0 --sg_polyorder 7 --gauss_sigma 1 \
         --times_lower_thr 1.7   \
-        --fft_method rfft --sw_freq 0.9254   --amp_thr 35  --sw_n 5 \
-        --plot -f --fill_rfi nan --keep_polar || exit 1 
+        # 这里略去相同的fft参数
     ```
     * 只需要已知时域rfi的文件，即*-tr*
     * --times_lower_thr: 大于RMS这么多倍的会被处理，低一些会干净。所以不需要已知pdr。
     * --sg_window --sg_polyorder: savgol_filter的窗口大小(MHz)和阶数.存在减去sg滤波值替代
     * --gauss_sigma: 银河系存在的地方临时用一个高斯平滑减下去
 
-    输出文件名含fft_bldt.
+    * 输出文件名含fft_bldt.
     
- 3. 'subtract rfi'用原始值减去滤波值。例如
+ 4. 'subtract rfi'用原始值减去滤波值。例如
     ```
     python cli_baseline_fft.py $subname --outdir ./data \
         --mw_frange 1420 1421 --rms_sigma 6 --rms_frange 1390 1400 \
         --rfi_method 'subtract rfi' --sg_window 1.0 --sg_polyorder 7 \
         --times_lower 1.0e4 --times_lower_thr 2   \
-        --fft_method rfft --sw_freq 0.9254   --amp_thr 35  --sw_n 5 \
-        --plot -f --fill_rfi nan --keep_polar || exit 1 
+        # 这里略去相同的fft参数
     ```
     * 需要已知周期rfi的文件，即*pdr*
     * --sg_window --sg_polyorder: savgol_filter的窗口大小(MHz)和阶数.存在减去sg滤波值替代
     * --times_lower_thr: 减去滤波值后，大于RMS这么多倍的会被降低
     * --times_lower: 把高流量压低，比如原来的1/1e4
     
-    输出文件名含fft_bldr.
+    * 输出文件名含fft_bldr.
  
-4. 'lower'降低高流量。不需要rfi文件。例如
+5. 'lower'降低高流量。不需要rfi文件。例如
     ```
     python cli_baseline_fft.py $subname  --rms_frange 1390 1400 \
         --rfi_method 'lower' --times_lower 1.0e4 --times_lower_thr 2 \
-        --fft_method rfft --sw_freq 0.9254   --amp_thr 35  --sw_n 5 \
-        --plot -f --keep_polar || exit 1 
+        -# 这里略去相同的fft参数
     ```
     * --times_lower_thr:大于RMS这么多倍的会被降低
     * --times_lower: 把高流量压低，比如原来的1/1e4
     
-    输出文件名含fft_bldl.
+    * 输出文件名含fft_bldl.
     
-5. 'set zeros','set noise'高流量全部置零/标准差为RMS的正态分布噪声。不需要rfi文件。例如
+6.7. 'set zeros','set noise'高流量全部置零/标准差为RMS的正态分布噪声。不需要rfi文件。例如
     ```
     python cli_baseline_fft.py $subname --outdir ./data --rms_frange 1390 1400 \
         --rfi_method 'set zeros'  --times_lower_thr 2 \
-        --fft_method rfft --sw_freq 0.9254   --amp_thr 35  --sw_n 5 \
-        --plot -f --keep_polar || exit 1 
+        # 这里略去相同的fft参数
     ```
     * --times_lower_thr:大于RMS这么多倍的会被降低
+    * 输出文件名含fft_bldz/fft_bldn.
     
-    输出文件名含fft_bldz/fft_bldn.
-    
-6. 'near ripple'使用高流量处附近的驻波替代。例如
-    ```
-    python cli_baseline_fft.py $subname --outdir ./data --rms_frange 1390 1400 \
-        --rfi_method 'near ripple'  --times_lower_thr 2.9 \
-        --rfi_width_lim 25 --ext_sec 20 --ext_freq 1.3 \
-        --fft_method rfft --sw_freq 0.9254   --amp_thr 35  --sw_n 5 \
-        --plot -f --keep_polar || exit 1 
-    ```
-    * 只需要已知时域rfi的文件，即*-tr*
-    * --times_lower_thr:大于RMS这么多倍的会被替代
-    * --rfi_width_lim,--ext_sec: 以上处理的范围，宽度阈值和扩展通道数(同周期rfi里的含义)
-    * --ext_freq: 扩展边缘(MHz)，再寻找强流量两边的最低点，先使用左/右边的一段代替强流量处
-    
-    输出文件名含fft_blde.
-    
-    
-如果没有时域RFI，设置-rfi 'none'即可。
+
 
 ### fft去驻波
 
-* --fft_method: 目前只提供rfft
-* --sw_freq: 1mhz左右的驻波，在fourier空间为0.925$\mu$s左右
-* --amp_thr: fourier空间的振幅大于阈值且处在1/16.2$\mu$s间隔RFI的模，被选中为驻波一部分
-* --sw_n: 距离sw_freq中心左右各sw_n个通道数的模，作为0.925$\mu$s驻波的一部分被选中
+* --fft_method: 目前只提供rfft，mean的方法见‘cli_baseline_mean去基线‘
 
-* --rfi_8mhz: 是否fft去除8mhz rfi
-* --rfi_freq_step: 残余的8.1MHzRFI，在fourier空间间隔为1/16.2$\mu$s左右
+* --amp_thr_mean_factor: fourier空间的平均振幅大于阈值的模，会被识别为已知的几种驻波。这里输入的是中值的倍数
+* --amp_thr_factor: fourier空间的每一谱线的振幅大于阈值，会被选中为驻波一部分被去除。这里输入的是中值的倍数
+* --chan_wide: 距离驻波的模的中心左右各(2 * chann - 1)个通道数的模，作为驻波的一部分被选中，这里为由于fourier空间中峰比较宽，多选一些
+  --chan_narr: 同理，窄一些的
+  
+* --rip_base: 去除基频(实空间的常数)
+* --rip_1mhz: fft去除1.08mhz 驻波，单镜都有的
+* --rip_2mhz: fft去除1.92mhz 驻波，只有M06 yy有
+* --rip_0_04mhz: fft去除0.039mhz 驻波，很弱的偏振驻波，由于光纤反射
+
+* --rfi_8mhz: fft去除一部分8.1mhz rfi，2021.7.28后的新数据做好了压缩机电源屏蔽，已经没有了
+* --rfi_8mhz_step: 残余的8.1MHzRFI，在fourier空间间隔为1/16.2$\mu$s左右
+
+* --fft_ylim: 画fft模的上下限 
 
 * --fill_rfi: 对输入的rfi区域，可以填nan或者保持原样。对应'nan','rfi'。需要注意只有输入对应RFI文件才能填nan。
-* --keep_polar: 保留xx，yy，返回三维的结果
+
+### 其他参数
+* smooth 参数同前面
+* --ylim: 画谱线的上下限 
+* --flux: 流量定标
+* -c, --cali_fname: 定标源
+* --keep_polar: 保留偏振
+* --plot: 画图
+* --no_radec: 没有radec文件的话
 * -sep, --sep_fname: 只分离光谱温度定标的文件。无则自动到输入文件的上一级名为/sep/的文件夹里找含-tr的文件，找不到则在当前路径找。
 
 输出的hdf5包含去除驻波的数组(T或者flux)(单独的驻波```dict_out['ripple']```注释掉了)

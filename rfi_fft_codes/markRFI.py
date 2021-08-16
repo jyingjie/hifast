@@ -74,7 +74,7 @@ def real_std(data,vel,sigma,vrange=None):
     sigma: gaussian_filter1d sigma
     """
     from scipy.ndimage import gaussian_filter1d
-    if rms_vrange is not None:
+    if vrange is not None:
         is_use = (vel > vrange[0])&(vel < vrange[1])
         if len(data.shape) == 1:
             data = data[is_use]
