@@ -327,10 +327,28 @@ def mean_fit_ripple(data, nspec):
         for i in tqdm(range(tlen)):
             sw[i,:,0] = np.mean(data[t1[i]:t2[i],:,0],axis = 0)
             sw[i,:,1] = np.mean(data[t1[i]:t2[i],:,1],axis = 0)
-            
+    return sw
+
+def med_fit_ripple(data, nspec):
+    n = nspec // 2
+    
+    tlen = data.shape[0]
+    t1 = np.arange(tlen)-n
+    t2 = np.arange(tlen)+n
+    t1[t1 < 0] = 0;t2[t2 < 2*n] = 2*n
+    t1[t1 > tlen - 2*n -1] = tlen - 2*n -1;t2[t2 > tlen -1] = tlen -1
+    
+    sw = np.zeros_like(data)
+    if len(data.shape) == 2:
+        for i in tqdm(range(tlen)):
+            sw[i,:] = np.median(data[t1[i]:t2[i],:],axis = 0)
+    elif len(data.shape) == 3:
+        for i in tqdm(range(tlen)):
+            sw[i,:,0] = np.median(data[t1[i]:t2[i],:,0],axis = 0)
+            sw[i,:,1] = np.median(data[t1[i]:t2[i],:,1],axis = 0)
     return sw
         
-def find_loc(amp,x,amp_thr,rip_mhz,xlim,):
+def find_loc(amp,x,amp_thr,xlim,rip_mhz=True,Print=True):
     """
     amp: fft amptitude
     x: fft xfreq
@@ -348,16 +366,17 @@ def find_loc(amp,x,amp_thr,rip_mhz,xlim,):
 
             loc = np.argmax(amp_)
             sw_mhz = 1/x[loc]
-            print(f'find ripple {sw_mhz:.2f} MHz,{1/sw_mhz:.2f} mu s,locate in {loc}')
+            if Print:
+                print(f'find ripple {sw_mhz:.5f} MHz,{1/sw_mhz:.5f} mu s,locate in {loc}')
         else:
             rip_mhz = False
 
     return loc,sw_mhz,rip_mhz
 
 def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_factor = 1.05,
-                   amp_thr_factor = 1.5,is_on = None,chan_wide = 5,chan_narr = 3,
-        rip_base = True,rip_1mhz= True,rip_2mhz = False,rip_0_04mhz = False,rfi_8mhz = False,
-        rfi_8mhz_step = None, plot = False,pdf = None,title = None,fft_ylim = None,
+                   amp_thr_factor = 1.5,is_on = None,chan_wide = 5,chan_narr = 3,choose_method = 'all',
+                   rip_base = True,rip_1mhz= True,rip_2mhz = False,rip_0_04mhz = False,
+                   plot = False,pdf = None,title = None,fft_ylim = None,
         ):
     """
     fit baseline ripple (standing wave) by FFT
@@ -395,25 +414,25 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
     
     # ripples freq in fourier space
     # 1 mhz
-    loc1,sw_1mhz,rip_1mhz = find_loc(amp,x,amp_thr,rip_1mhz,xlim=[.90,.95])
-    loc1_,sw_1mhz_,_ = find_loc(amp,x,amp_thr,rip_1mhz,xlim=[1.8,2])
+    loc1,sw_1mhz,rip_1mhz = find_loc(amp,x,amp_thr,rip_mhz=rip_1mhz,xlim=[.90,.95])
+    loc1_,sw_1mhz_,_ = find_loc(amp,x,amp_thr,rip_mhz=rip_1mhz,xlim=[1.8,2])
     loc1s = np.array([loc1,loc1_])
     # 2 mhz
-    loc2,sw_2mhz,rip_2mhz = find_loc(amp,x,amp_thr,rip_2mhz,xlim=[.5,.6])
+    loc2,sw_2mhz,rip_2mhz = find_loc(amp,x,amp_thr,rip_mhz=rip_2mhz,xlim=[.5,.6])
     # 0.04 mhz
-    loc4,sw_0_04mhz,rip_0_04mhz = find_loc(amp,x,amp_thr,rip_0_04mhz,xlim=[25,26])
+    loc0_04,sw_0_04mhz,rip_0_04mhz = find_loc(amp,x,amp_thr,rip_mhz=rip_0_04mhz,xlim=[25,26])
     # 8 mhz rfi
-    if rfi_8mhz:
-        x_loc16 = np.arange(0,x[-1],rfi_8mhz_step)
-        loc16 = np.around(x_loc16 / (fs/N)).astype('int')
+    #if rfi_8mhz:
+    #    x_loc16 = np.arange(0,x[-1],rfi_8mhz_step)
+    #   loc16 = np.around(x_loc16 / (fs/N)).astype('int')
     
     # select which components?
     use = np.zeros_like(x,dtype = 'bool')
     use_1mhz = np.zeros_like(x,dtype = 'bool')
     use_2mhz = np.zeros_like(x,dtype = 'bool')
     use_0_04mhz = np.zeros_like(x,dtype = 'bool')
-    use_8mhz = np.zeros_like(x,dtype = 'bool')
-
+    #use_8mhz = np.zeros_like(x,dtype = 'bool')
+    
     if rip_1mhz:
         for s1 in range(len(loc1s)):
             use_1mhz |= (np.abs(np.arange(len(x))-loc1s[s1]) < chan_wide)
@@ -422,36 +441,35 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
         use_2mhz = (np.abs(np.arange(len(x))-loc2) < chan_wide)
         use[use_2mhz] = True
     if rip_0_04mhz:
-        use_0_04mhz = (np.abs(np.arange(len(x))-loc4) < chan_narr)
+        use_0_04mhz = (np.abs(np.arange(len(x))-loc0_04) < chan_narr)
         use[use_0_04mhz] = True
-    if rfi_8mhz:
-        use_16mhz = np.full(len(x),False)
-        use_16mhz[loc16] = True; use16[0] = False
-    if rip_base:
-        use[0] = True
+    #if rfi_8mhz:
+    #    use_16mhz = np.full(len(x),False)
+    #    use_16mhz[loc16] = True; use16[0] = False
+        
+    use_amp = use  & (amp_data > amp_thr_off)
+    use_amp[is_on,:] = use  & (amp_data[is_on,:] > amp_thr_on)
     
-    # interpolate
     amp_data_inpd = deepcopy(amp_data)
     from scipy.interpolate import interp1d
     x_ = deepcopy(x)
-    if rfi_8mhz:
-        use_i = ( use_8mhz ) & (amp_data > amp_thr_off)
-        use_i[is_on,:] = ( use_8mhz ) & (amp_data[is_on,:] > amp_thr_on)
-
+    if choose_method == 'interpolate':
+        # interpolate
         for ti in tqdm(range(amp_data.shape[0])):
-            x_mask = x_[~use_i[ti]]
-            amp_data_mask = amp_data[ti][~use_i[ti]]
+            x_mask = x_[~use_amp[ti]]
+            amp_data_mask = amp_data[ti][~use_amp[ti]]
             amp_data_interp = interp1d(x_mask,amp_data_mask,kind='linear')#,fill_value="extrapolate")
-            amp_data_inpd[ti][use_i[ti]] = amp_data_interp(x_[use_i[ti]])
-    
-    use_a = use  & (amp_data > amp_thr_off)
-    use_a[is_on,:] = use  & (amp_data[is_on,:] > amp_thr_on)
-    
-    #med = np.full(amp_data.shape,np.median(amp_off))
-    #med[is_on] = np.median(amp_on)
-    
+            amp_data_inpd[ti][use_amp[ti]] = amp_data_interp(x_[use_amp[ti]])  
+    elif choose_method == 'median':
+        raise ValueError("I don't want to write this method now...")
+
     amp_data_inpd = amp_data - amp_data_inpd
-    amp_data_inpd[use_a] = amp_data[use_a] #- med[use_a]
+    if choose_method == 'all':
+        # use all 
+        amp_data_inpd[use_amp] = amp_data[use_amp]
+    # 0 mu s constant
+    if rip_base:
+        amp_data_inpd[:,0] = amp_data[:,0]
     
     amp_data_inpd[amp_data_inpd < 0] = 0
     
@@ -472,6 +490,8 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
        
         fig = plt.figure(figsize=(15,6))
         ax = fig.add_subplot(211) 
+        if choose_method != 'all':
+            ax.plot(x,amp_data[tn]-amp_data_inpd[tn],'g',label = f'{choose_method}')
         ax.plot(x,amp_data[tn], label = 'whole fft')
         ax.plot(x,amp_data_inpd[tn],label = 'sw fft')
         ax.axhline(amp_thr,color = 'k',linestyle='--',label = f'amp thr = {amp_thr:.2f}',alpha=.5)
@@ -481,10 +501,10 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
         if rip_2mhz:
             ax.text(x[loc2],amp_thr,f'{sw_2mhz:.4f} MHz',color = 'k',size = 16)
             #ax.plot(x[use_i[tn]],np.zeros_like(x[use_i[tn]]),'r^',label = '2 mhz')
-        if rfi_8mhz:
-            ax.plot(x[loc16],np.zeros_like(loc16),'gs',label = f'step {rfi_8mhz_step:.4f} $\mu$s ')
+        #if rfi_8mhz:
+        #    ax.plot(x[loc16],np.zeros_like(loc16),'gs',label = f'step {rfi_8mhz_step:.4f} $\mu$s ')
         if rip_base | rip_1mhz :
-            ax.plot(x[use_a[tn]],np.zeros_like(x[use_a[tn]]),'r^',label = 'base,1mhz,2mhz')
+            ax.plot(x[use_amp[tn]],np.zeros_like(x[use_amp[tn]]),'r^',label = 'base,1mhz,2mhz')
         ax.set_xlim(-.01,2)
         if fft_ylim is not None:
             ax.set_ylim(fft_ylim[0],fft_ylim[1])
@@ -493,15 +513,17 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
         if title is not None:
             ax.set_title(title)
         
-        ax = fig.add_subplot(212) 
+        ax = fig.add_subplot(212)
+        if choose_method != 'all':
+            ax.plot(x,amp_data[tn]-amp_data_inpd[tn],'g',label = f'{choose_method}') 
         ax.plot(x,amp_data[tn], label = 'whole fft')
         ax.plot(x,amp_data_inpd[tn],label = 'sw fft')
         ax.axhline(amp_thr,color = 'k',linestyle='--',label = f'amp thr = {amp_thr:.2f}',alpha=.5)
         if rip_0_04mhz:
-            ax.text(x[loc4],amp_thr,f'{sw_0_04mhz:.4f} MHz',color = 'k',size = 16)
-            ax.plot(x[use_a[tn]],np.zeros_like(x[use_a[tn]]),'ro',label = '0.04mhz')
-        if rfi_8mhz:
-            ax.plot(x[loc16],np.zeros_like(loc16),'gs',label = f'step {rfi_8mhz_step:.4f} $\mu$s ')
+            ax.text(x[loc0_04],amp_thr,f'{sw_0_04mhz:.4f} MHz',color = 'k',size = 16)
+            ax.plot(x[use_amp[tn]],np.zeros_like(x[use_amp[tn]]),'ro',label = '0.04mhz')
+        #if rfi_8mhz:
+        #    ax.plot(x[loc16],np.zeros_like(loc16),'gs',label = f'step {rfi_8mhz_step:.4f} $\mu$s ')
         ax.set_xlim(25,26)
         if fft_ylim is not None:
             ax.set_ylim(fft_ylim[0],fft_ylim[1])
@@ -530,6 +552,8 @@ def fit_ripple(data,freq=None, method='rfft', is_rfi_num=None,not_rfi_num=None,o
         return A_data_ifft        
     elif method == 'mean':
         sw = mean_fit_ripple(data,nspec = nspec )
+    elif method == 'median':
+        sw = med_fit_ripple(data,nspec = nspec )
         
         return sw
     

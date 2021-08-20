@@ -16,14 +16,14 @@ eg:
 ```
 python cli_markRFI.py $subname --outdir ./data \
         --lf --sf --lf_beams ['05','06','13'] \
-        --sf_frange 1380 1382 --sf_times 10 --sf_thr 10 --sf_rfi_last 20 --sf_T_thr .3 \
+        --sf_frange 1380 1382 --sf_times 10 --sf_thr 10 --sf_rfi_last 20 --sf_T_thr_times 3 \
         --lf_frange 1400 1450 --lf_times 1.5 --lf_thr 0 --lf_rfi_last 50 --lf_ext 10 \
         --period_rfi \
         --s_method_freq gaussian --s_sigma_freq 3 --s_method_t boxcar --s_sigma_t 7 \
         --rfi_thr 3 --rms_frange 1400 1403 --mw_frange 1419 1425 --rfi_groups 'two groups' \
         --rfi_width_lim 20 --ext_sec 20 --freq_thr .3 --freq_step 8.1 \
         --mask_RFI_method 'fixed freq' --ext_edge 3 --mask_thr 2 --mask_all_theory --freq_from_theory .5 \
-        --plot -f --save_sf || exit 1 
+        --plot -f --save_tf --vmin_max -.05 .05 || exit 1 
 ```
 ### 时域
 
@@ -36,8 +36,8 @@ python cli_markRFI.py $subname --outdir ./data \
 time_rfi_file = '/data/inspur_disk01/userdir/ucas_students/xuc/FAST/G15/newG15/time_rfi_list.npy'
 python cli_markRFI.py $subname --outdir ./data \
         --sf \
-        --sf_file $time_rfi_file --sf_times 1.8 --sf_thr 0 --sf_rfi_last 20 --sf_T_thr .3 \
-        --plot --ylim -1 5 -f  || exit 1 
+        --sf_file $time_rfi_file --sf_times 1.8 --sf_thr 0 --sf_rfi_last 20 --sf_T_thr_times 3 \
+        --plot --ylim -1 5 --vmin_max -.05 .05 -f  || exit 1 
         
 INFO: Looking for short-freq time RFI in [1378 1384] ... [markRFI]
 Found :D
@@ -51,7 +51,7 @@ Finish
 * --sf_times: 大于各谱线之中，中值的10倍，初步认为异常
 * --sf_thr: 边缘处与附近值的差是中值的倍数，找出时间方向的边缘处陡峭的
 * --sf_rfi_last: 持续出现的谱线数
-* --sf_T_thr: 选定区域后，大于温度阈值的被标记
+* --sf_T_thr_times: 选定区域后，大于温度阈值的被标记
 * --sf_ext: 选定区域后，扩展边缘
 
 * --lf
@@ -62,7 +62,7 @@ Finish
 * --lf_rfi_last: 持续出现的谱线数
 * --lf_ext: 选定区域后，扩展边缘
 
-* --save_sf: 将sf单独保存为```dict_out['short_rfi']```
+* --save_tf: 将sf单独保存为```dict_out['short_rfi']```
 
 输出文件名含tr
 
@@ -103,7 +103,7 @@ Finish
   ```
   python cli_markRFI.py $subname --outdir ./data \
         --sf --lf --lf_beams ['05','06','13'] \
-        --sf_frange 1380 1382 --sf_times 10 --sf_thr 10 --sf_rfi_last 20 --sf_T_thr .3 \
+        --sf_frange 1380 1382 --sf_times 10 --sf_thr 10 --sf_rfi_last 20 --sf_T_thr_times 3 \
         --lf_frange 1400 1450 --lf_times 1.5 --lf_thr 0 --lf_rfi_last 50 --lf_ext 10 \
         --period_rfi \
         --s_method_freq gaussian --s_sigma_freq 3 --s_method_t boxcar --s_sigma_t 7 \
@@ -111,7 +111,7 @@ Finish
         --rfi_width_lim 20 --ext_sec 20 --freq_thr .3 --freq_step 8.1 \
         --mask_RFI_method '2 sides' --ext_edge 10 --mask_thr 2 --freq_from_theory 3\
         --small_rfi_times 2 --chan_step 5 \
-        --plot -f  --save_tf|| exit 1 
+        --plot -f --vmin_max -.05 .05 --save_tf|| exit 1 
   ```
   
 * --time_coherent_per: 如果该频率，例如90%都被标记了，那么整条都被标记为RFI。不怎么用。
@@ -128,7 +128,7 @@ Finish
 * --keep_polar: 保留偏振
 * --keep_rfi: 保留RFI
 * --plot: 画图
-
+* --vmin_max: 瀑布图的上下限
 
 
 ## cli_baseline_fft去驻波
@@ -258,6 +258,7 @@ Finish
 * -c, --cali_fname: 定标源
 * --keep_polar: 保留偏振
 * --plot: 画图
+* --vmin_max: 瀑布图的上下限
 * --no_radec: 没有radec文件的话
 * -sep, --sep_fname: 只分离光谱温度定标的文件。无则自动到输入文件的上一级名为/sep/的文件夹里找含-tr的文件，找不到则在当前路径找。
 
@@ -266,10 +267,10 @@ Finish
 
 ## cli_baseline_mean去基线
 
-* --sub_method: mean，平均前后若干条谱线作为基线
+* --sub_method: mean或median，取平均或中值前后若干条谱线作为基线
 * --nspec: 平均谱线条数，默认10条。过少容易损失信号，过多容易驻波变化了。
 
-输出文件名含mean_bld.
+输出文件名含mean_bld/med_bld
 
 需要注意，由于不同谱线基线不同，还需要使用cli_baseline.py多项式去一次基线。
 

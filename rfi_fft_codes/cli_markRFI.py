@@ -142,6 +142,8 @@ if __name__ == '__main__':
                        help='plot')
     parser.add_argument('--ylim', type=float, nargs=2,
                         help='set ylim in plot')
+    parser.add_argument('--vmin_max', type=float, nargs=2,
+                        help='plot waterfall')
     parser.add_argument('--save_rfi_list', action= 'store_true',
                        help='save rfi freq list in hdf5')
     parser.add_argument('--save_tf', action= 'store_true',
@@ -442,16 +444,16 @@ if __name__ == '__main__':
 
         if plot:    
             print(" 'Wait for plotting patiently, you must.' Master Yoda said.")
-
+            vmin_max = args.vmin_max
             from util import plot_waterfall
             if keep_polar:
-                plot_waterfall(f,data = T_ret[:,:,0], vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
+                plot_waterfall(f,data = T_ret[:,:,0], vmin_max=vmin_max,cmap='plasma',figsize=(18,5),
                                title = os.path.basename(fileout).split('.')[:-1][0] + '_polar xx',pdf = pdf)
 
-                plot_waterfall(f,data = T_ret[:,:,1], vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
+                plot_waterfall(f,data = T_ret[:,:,1], vmin_max=vmin_max,cmap='plasma',figsize=(18,5),
                                title = os.path.basename(fileout).split('.')[:-1][0] + '_polar yy',pdf = pdf)
             else:
-                plot_waterfall(f,data = T_ret, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),
+                plot_waterfall(f,data = T_ret, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),
                                title = os.path.basename(fileout).split('.')[:-1][0] + '_polar merged',pdf = pdf)              
 
             pdf.close()

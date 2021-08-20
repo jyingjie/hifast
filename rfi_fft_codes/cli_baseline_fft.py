@@ -24,8 +24,6 @@ if __name__ == '__main__':
                         help='file name to sub standing waves')
     parser.add_argument('-rfi', '--rfi_fname',
                        help='mask rfi file name')
-    #parser.add_argument('-srfi', '--save_rfi_fname',
-    #                   help='mask rfi file name')
     parser.add_argument('-sep', '--sep_fname',
                        help='sep file name')
     parser.add_argument('-f', '--force', action='store_true',
@@ -92,6 +90,8 @@ if __name__ == '__main__':
                        help='channel numbers near 1mhz to be chosed (wide)')
     parser.add_argument('--chan_narr', type=int, default=3, 
                        help='channel numbers near 1mhz to be chosed (narrow)')
+    parser.add_argument('--choose_method', default='all', choices=['all','interpolate'],
+                       help='method to choose components in fft')
 
     # remove which component in fft ?
     parser.add_argument('--rip_base', action='store_true',
@@ -102,11 +102,11 @@ if __name__ == '__main__':
                        help='remove 1.92mhz ripple')
     parser.add_argument('--rip_0_04mhz', action='store_true',
                        help='remove 0.039 mhz ripple')
-    
-    parser.add_argument('--rfi_8mhz', action='store_true',
-                       help='remove 8.1 mhz components')
-    parser.add_argument('--rfi_8mhz_step', type=float, 
-                       help='big RFI linspace step, freq(\mu s) in Fourier space, nearly 1/16')
+    # DELETE
+    #parser.add_argument('--rfi_8mhz', action='store_true',
+    #                   help='remove 8.1 mhz components')
+    #parser.add_argument('--rfi_8mhz_step', type=float, 
+    #                   help='big RFI linspace step, freq(\mu s) in Fourier space, nearly 1/16')
     parser.add_argument('--fft_ylim', type=float, nargs=2,
                         help='set ylim in plotting fft components')
     
@@ -182,20 +182,23 @@ if __name__ == '__main__':
 
     #fit args
     fit_args = {}
+    cw = args.chan_wide
+    cn = args.chan_narr
+    choose_method = args.choose_method
     if fft_method =='rfft':
-        fit_args['chan_wide'] = args.chan_wide
-        fit_args['chan_narr'] = args.chan_narr
+        fit_args['chan_wide'] = cw
+        fit_args['chan_narr'] = cn
         fit_args['amp_thr_mean_factor'] = args.amp_thr_mean_factor
         fit_args['amp_thr_factor'] = args.amp_thr_factor
-
+        fit_args['choose_method'] = choose_method
         fit_args['rip_base'] = args.rip_base
         fit_args['rip_1mhz'] = args.rip_1mhz
         fit_args['rip_2mhz'] = args.rip_2mhz
         fit_args['rip_0_04mhz'] = args.rip_0_04mhz
         fit_args['fft_ylim'] = args.fft_ylim
-        if args.rfi_8mhz_step is not None:
-            fit_args['rfi_8mhz'] = args.rfi_8mhz
-            fit_args['rfi_8mhz_step'] = args.rfi_8mhz_step
+        #if args.rfi_8mhz_step is not None:
+        #    fit_args['rfi_8mhz'] = args.rfi_8mhz
+        #    fit_args['rfi_8mhz_step'] = args.rfi_8mhz_step
         print("fit_args:",fit_args) 
     else:
         raise ValueError("Unsupport fit baseline ripple method.")
@@ -218,7 +221,13 @@ if __name__ == '__main__':
         fpart += 'n'
     elif rfi_method =='near ripple':
         fpart += 'e'
-        
+    
+    if choose_method == 'all':
+        fpart += 'a'
+    elif choose_method == 'interpolate':
+        fpart += 'i'
+    # test
+    #fpart += f'{cw}_{cn}'    
     if args.trans: fpart += '_T'
     if outdir is None: outdir = os.path.dirname(file_spec)
     fileout = os.path.join(outdir, '.'.join(os.path.basename(file_spec).split('.')[:-1]) + f'{fpart}.hdf5')
@@ -350,57 +359,6 @@ if __name__ == '__main__':
         is_rfi = None;t_rfi = None
         not_rfi_num = np.arange(T.shape[0])
         is_rfi_num = np.array([])
-        
-    '''    
-    # going to save RFI
-    if save_rfi_fname is not None:
-        pass
-    else:
-        rfi_dir_default = os.path.dirname(file_spec).split('/')[:-1]
-        rfi_dir_default.append('rfi_full')
-        
-        rfi_dir_default = '/'.join(rfi_dir_default)
-        outpart = '*-tr*.hdf5'
-        rfi_dir = os.path.join(rfi_dir_default, '.'.join(os.path.basename(file_spec).split('.')[:-1]) + f'{outpart}')
-
-        rfi_fnames = glob(rfi_dir)
-        if len(rfi_fnames) == 1:
-            save_rfi_fname = rfi_fnames[0]
-        elif len(rfi_fnames) == 0:
-            rfi_dir = os.path.join(os.path.dirname(file_spec),'.'.join(os.path.basename(file_spec).split('.')[:-1]) + f'{outpart}')
-            rfi_fnames = glob(rfi_dir)
-            if len(rfi_fnames) == 1:
-                save_rfi_fname = rfi_fnames[0]
-            
-    
-    if rfi_fname is not None:
-        srfi = h5py.File(save_rfi_fname,'r')
-        print(f"Find save rfi file {save_rfi_fname}")
-        
-        if 'is_rfi' in srfi.keys():
-            is_srfi = srfi['is_rfi'][()]
-            
-            srfi.close()
-            if len(is_srfi.shape) == 3:
-                # use 2D rfi mask
-                is_srfi = is_srfi[:,:,0]|is_srfi[:,:,1]
-        else:
-            if 'T' in srfi.keys():
-                Tr = srfi['T'][()]
-            elif 'Ta' in srfi.keys():
-                Tr = srfi['Ta'][()]
-            elif 'flux' in srfi.keys():
-                Tr = srfi['flux'][()]
-            else:
-                print(f"{srfi.keys()}")
-                raise ValueError(f"srfi keys don't have 'T','Ta' or 'flux'.")
-            if len(Tr.shape) == 3:
-                Tr = np.mean(Tr, axis=2, dtype='float64')
-            is_srfi = np.isnan(Tr)  
-    else:
-        is_srfi = deecopy(is_rfi)
-    '''
-    is_srfi = deepcopy(is_rfi)
 
     freq = fs['freq'][:]
     fdelta = freq[1] - freq[0]
@@ -626,10 +584,8 @@ if __name__ == '__main__':
     dict_out[outfield] = rmsw_data.astype('float32')
     #dict_out['ripple'] = sw_fit.astype('float32')
     dict_out['freq'] = freq
-    if is_srfi is not None:
-        dict_out['is_rfi'] = is_srfi
-    #if save_rfi_name is not None:
-    #    srfi.close()
+    if is_rfi is not None:
+        dict_out['is_rfi'] = is_rfi
     if rfi_fname != 'none':      
         rfi.close()
     if is_extrapo is not None:

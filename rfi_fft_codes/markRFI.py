@@ -664,9 +664,10 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
     #from markRFI import get_startend
     try:
         start,end = get_startend(is_pat,rfi_width_lim = rfi_width_lim,ext_sec=0)
-    except ValueError :
-        import traceback
-        traceback.print_exc() 
+    except ValueError as V:
+        #import traceback
+        #traceback.print_exc() 
+        #print(f"{V}.Not found.")
         return  is_timerfi
        
     pat_diff = np.abs(np.diff(pat_mean,append = 0))
@@ -754,8 +755,8 @@ def mask_time_rfi(data,freq,T_thr_times = None,rtype = 'short-freq',frange = Non
                 if franges.shape[1] != 2:
                     raise ValueError("time RFI freq shape must like (n,2)")
             elif (file is None) & (frange is None):
-                frq1 = np.arange(freq[0],freq[-1],frange_step)
-                frq2 = np.hstack((start[1:],freq[-1]))
+                frq1 = np.arange(freq[0],freq[-1],frange_step//2)[:-1]
+                frq2 = np.hstack((np.arange(freq[0]+frange_step,freq[-1],frange_step//2),freq[-1]))
                 franges = np.vstack((frq1,frq2)).T
 
             for nf in range(franges.shape[0]):

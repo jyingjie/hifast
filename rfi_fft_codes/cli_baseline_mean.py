@@ -36,7 +36,7 @@ if __name__ == '__main__':
                        help='quasar calibration file name')
  
 
-    parser.add_argument('--sub_method', default='mean', choices=['mean'],
+    parser.add_argument('--sub_method', default='mean', choices=['mean','median'],
                        help='method to remove baseline')
     parser.add_argument('--nspec',type=int, default=10,
                         help='average how many specs to fit baseline.')
@@ -49,6 +49,13 @@ if __name__ == '__main__':
                        help='plot')
     parser.add_argument('--no_radec', action='store_true',
                        help='do not check radec')
+    
+    parser.add_argument('--ylim', type=float, nargs=2,
+                        help='set ylim in plotting spec')
+    parser.add_argument('--vmin_max', type=float, nargs=2,
+                        help='vmin vmax in plotting waterfall')
+    parser.add_argument('--one_spec', action='store_true',
+                       help='plot only one spec or mean specs')
     
     
     args = parser.parse_args()
@@ -67,7 +74,9 @@ if __name__ == '__main__':
     
     fpart = '-flux_' if args.flux else '-'
     if sub_method == 'mean': 
-        fpart += 'mean_bld'
+        fpart += f'mean{nspec}_bld'
+    elif sub_method == 'median': 
+        fpart += f'med{nspec}_bld'
 
     if args.trans: fpart += '_T'
     if outdir is None: outdir = os.path.dirname(file_spec)
@@ -170,13 +179,13 @@ if __name__ == '__main__':
             ori_shape = T_xx.shape
             print("polar xx ...")
             # get standing waves
-            sw_fit_xx = fit_ripple(T_xx,method = 'mean', nspec = nspec)
+            sw_fit_xx = fit_ripple(T_xx,method = sub_method, nspec = nspec)
             print("polar yy ...")
-            sw_fit_yy = fit_ripple(T_yy,method = 'mean', nspec = nspec)
+            sw_fit_yy = fit_ripple(T_yy,method = sub_method, nspec = nspec)
             
         else:
             T = np.mean(T, axis=2, dtype='float64')   
-            sw_fit = fit_ripple(T,method = 'mean', nspec = nspec)
+            sw_fit = fit_ripple(T,method = sub_method, nspec = nspec)
     else:
         raise ValueError('data should be 3D, and has 2 polars') 
 
@@ -188,30 +197,51 @@ if __name__ == '__main__':
     rmsw_data = T - sw_fit
            
     if plot:
+        ylim = args.ylim
+        vmin_max = args.vmin_max
+        one_spec = args.one_spec
         print(" 'Wait for plotting patiently, you must.' Master Yoda said")
         tn = 10
-        def plot_in_pdf(T,sw_fit,rmsw_data,polar,pdf = None):
+        def plot_in_pdf(T,sw_fit,rmsw_data,polar,pdf = None,one_spec = False,
+                        ylim = None,vmin_max=None):
             global tn, freq
             fig = plt.figure(figsize=(40,4))
             ax = fig.add_subplot(111)
-            ax.hlines([0,-.5],1320,1440,alpha = .8)
-            ax.plot(freq,np.mean(T[tn-5:tn+5,:],axis = 0),label='original')
-            ax.plot(freq,np.mean(sw_fit[tn-5:tn+5,:],axis = 0),label='ripple')
-            #ax.plot(freq,np.mean(rmsw_data[tn-5:tn+5,:],axis = 0) - .5,label='result')
-            ax.grid();ax.legend();ax.set_title(f'ten specs mean, polar {polar}')
-            ax.set_xlim(1320,1440)
+            if not one_spec:
+                ax.hlines([0,-.5],freq[0],freq[-1],alpha = .8)
+                ax.plot(freq,np.mean(T[tn-5:tn+5,:],axis = 0),label='original')
+                ax.plot(freq,np.mean(sw_fit[tn-5:tn+5,:],axis = 0),label='ripple')
+                ax.plot(freq,np.mean(rmsw_data[tn-5:tn+5,:],axis = 0) - .5,label='result')
+                ax.set_title(f'ten specs mean, polar {polar}')
+                if ylim is not None:
+                    ax.set_ylim(ylim[0],ylim[1])
+            else:
+                ax.hlines([0,-2],freq[0],freq[-1],alpha = .8)
+                ax.plot(freq,T[tn,:],label='original')
+                ax.plot(freq,sw_fit[tn,:],label='ripple')
+                ax.plot(freq,rmsw_data[tn,:] - 2,label='result')
+                ax.set_title(f'single spec, polar {polar}')
+                if ylim is not None:
+                    ax.set_ylim(ylim[0],ylim[1])
+            ax.grid();ax.legend();
+            ax.set_xlim(freq[0],freq[-1])
             pdf.savefig();plt.close()
 
             from util import plot_waterfall
+            plot_waterfall(fs,data = T, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),
+                           title = os.path.basename(file_spec).split('.')[:-1][0],pdf = pdf)
 
-            plot_waterfall(fs,data = rmsw_data, vmin_max=[-.05,.05],cmap='plasma',figsize=(18,5),pdf = pdf,
+            plot_waterfall(fs,data = rmsw_data, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),pdf = pdf,
                            title = f'remove baseline, polar {polar}')
             
         if keep_polar:
-            plot_in_pdf(T_xx,sw_fit_xx,rmsw_data[:,:,0],polar='xx',pdf = pdf)
-            plot_in_pdf(T_yy,sw_fit_yy,rmsw_data[:,:,1],polar='yy',pdf = pdf)
+            plot_in_pdf(T_xx,sw_fit_xx,rmsw_data[:,:,0],polar='xx',pdf = pdf,
+                        one_spec = one_spec, ylim = ylim,vmin_max=vmin_max)
+            plot_in_pdf(T_yy,sw_fit_yy,rmsw_data[:,:,1],polar='yy',pdf = pdf,
+                       one_spec = one_spec, ylim = ylim,vmin_max=vmin_max)
         else:
             plot_in_pdf(T,sw_fit,rmsw_data,polar='merged',pdf = pdf)
+
         
         pdf.close()
         log.info(f"Plot to {pdfname}")
