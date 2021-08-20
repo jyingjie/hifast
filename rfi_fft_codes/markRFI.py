@@ -620,7 +620,7 @@ def find_RFI(spec,freq,is_rfi,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge 
 ####################### time rfi ########################
 
 def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
-           ext_add = 0,plot = False,pdf = None,ylim = None):
+           ext_add = 0,plot = False,pdf = None,ylim = None,plot_lf=True):
     """
     data: 2D arrays
     frange: like [a,b]
@@ -645,7 +645,7 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
     
     is_pat = pat_mean > pat_med * times
     if is_pat.any() == False:
-        if plot:  
+        if plot_lf:  
             if pdf is not None:
                 plt.switch_backend('agg')
             fig,ax = plt.subplots(figsize = (15,3))
@@ -714,7 +714,7 @@ def mask_sf(data,freq,T_thr_times = None,frange = None,RMS = None,**kwargs):
     
     f_use = (freq>frange[0])&(freq<frange[1])
     
-    is_timerfi = find_t(data,freq,frange =frange, **kwargs)
+    is_timerfi = find_t(data,freq,frange =frange,plot_lf = False,**kwargs)
     
     if is_timerfi.any() == False:
         return ret
