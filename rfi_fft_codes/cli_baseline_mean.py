@@ -22,6 +22,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument('fname',
                         help='sep file name to sub baseline')
+    parser.add_argument('-rfi', '--rfi_fname',
+                       help='mask rfi file name')
     parser.add_argument('-f', '--force', action='store_true',
                         help='overwriting file if out file exists')
     parser.add_argument('--frange', type=float, nargs=2,
@@ -40,6 +42,8 @@ if __name__ == '__main__':
                        help='method to remove baseline')
     parser.add_argument('--nspec',type=int, default=10,
                         help='average how many specs to fit baseline.')
+    parser.add_argument('--func', default='iter', choices=['iter','smooth'],
+                       help='function to mean or median')
     
     parser.add_argument('-T', '--trans', action='store_true',
                        help='trans')
@@ -56,7 +60,8 @@ if __name__ == '__main__':
                         help='vmin vmax in plotting waterfall')
     parser.add_argument('--one_spec', action='store_true',
                        help='plot only one spec or mean specs')
-    
+    parser.add_argument('--fill_rfi', default='rfi', choices=['nan','rfi'],
+                       help='keep rfi')
     
     args = parser.parse_args()
     file_spec = args.fname
@@ -67,8 +72,12 @@ if __name__ == '__main__':
     sub_method = args.sub_method
     keep_polar = args.keep_polar
 
-    if sub_method in ['mean']:
+    if sub_method in ['mean','median']:
+        fit_args = {}
         nspec = args.nspec
+        fit_args['nspec'] = nspec
+        fit_args['func'] = args.func
+        print("fit args:",fit_args)
     else:
         raise ValueError("Unsupport fit baseline ripple method.")
     
@@ -139,13 +148,69 @@ if __name__ == '__main__':
     ra = ra[ind_sort]
     dec = dec[ind_sort]
     T = T[ind_sort]
+        
+    # read RFI
+    from glob import glob
+    rfi_fname = args.rfi_fname
+    
+    if rfi_fname is not None:
+        if rfi_fname == 'none':
+            print("Don't use rfi file.")
+    else:
+        rfi_dir_default = os.path.dirname(file_spec).split('/')[:-1]
+        rfi_dir_default.append('rfi')
+        
+        rfi_dir_default = '/'.join(rfi_dir_default)
+        outpart = '*-tr*.hdf5'
+        rfi_dir = os.path.join(rfi_dir_default, '.'.join(os.path.basename(file_spec).split('.')[:-1]) + f'{outpart}')
 
+        rfi_fnames = glob(rfi_dir)
+        if len(rfi_fnames) == 1:
+            rfi_fname = rfi_fnames[0]
+        elif len(rfi_fnames) == 0:
+            rfi_dir = os.path.join(os.path.dirname(file_spec),'.'.join(os.path.basename(file_spec).split('.')[:-1]) + f'{outpart}')
+            rfi_fnames = glob(rfi_dir)
+            if len(rfi_fnames) < 3:
+                rfi_fname = rfi_fnames[0]
+            else:
+                raise FileNotFoundError("Where is rfi mask?")
+        else:
+            raise FileNotFoundError("Which rfi mask do you want? ")
+    
+    if rfi_fname != 'none':
+        rfi = h5py.File(rfi_fname,'r')
+        print(f"Find rfi file {rfi_fname}")
+        
+        if 'is_rfi' in rfi.keys():
+            is_rfi = rfi['is_rfi'][()]
+                
+            rfi.close()
+            if len(is_rfi.shape) == 3:
+                # use 2D rfi mask
+                is_rfi = is_rfi[:,:,0]|is_rfi[:,:,1]
+        else:
+            if 'T' in rfi.keys():
+                Tr = rfi['T'][()]
+            elif 'Ta' in rfi.keys():
+                Tr = rfi['Ta'][()]
+            elif 'flux' in rfi.keys():
+                Tr = rfi['flux'][()]
+            else:
+                print(f"{rfi.keys()}")
+                raise ValueError(f"rfi keys don't have 'T','Ta' or 'flux'.")
+            if len(Tr.shape) == 3:
+                Tr = np.mean(Tr, axis=2, dtype='float64')
+            is_rfi = np.isnan(Tr)
+    else:
+        is_rfi = None 
+    
     freq = fs['freq'][:]
     if frange is not None:
         is_ = (freq >= frange[0]) & (freq <= frange[1])
         freq = freq[is_]
         T = T[:,is_,:]
-    
+        is_rfi = is_rfi[:,is_]
+        
     # try to load header
     if 'Header' in fs.keys():
         from collections import OrderedDict
@@ -161,7 +226,7 @@ if __name__ == '__main__':
         T = T.transpose((1,0,2))
         if flux:
             raise()     
-  
+    T_ori = deepcopy(T)
     if flux:
         ra = comm.scatter(ra, root=0)
         dec = comm.scatter(dec, root=0)
@@ -169,6 +234,11 @@ if __name__ == '__main__':
         print('Flux calibrating ...')
         T = cali_src(T, nB, freq, cali_fname, ra=ra, dec=dec, mjd=mjd)
     
+    if rfi_fname != 'none':
+        if keep_polar:
+            T[is_rfi,:] = np.nan
+        else:
+            T[is_rfi] = np.nan
     
     from baseline_2 import fit_ripple
     if len(T.shape) == 3:
@@ -179,13 +249,13 @@ if __name__ == '__main__':
             ori_shape = T_xx.shape
             print("polar xx ...")
             # get standing waves
-            sw_fit_xx = fit_ripple(T_xx,method = sub_method, nspec = nspec)
+            sw_fit_xx = fit_ripple(T_xx,method = sub_method, **fit_args)
             print("polar yy ...")
-            sw_fit_yy = fit_ripple(T_yy,method = sub_method, nspec = nspec)
+            sw_fit_yy = fit_ripple(T_yy,method = sub_method,  **fit_args)
             
         else:
             T = np.mean(T, axis=2, dtype='float64')   
-            sw_fit = fit_ripple(T,method = sub_method, nspec = nspec)
+            sw_fit = fit_ripple(T,method = sub_method,  **fit_args)
     else:
         raise ValueError('data should be 3D, and has 2 polars') 
 
@@ -194,7 +264,15 @@ if __name__ == '__main__':
         sw_fit = np.append(sw_fit_xx,sw_fit_yy)
         sw_fit = sw_fit.reshape((2,ori_shape[0],ori_shape[1])).transpose((1,2,0))
 
-    rmsw_data = T - sw_fit
+    rmsw_data = T_ori - sw_fit
+    fill_rfi = args.fill_rfi
+    # fill rfi with ?
+    if fill_rfi == 'nan':
+        if rfi_fname != 'none':
+            rmsw_data[is_rfi] = np.nan
+    elif fill_rfi == 'rfi':
+        pass
+    
            
     if plot:
         ylim = args.ylim
@@ -202,7 +280,7 @@ if __name__ == '__main__':
         one_spec = args.one_spec
         print(" 'Wait for plotting patiently, you must.' Master Yoda said")
         tn = 10
-        def plot_in_pdf(T,sw_fit,rmsw_data,polar,pdf = None,one_spec = False,
+        def plot_in_pdf(T,sw_fit,rmsw_data,polar,pdf = None,one_spec = False,frange = None,
                         ylim = None,vmin_max=None):
             global tn, freq
             fig = plt.figure(figsize=(40,4))
@@ -228,19 +306,19 @@ if __name__ == '__main__':
             pdf.savefig();plt.close()
 
             from util import plot_waterfall
-            plot_waterfall(fs,data = T, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),
+            plot_waterfall(fs,data = T, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),xrange = frange,
                            title = os.path.basename(file_spec).split('.')[:-1][0],pdf = pdf)
 
-            plot_waterfall(fs,data = rmsw_data, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),pdf = pdf,
+            plot_waterfall(fs,data = rmsw_data, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),pdf = pdf,xrange = frange,
                            title = f'remove baseline, polar {polar}')
             
         if keep_polar:
-            plot_in_pdf(T_xx,sw_fit_xx,rmsw_data[:,:,0],polar='xx',pdf = pdf,
+            plot_in_pdf(T_xx,sw_fit_xx,rmsw_data[:,:,0],polar='xx',pdf = pdf,frange = frange,
                         one_spec = one_spec, ylim = ylim,vmin_max=vmin_max)
-            plot_in_pdf(T_yy,sw_fit_yy,rmsw_data[:,:,1],polar='yy',pdf = pdf,
+            plot_in_pdf(T_yy,sw_fit_yy,rmsw_data[:,:,1],polar='yy',pdf = pdf,frange = frange,
                        one_spec = one_spec, ylim = ylim,vmin_max=vmin_max)
         else:
-            plot_in_pdf(T,sw_fit,rmsw_data,polar='merged',pdf = pdf)
+            plot_in_pdf(T,sw_fit,rmsw_data,polar='merged',pdf = pdf,frange = frange)
 
         
         pdf.close()

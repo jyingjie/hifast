@@ -227,7 +227,15 @@ if __name__ == '__main__':
     elif choose_method == 'interpolate':
         fpart += 'i'
     # test
-    #fpart += f'{cw}_{cn}'    
+    #fpart += f'{cw}_{cn}'  
+    
+    s_method_freq = args.s_method_freq
+    s_sigma_freq = args.s_sigma_freq
+    s_method_t = args.s_method_t
+    s_sigma_t = args.s_sigma_t
+    if (s_method_freq is not 'None') or (s_method_t is not 'None'):
+        fpart += 's'
+    
     if args.trans: fpart += '_T'
     if outdir is None: outdir = os.path.dirname(file_spec)
     fileout = os.path.join(outdir, '.'.join(os.path.basename(file_spec).split('.')[:-1]) + f'{fpart}.hdf5')
@@ -439,10 +447,7 @@ if __name__ == '__main__':
         T = cali_src(T, nB, freq, cali_fname, ra=ra, dec=dec, mjd=mjd)
     
     ########################### smooth ###############################3
-    s_method_freq = args.s_method_freq
-    s_sigma_freq = args.s_sigma_freq
-    s_method_t = args.s_method_t
-    s_sigma_t = args.s_sigma_t
+    
     def do_smooth(T,s_method_t,s_sigma_t,s_method_freq,s_sigma_freq):
         from hifast.utils.misc import smooth1d
         if  s_method_t in ['gaussian', 'boxcar', 'median']:
@@ -482,7 +487,8 @@ if __name__ == '__main__':
                                    is_on = is_on, plot = plot,pdf=pdf,title='polar yy',**fit_args)
             
         else:
-            T = np.mean(T, axis=2, dtype='float64')   
+            T = np.mean(T, axis=2, dtype='float64')
+            T_ori = deepcopy(T)
             ori_shape = T.shape
             
             # replace big rfi
@@ -517,7 +523,7 @@ if __name__ == '__main__':
         one_spec = args.one_spec
         print(" 'Wait for plotting patiently, you must.' Master Yoda said.")
         tn = not_rfi_num[10]
-        def plot_in_pdf(data_rep,T,sw_fit,rmsw_data,polar,pdf = None,one_spec = False,
+        def plot_in_pdf(data_rep,T,sw_fit,rmsw_data,polar,pdf = None,one_spec = False,frange = None,
                         ylim = None,vmin_max=None):
             global tn, freq
             fig = plt.figure(figsize=(40,4))
@@ -545,19 +551,19 @@ if __name__ == '__main__':
             pdf.savefig();plt.close()
 
             from util import plot_waterfall
-            plot_waterfall(fs,data = T, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),
+            plot_waterfall(fs,data = T, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),xrange = frange,
                            title = os.path.basename(file_spec).split('.')[:-1][0],pdf = pdf)
 
-            plot_waterfall(fs,data = rmsw_data, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),pdf = pdf,
+            plot_waterfall(fs,data = rmsw_data, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),pdf = pdf,xrange = frange,
                            title = f'remove standing waves, polar {polar}')
             
         if keep_polar:
-            plot_in_pdf(data_rep_xx,T_xx,sw_fit_xx,rmsw_data[:,:,0],polar='xx',pdf = pdf,
+            plot_in_pdf(data_rep_xx,T_xx,sw_fit_xx,rmsw_data[:,:,0],polar='xx',pdf = pdf,frange=frange,
                         one_spec = one_spec, ylim = ylim,vmin_max=vmin_max)
-            plot_in_pdf(data_rep_yy,T_yy,sw_fit_yy,rmsw_data[:,:,1],polar='yy',pdf = pdf,
+            plot_in_pdf(data_rep_yy,T_yy,sw_fit_yy,rmsw_data[:,:,1],polar='yy',pdf = pdf,frange=frange,
                        one_spec = one_spec, ylim = ylim,vmin_max=vmin_max)
         else:
-            plot_in_pdf(data_rep,T,sw_fit,rmsw_data,polar='merged',pdf = pdf)
+            plot_in_pdf(data_rep,T,sw_fit,rmsw_data,polar='merged',pdf = pdf,frange=frange,)
         
         pdf.close()
         log.info(f"Plot to {pdfname}")
@@ -572,7 +578,7 @@ if __name__ == '__main__':
     # fill rfi with ?
     if fill_rfi == 'nan':
         if rfi_fname != 'none':
-            rmsw_data[is_srfi] = np.nan
+            rmsw_data[is_rfi] = np.nan
     elif fill_rfi == 'rfi':
         pass
     

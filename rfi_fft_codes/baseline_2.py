@@ -200,7 +200,7 @@ def repalce_near(data,freq,time_rfi,mw_use=None,times_lower_thr=None,rms_sigma =
         time_rfi = np.full(data.shape,False)
 
     if mw_use is None:
-        mw = np.full(freq.shape,False)
+        mw_use = np.full(freq.shape,False)
         
     data_rep = np.full(data.shape,np.nan)
     from hifast.utils.misc import extend_Trues
@@ -308,45 +308,8 @@ def replace_rfi(data,freq,is_rfi = None,time_rfi = None, method='subtract with p
         
     return data_rep  
 
-############################## fft #####################################
+############################## fit ripple #####################################
 
-def mean_fit_ripple(data, nspec):
-    n = nspec // 2
-    
-    tlen = data.shape[0]
-    t1 = np.arange(tlen)-n
-    t2 = np.arange(tlen)+n
-    t1[t1 < 0] = 0;t2[t2 < 2*n] = 2*n
-    t1[t1 > tlen - 2*n -1] = tlen - 2*n -1;t2[t2 > tlen -1] = tlen -1
-    
-    sw = np.zeros_like(data)
-    if len(data.shape) == 2:
-        for i in tqdm(range(tlen)):
-            sw[i,:] = np.mean(data[t1[i]:t2[i],:],axis = 0)
-    elif len(data.shape) == 3:
-        for i in tqdm(range(tlen)):
-            sw[i,:,0] = np.mean(data[t1[i]:t2[i],:,0],axis = 0)
-            sw[i,:,1] = np.mean(data[t1[i]:t2[i],:,1],axis = 0)
-    return sw
-
-def med_fit_ripple(data, nspec):
-    n = nspec // 2
-    
-    tlen = data.shape[0]
-    t1 = np.arange(tlen)-n
-    t2 = np.arange(tlen)+n
-    t1[t1 < 0] = 0;t2[t2 < 2*n] = 2*n
-    t1[t1 > tlen - 2*n -1] = tlen - 2*n -1;t2[t2 > tlen -1] = tlen -1
-    
-    sw = np.zeros_like(data)
-    if len(data.shape) == 2:
-        for i in tqdm(range(tlen)):
-            sw[i,:] = np.median(data[t1[i]:t2[i],:],axis = 0)
-    elif len(data.shape) == 3:
-        for i in tqdm(range(tlen)):
-            sw[i,:,0] = np.median(data[t1[i]:t2[i],:,0],axis = 0)
-            sw[i,:,1] = np.median(data[t1[i]:t2[i],:,1],axis = 0)
-    return sw
         
 def find_loc(amp,x,amp_thr,xlim,rip_mhz=True,Print=True):
     """
@@ -377,7 +340,7 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
                    amp_thr_factor = 1.5,is_on = None,chan_wide = 5,chan_narr = 3,choose_method = 'all',
                    rip_base = True,rip_1mhz= True,rip_2mhz = False,rip_0_04mhz = False,
                    plot = False,pdf = None,title = None,fft_ylim = None,
-        ):
+                   quick_test = False, fftf = None,amp_data = None, x = None, tn = None):
     """
     fit baseline ripple (standing wave) by FFT
     Parameter:
@@ -399,9 +362,10 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
     #is_off_num = np.arange(data_rep.shape[0])[~is_on]
     
     # FFT
-    fftf = FFT(data_rep, freq)
-    x = fftf.x
-    amp_data = fftf.amp
+    if not quick_test:
+        fftf = FFT(data_rep, freq)
+        x = fftf.x
+        amp_data = fftf.amp
     
     amp = np.mean(amp_data,axis=0)
     amp_on = np.mean(amp_data[is_on],axis=0)
@@ -415,7 +379,7 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
     # ripples freq in fourier space
     # 1 mhz
     loc1,sw_1mhz,rip_1mhz = find_loc(amp,x,amp_thr,rip_mhz=rip_1mhz,xlim=[.90,.95])
-    loc1_,sw_1mhz_,_ = find_loc(amp,x,amp_thr,rip_mhz=rip_1mhz,xlim=[1.8,2])
+    loc1_,sw_1mhz_,_ = find_loc(amp,x,amp_thr,rip_mhz=rip_1mhz,xlim=[1.8,1.9])
     loc1s = np.array([loc1,loc1_])
     # 2 mhz
     loc2,sw_2mhz,rip_2mhz = find_loc(amp,x,amp_thr,rip_mhz=rip_2mhz,xlim=[.5,.6])
@@ -479,7 +443,8 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
     print("Finished ifft.")
     
     if plot:
-        tn = not_rfi_num[10]
+        if not quick_test:
+            tn = not_rfi_num[10]
         if pdf is not None:
             plt.switch_backend('agg')   
             
@@ -533,6 +498,8 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
         plt.tight_layout()
         if pdf is not None:
             pdf.savefig();plt.close()
+        else:
+            plt.show()
 
     if len(is_rfi_num)>0:
         A_data_ifft_ = np.full(ori_shape,np.nan)
@@ -541,7 +508,68 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
     
     return A_data_ifft
 
-def fit_ripple(data,freq=None, method='rfft', is_rfi_num=None,not_rfi_num=None,ori_shape=None,nspec = None,
+
+
+def mean_fit_ripple(data, nspec,func = 'iter'):
+    
+    n = nspec // 2
+    if func == 'iter':
+        print(f'mean {2*n}')
+        import bottleneck as bn
+        tlen = data.shape[0]
+        t1 = np.arange(tlen)-n
+        t2 = np.arange(tlen)+n
+        t1[t1 < 0] = 0;t2[t2 < 2*n] = 2*n
+        t1[t1 > tlen - 2*n -1] = tlen - 2*n -1;t2[t2 > tlen -1] = tlen -1
+
+        sw = np.zeros_like(data)
+        if len(data.shape) == 2:
+            for i in tqdm(range(tlen)):
+                sw[i,:] = bn.nanmean(data[t1[i]:t2[i],:],axis = 0)
+        elif len(data.shape) == 3:
+            for i in tqdm(range(tlen)):
+                sw[i,:,0] = bn.nanmean(data[t1[i]:t2[i],:,0],axis = 0)
+                sw[i,:,1] = bn.nanmean(data[t1[i]:t2[i],:,1],axis = 0)
+                
+    elif func == 'smooth':
+        print(f'mean {2*n+1}')
+        from hifast.utils.misc import smooth1d
+        s_method_t = 'boxcar'
+        print('Smooth ing ...')
+        sw = smooth1d(data,axis = 0,sigma = n, method = s_method_t)
+    return sw
+
+def med_fit_ripple(data, nspec,func = 'iter'):
+    
+    n = nspec // 2
+    if func == 'iter':
+        print(f'median {2*n}')
+        import bottleneck as bn
+    
+        tlen = data.shape[0]
+        t1 = np.arange(tlen)-n
+        t2 = np.arange(tlen)+n
+        t1[t1 < 0] = 0;t2[t2 < 2*n] = 2*n
+        t1[t1 > tlen - 2*n -1] = tlen - 2*n -1;t2[t2 > tlen -1] = tlen -1
+
+        sw = np.zeros_like(data)
+        if len(data.shape) == 2:
+            for i in tqdm(range(tlen)):
+                sw[i,:] = bn.nanmedian(data[t1[i]:t2[i],:],axis = 0)
+        elif len(data.shape) == 3:
+            for i in tqdm(range(tlen)):
+                sw[i,:,0] = bn.nanmedian(data[t1[i]:t2[i],:,0],axis = 0)
+                sw[i,:,1] = bn.nanmedian(data[t1[i]:t2[i],:,1],axis = 0)
+    elif func == 'smooth':
+        print(f'median {2*n+1}')
+        from hifast.utils.misc import smooth1d
+        s_method_t = 'median'
+        print('Smooth ing ...')
+        sw = smooth1d(data,axis = 0,sigma = n, method = s_method_t)            
+    
+    return sw
+
+def fit_ripple(data,freq=None, method='rfft', is_rfi_num=None,not_rfi_num=None,ori_shape=None,
                plot = False,pdf = None,title = None,is_on = None,**fit_args): 
     
     log.info(f"Fit baseline ripple with {method} method ...")
@@ -551,10 +579,10 @@ def fit_ripple(data,freq=None, method='rfft', is_rfi_num=None,not_rfi_num=None,o
         
         return A_data_ifft        
     elif method == 'mean':
-        sw = mean_fit_ripple(data,nspec = nspec )
+        sw = mean_fit_ripple(data,**fit_args)
+        return sw
     elif method == 'median':
-        sw = med_fit_ripple(data,nspec = nspec )
-        
+        sw = med_fit_ripple(data,**fit_args)
         return sw
     
     
