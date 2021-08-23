@@ -27,7 +27,8 @@ python cli_markRFI.py $subname --outdir ./data \
 ```
 ### 时域
 
-* --time_rfi：标记时域上突然出现的RFI，根据占据的频率长度，分为short-freq/long-freq。对该频率区间内的所有谱线做频率方向的平均后，画出一维的图。
+* --time_rfi：标记时域上突然出现的RFI，根据占据的频率长度，分为short-freq/long-freq。
+    对该频率区间内的所有谱线做频率方向的平均后，画出一维的图。如果有--lf或--sf，可以省略--time_rfi
 
 * --sf
 * --sf_frange: 一个典型的1～2MHz宽时域RFI，经常出现在1380～1382MHz。
@@ -46,6 +47,15 @@ Found :D
 INFO: Looking for short-freq time RFI in [1320 1325] ... [markRFI]
 Found :D
 Finish
+```
+* --sf_frange_step:如果sf_frange和sf_file不指定，将以这个step(MHz)在频率上循环，对每个区间找一次时域RFI
+```
+python cli_markRFI.py $subname \
+        --outdir $outdir \
+        --mw_frange 1420.3 1423.3 --sf_frange_step 20 \
+        --sf --sf_times 3 --sf_thr 0 --sf_rfi_last 10 --sf_T_thr_times 3 \
+        --lf --lf_frange 1400 1450 --lf_times 1.5 --lf_thr 0 --lf_rfi_last 50 --lf_ext 10 \
+        --plot --ylim -.5 .5 --vmin_max -.05 .05 -f  || exit 1 
 ```
 
 * --sf_times: 大于各谱线之中，中值的10倍，初步认为异常
@@ -145,16 +155,18 @@ Finish
 
 1. 'near ripple'使用高流量处附近的驻波替代。例如
     ```
-    python cli_baseline_fft.py $subname --outdir $outdir \
-        -sep $sepname   -rfi 'none' \
-        --mw_frange 1420.2 1420.55 --rms_sigma 6 --rms_frange 1390 1400 \
-        --rfi_method 'near ripple' --times_lower_thr 7 \
-        --rfi_width_lim 15 --ext_sec 20 --ext_freq 1.3 \
-        \
-        --fft_method rfft --chan_wide 5 --chan_narr 3 \
-        --amp_thr_mean_factor 1.05 --amp_thr_factor 1.4 \
-        --rip_base --rip_1mhz --rip_2mhz --rip_0_04mhz --fft_ylim -5 130 \
-        --plot --ylim -1 .5 --vmin_max -.15 .15 -f --fill_rfi nan --keep_polar || exit 1 
+    fname = subnames[1]
+    outdir = './data'
+    sepname='/data/inspur_disk01/userdir/jyj/FAST/jingyj/M31_snapshot/data/M31_SnapShot_6_snapshot-M'
+    python cli_baseline_fft.py $fname --outdir $outdir \
+            -sep $sepname  --s_method_t boxcar --s_sigma_t 100 \
+            --mw_frange 1420.3 1423.3 --rms_sigma 6 --rms_frange 1390 1400 \
+            --rfi_method 'near ripple' --times_lower_thr 4 \
+            --rfi_width_lim 15 --ext_sec 20 --ext_freq 1.3 \
+            --fft_method rfft --chan_wide 10 --chan_narr 3 \
+            --amp_thr_mean_factor 3 --amp_thr_factor 4 --choose_method 'interpolate' \
+            --rip_base --rip_1mhz --rip_0_04mhz --fft_ylim -5 60 \
+            --plot --ylim -1 .5 --vmin_max -.05 .05 -f --fill_rfi nan --keep_polar || exit 1 
     ```
     * 只需要已知时域rfi的文件，即*-tr*。    
       如果没有时域RFI，设置-rfi 'none'即可。
@@ -238,14 +250,12 @@ Finish
 * --amp_thr_factor: fourier空间的每一谱线的振幅大于阈值，会被选中为驻波一部分被去除。这里输入的是中值的倍数
 * --chan_wide: 距离驻波的模的中心左右各(2 * chann - 1)个通道数的模，作为驻波的一部分被选中，这里为由于fourier空间中峰比较宽，多选一些
   --chan_narr: 同理，窄一些的
+* --choose_method: 选择fourier模的方法，'all'或者'interpolate'
   
 * --rip_base: 去除基频(实空间的常数)
 * --rip_1mhz: fft去除1.08mhz 驻波，单镜都有的
 * --rip_2mhz: fft去除1.92mhz 驻波，只有M06 yy有
 * --rip_0_04mhz: fft去除0.039mhz 驻波，很弱的偏振驻波，由于光纤反射
-
-* --rfi_8mhz: fft去除一部分8.1mhz rfi，2021.7.28后的新数据做好了压缩机电源屏蔽，已经没有了
-* --rfi_8mhz_step: 残余的8.1MHzRFI，在fourier空间间隔为1/16.2$\mu$s左右
 
 * --fft_ylim: 画fft模的上下限 
 
@@ -269,6 +279,13 @@ Finish
 
 * --sub_method: mean或median，取平均或中值前后若干条谱线作为基线
 * --nspec: 平均谱线条数，默认10条。过少容易损失信号，过多容易驻波变化了。
+* --func: 自己写的'iter'或卷积的'smooth'。默认'iter'，但是多了会比较慢。
+
+```
+python cli_baseline_mean.py $fname --outdir $outdir \
+        --sub_method mean --nspec 200 --frange 1330 1360 \
+        --plot --ylim -1 .5 --vmin_max -.05 .05 -f --keep_polar --fill_rfi nan || exit 1 
+```
 
 输出文件名含mean_bld/med_bld
 
