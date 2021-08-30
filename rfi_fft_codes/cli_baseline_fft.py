@@ -50,8 +50,7 @@ if __name__ == '__main__':
                        help='smooth spec along time sigma')
     
     ## replace big RFI
-    parser.add_argument('--rfi_method', default='near ripple', choices=['subtract trpdr',
-                      'subtract tr','subtract rfi', 'lower','set zeros','set noise','near ripple'],
+    parser.add_argument('--rfi_method', default='near ripple', choices=['near ripple'],
                         help='method to replace big RFI')
     parser.add_argument('--mw_frange', type=float, nargs=2,
                        help='milky way freq range')  
@@ -59,18 +58,9 @@ if __name__ == '__main__':
                        help='gauss filter sigma to compute real rms')
     parser.add_argument('--rms_frange', type=float, nargs=2,
                        help='freq range to compute rms')
-    # subtract methods use sg filter and gauss smooth
-    parser.add_argument('--sg_window', type=float, default=1.0, 
-                       help='savgol_filter window_length (MHz)')
-    parser.add_argument('--sg_polyorder', type=int, default=7, 
-                       help='savgol_filter polyorder')
-    parser.add_argument('--gauss_sigma',type=float, default=1.0,
-                       help='gauss smooth sigma')
-    # other methods need
+    
     parser.add_argument('--times_lower_thr', type=float, default=2, 
                        help='above * times of rms will be lowered')
-    parser.add_argument('--times_lower', type=float, default=1.0e4, 
-                       help='lower mw area when fft, default mw/1e4')
     parser.add_argument('--ext_freq',type=float, 
                         help='extend freq range to replace (mhz)')
     parser.add_argument('--rfi_width_lim', type=float, 
@@ -102,11 +92,9 @@ if __name__ == '__main__':
                        help='remove 1.92mhz ripple')
     parser.add_argument('--rip_0_04mhz', action='store_true',
                        help='remove 0.039 mhz ripple')
-    # DELETE
-    #parser.add_argument('--rfi_8mhz', action='store_true',
-    #                   help='remove 8.1 mhz components')
-    #parser.add_argument('--rfi_8mhz_step', type=float, 
-    #                   help='big RFI linspace step, freq(\mu s) in Fourier space, nearly 1/16')
+    # plot
+    parser.add_argument('--plot', action= 'store_true',
+                       help='plot')
     parser.add_argument('--fft_ylim', type=float, nargs=2,
                         help='set ylim in plotting fft components')
     
@@ -123,8 +111,7 @@ if __name__ == '__main__':
                        help='keep two polarizations')
     parser.add_argument('--fill_rfi', default='rfi', choices=['nan','rfi'],
                        help='keep rfi')
-    parser.add_argument('--plot', action= 'store_true',
-                       help='plot')
+    
     parser.add_argument('--no_radec', action='store_true',
                        help='do not check radec')
     
@@ -143,38 +130,20 @@ if __name__ == '__main__':
     nB_radec = args.nB_radec
     cali_fname = args.cali_fname
     rfi_fname = args.rfi_fname
-    #save_rfi_fname =  args.save_rfi_fname
     
     fft_method = args.fft_method
     rfi_method = args.rfi_method
     
     # replace args
     rep_args = {}
-    if rfi_method in ['subtract trpdr','subtract tr','subtract rfi',
-                       'lower','set zeros','set noise','near ripple']:
+    if rfi_method in ['near ripple']:
         rep_args['rms_sigma'] = args.rms_sigma
         rep_args['rms_frange'] = args.rms_frange
-        if 'subtract' in rfi_method:
-            rep_args['sg_window'] = args.sg_window
-            rep_args['sg_polyorder'] = args.sg_polyorder
-            rep_args['times_lower_thr'] = args.times_lower_thr
-            if 'subtract tr' in rfi_method:
-                rep_args['s_sigma'] = args.gauss_sigma
-            if rfi_method == 'subtract tr':
-                rep_args['times_low_thr'] = args.times_lower_thr
-            elif rfi_method == 'subtract rfi':
-                rep_args['times_lower'] = args.times_lower
-                
-        else:
-            rep_args['times_lower_thr'] = args.times_lower_thr
-            if rfi_method == 'lower':
-                rep_args['times_lower'] = args.times_lower
-            elif rfi_method == 'near ripple':
-                rep_args['rfi_width_lim'] = args.rfi_width_lim
-                rep_args['ext_sec'] = args.ext_sec
-                rep_args['ext_freq'] = args.ext_freq
-            if rfi_method == 'lower' or 'set' in rfi_method :
-                rfi_fname = 'none'
+        
+        rep_args['times_lower_thr'] = args.times_lower_thr
+        rep_args['rfi_width_lim'] = args.rfi_width_lim
+        rep_args['ext_sec'] = args.ext_sec
+        rep_args['ext_freq'] = args.ext_freq
             
         print("rep_args:",rep_args)    
     else:
@@ -196,9 +165,7 @@ if __name__ == '__main__':
         fit_args['rip_2mhz'] = args.rip_2mhz
         fit_args['rip_0_04mhz'] = args.rip_0_04mhz
         fit_args['fft_ylim'] = args.fft_ylim
-        #if args.rfi_8mhz_step is not None:
-        #    fit_args['rfi_8mhz'] = args.rfi_8mhz
-        #    fit_args['rfi_8mhz_step'] = args.rfi_8mhz_step
+        
         print("fit_args:",fit_args) 
     else:
         raise ValueError("Unsupport fit baseline ripple method.")
@@ -207,19 +174,7 @@ if __name__ == '__main__':
     if fft_method == 'rfft': 
         fpart += 'fft_bld'
         
-    if rfi_method =='subtract trpdr':
-        fpart += 'p'
-    elif rfi_method =='subtract tr':
-        fpart += 't'
-    elif rfi_method =='subtract rfi':
-        fpart += 'r'
-    elif rfi_method =='lower':
-        fpart += 'l'
-    elif rfi_method =='set zeros':
-        fpart += 'z'
-    elif rfi_method =='set noise':
-        fpart += 'n'
-    elif rfi_method =='near ripple':
+    if rfi_method =='near ripple':
         fpart += 'e'
     
     if choose_method == 'all':
@@ -460,6 +415,12 @@ if __name__ == '__main__':
         return T
     
     ######################### fft ##############################
+    m_pos = file_spec.find('-M')
+    nB = file_spec[m_pos+2:m_pos+4]
+    if nB not in ['06']:
+        fit_args['rip_2mhz'] = False
+    else:
+        print(f"M{nB} in beam M06, input rip_2mhz = {args.rip_2mhz}")
     
     from baseline_2 import replace_rfi,fit_ripple
     if len(T.shape) == 3:
@@ -551,10 +512,10 @@ if __name__ == '__main__':
             pdf.savefig();plt.close()
 
             from util import plot_waterfall
-            plot_waterfall(fs,data = T, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),xrange = frange,
+            plot_waterfall(fs,data = T, vmin_max=vmin_max,cmap='plasma',figsize=(20,5),xrange = frange,
                            title = os.path.basename(file_spec).split('.')[:-1][0],pdf = pdf)
 
-            plot_waterfall(fs,data = rmsw_data, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),pdf = pdf,xrange = frange,
+            plot_waterfall(fs,data = rmsw_data, vmin_max=vmin_max,cmap='plasma',figsize=(20,5),pdf = pdf,xrange = frange,
                            title = f'remove standing waves, polar {polar}')
             
         if keep_polar:

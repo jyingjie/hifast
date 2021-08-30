@@ -357,6 +357,7 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
     
     if len(is_rfi_num) > 0:
         data_rep = np.delete(data_rep,is_rfi_num,axis = 0)
+        is_on = np.delete(is_on,is_rfi_num,axis = 0)
         
     is_on_num = np.arange(data_rep.shape[0])[is_on]
     #is_off_num = np.arange(data_rep.shape[0])[~is_on]
@@ -367,20 +368,23 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
         x = fftf.x
         amp_data = fftf.amp
     
-    amp = np.mean(amp_data,axis=0)
-    amp_on = np.mean(amp_data[is_on],axis=0)
-    amp_off = np.mean(amp_data[~is_on],axis=0)
+    amp = np.nanmean(amp_data,axis=0)
+    amp_on = np.nanmean(amp_data[is_on],axis=0)
+    amp_off = np.nanmean(amp_data[~is_on],axis=0)
     
-    amp_thr = np.median(amp) * amp_thr_mean_factor
-    amp_thr_on = np.median(amp_on) * amp_thr_factor
-    amp_thr_off = np.median(amp_off) * amp_thr_factor
+    amp_thr = np.nanmedian(amp) * amp_thr_mean_factor
+    amp_thr_on = np.nanmedian(amp_on) * amp_thr_factor
+    amp_thr_off = np.nanmedian(amp_off) * amp_thr_factor
     print(f"mean amp thr:{amp_thr:.3f}, amp thr on:{amp_thr_on:.3f}, amp thr off:{amp_thr_off:.3f}")
     
     # ripples freq in fourier space
     # 1 mhz
     loc1,sw_1mhz,rip_1mhz = find_loc(amp,x,amp_thr,rip_mhz=rip_1mhz,xlim=[.90,.95])
     loc1_,sw_1mhz_,_ = find_loc(amp,x,amp_thr,rip_mhz=rip_1mhz,xlim=[1.8,1.9])
-    loc1s = np.array([loc1,loc1_])
+    if loc1_ is None:
+        loc1s = np.array([loc1])
+    else:
+        loc1s = np.array([loc1,loc1_])
     # 2 mhz
     loc2,sw_2mhz,rip_2mhz = find_loc(amp,x,amp_thr,rip_mhz=rip_2mhz,xlim=[.5,.6])
     # 0.04 mhz
@@ -462,12 +466,11 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
         ax.axhline(amp_thr,color = 'k',linestyle='--',label = f'amp thr = {amp_thr:.2f}',alpha=.5)
         if rip_1mhz:
             ax.text(x[loc1],amp_thr,f'{sw_1mhz:.4f} MHz',color = 'k',size = 16)
-            ax.text(x[loc1_],amp_thr,f'{sw_1mhz_:.4f} MHz',color = 'k',size = 16)
+            if loc1_ is not None:
+                ax.text(x[loc1_],amp_thr,f'{sw_1mhz_:.4f} MHz',color = 'k',size = 16)
         if rip_2mhz:
             ax.text(x[loc2],amp_thr,f'{sw_2mhz:.4f} MHz',color = 'k',size = 16)
-            #ax.plot(x[use_i[tn]],np.zeros_like(x[use_i[tn]]),'r^',label = '2 mhz')
-        #if rfi_8mhz:
-        #    ax.plot(x[loc16],np.zeros_like(loc16),'gs',label = f'step {rfi_8mhz_step:.4f} $\mu$s ')
+            
         if rip_base | rip_1mhz :
             ax.plot(x[use_amp[tn]],np.zeros_like(x[use_amp[tn]]),'r^',label = 'base,1mhz,2mhz')
         ax.set_xlim(-.01,2)

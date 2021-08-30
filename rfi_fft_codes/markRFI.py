@@ -174,7 +174,7 @@ def get_startend(is_rfi,rfi_width_lim = None,ext_sec= 0):
         start = start_ - ext_sec
         end = end_ + ext_sec
     else:
-        if isinstance(rfi_width_lim,int)|isinstance(rfi_width_lim,float):
+        if isinstance(rfi_width_lim,int)|isinstance(rfi_width_lim,float)|isinstance(rfi_width_lim,np.int64):
             starend_use = (end_-start_)>rfi_width_lim
         elif len(rfi_width_lim) == 2:
             starend_use = ((end_-start_)>rfi_width_lim[0])&((end_-start_)<rfi_width_lim[1])
@@ -687,7 +687,7 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
             plt.switch_backend('agg')
         fig,ax = plt.subplots(figsize = (15,3))
         ax.plot(t,pat_mean)
-        ax.axhline(pat_med*times,c = 'k',linestyle = '--',label='median')
+        ax.axhline(pat_med*times,c = 'k',linestyle = '--',label='thr')
         ax.plot(t,is_timerfi*np.max(pat_mean),label='is_timeRFI')
         ax.plot(t,pat_diff-np.max(pat_mean),label='abs(diff)')
         ax.grid()

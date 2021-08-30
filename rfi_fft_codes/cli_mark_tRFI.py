@@ -15,6 +15,7 @@ import numpy as np
 import h5py
 from copy import deepcopy
 from tqdm import tqdm
+from glob import glob
 
 
 if __name__ == '__main__':
@@ -36,7 +37,8 @@ if __name__ == '__main__':
                        help='freq range to compute rms')
     parser.add_argument('--rms_sigma', type=float, default =6,
                        help='gauss filter sigma to compute real rms')
-    
+    parser.add_argument('--mw_frange', type=float, nargs=2,
+                       help='milky way freq range')  
     ## time rfi
     parser.add_argument('--time_rfi', action='store_true',
                         help='find time rfi')
@@ -65,6 +67,8 @@ if __name__ == '__main__':
     # long freq
     parser.add_argument('--lf_beams', 
                         help='beam numbers which has long-freq time rfi')
+    parser.add_argument('--lf_sepname', 
+                        help='search lf in sep data? If it is None, search in sub data input.')
     parser.add_argument('--lf_frange', type=float, nargs=2,
                        help='freq range exists long-freq time rfi')
     parser.add_argument('--lf_times', type=float, default=1.5,
@@ -76,57 +80,6 @@ if __name__ == '__main__':
     parser.add_argument('--lf_ext',type = int,default=10, 
                        help='extend edge')
 
-    #smooth
-    parser.add_argument('--s_method_freq', default='None', choices=['gaussian', 'boxcar', 'median', 'None'],
-                       help='smooth spec along freq')
-    parser.add_argument('--s_sigma_freq', type=int, default=3,
-                       help='smooth spec along freq sigma')
-    parser.add_argument('--s_method_t', default='None', choices=['gaussian', 'boxcar', 'median', 'None'],
-                       help='smooth spec along time')
-    parser.add_argument('--s_sigma_t', type=int, default=10,
-                       help='smooth spec along time sigma')
-    
-    ## freq period rfi #################
-    parser.add_argument('--period_rfi', action='store_true',
-                        help='find freq period rfi')
-    # find rfi
-    parser.add_argument('--rfi_thr', type=float, default=3, 
-                       help='default 3 times of rms threshold')
-    parser.add_argument('--mw_frange', type=float, nargs=2,
-                       help='protect milky way freq range(estimate)')
-    
-    parser.add_argument('--rfi_width_lim', type=float, default=10, 
-                       help='rfi should contain more channels than limit')
-    parser.add_argument('--ext_sec', type=int, default=30, 
-                       help='extend channel number of start and end of each section')
-    parser.add_argument('--freq_thr', type=float, default=.5, 
-                       help='estimate error when looking for peaks to polyfit')
-    parser.add_argument('--freq_step', type=float, default = 8.1, 
-                       help='rfi period MHz')
-    parser.add_argument('--rfi_groups', default = 'two groups', choices=['two groups','three groups','all'],
-                        help='divide rfi into 2 or 3 groups')
-    
-    ## mask rfi
-    parser.add_argument('--freq_from_theory', type=float,
-                        help='mask width from theory center')
-    parser.add_argument('--mask_thr', type=float, 
-                       help=' above ~ times of rms threshold will be masked')
-    parser.add_argument('--ext_edge', type=int, default= 0, 
-                       help=' extend result channel on freq axis')
-    parser.add_argument('--mask_RFI_method',default='fixed freq',choices=['2 sides','fixed freq'],
-                         help='from center to two sides, or use a fixed freq width')
-    # 2 sides  
-    parser.add_argument('--small_rfi_times',type=float, 
-                        help='small rfi below, eg.2*RMS will not be masked')
-    parser.add_argument('--chan_step' ,type=int, 
-                        help='channel step when walk from center to two sides')
-    # fixed freq
-    parser.add_argument('--mask_all_theory', action= 'store_true',
-                       help='mask_all_theory')
-    
-    # time coherent
-    parser.add_argument('--time_coherent_per', type=float, default = 1,
-                       help='rfi in one freq appears more than emmm, maybe 70%, mask them all on time axis.')
     
     ## flux calibration
     parser.add_argument('--flux', action='store_true',
@@ -144,10 +97,6 @@ if __name__ == '__main__':
                         help='set ylim in plot')
     parser.add_argument('--vmin_max', type=float, nargs=2,
                         help='plot waterfall')
-    parser.add_argument('--save_rfi_list', action= 'store_true',
-                       help='save rfi freq list in hdf5')
-    parser.add_argument('--save_tf', action= 'store_true',
-                       help='save short time rfi in hdf5')
     
     
     args = parser.parse_args()
@@ -169,34 +118,8 @@ if __name__ == '__main__':
     if (longf_rfi == True) or (shortf_rfi == True):
         time_rfi = True
     
-    period_rfi = args.period_rfi
-    if period_rfi:
-        find_args = {}
-        find_args['rfi_width_lim'] = args.rfi_width_lim
-        find_args['ext_sec'] = args.ext_sec
-        find_args['freq_thr'] = args.freq_thr
-
-        find_args['freq_step'] = args.freq_step
-        find_args['ext_edge'] = args.ext_edge
-        rfi_groups = args.rfi_groups
-        
-        mask_RFI_method = args.mask_RFI_method
-        find_args['small_rfi_times'] = args.small_rfi_times
-        find_args['chan_step'] = args.chan_step
-        find_args['mask_all_theory'] = args.mask_all_theory
-        find_args['freq_from_theory'] = args.freq_from_theory
-        find_args['mask_thr'] = args.mask_thr
-        save_rfi_list = args.save_rfi_list
-        if save_rfi_list:
-            plot = True
-        print("find_args:",find_args)
-    
     outparts = []
     if time_rfi:outparts += ['tr']
-    if period_rfi:
-        outparts += ['pdr']
-        #if mask_all_theory: outparts += ['strict']
-
     if flux: outparts += ['flux']
     
     outpart = '-' + '_'.join(outparts)
@@ -262,6 +185,42 @@ if __name__ == '__main__':
     T_ori = deepcopy(T)
     
     
+    # load data
+    sep_fname = args.lf_sepname 
+    if sep_fname == 'input_subname':
+        sep_fname = fname
+        
+    elif sep_fname is None:
+        # find higher class folder
+        sep_dir_default = os.path.dirname(fname).split('/')[:-1]
+        sep_dir_default.append('sep')
+        sep_dir_default = '/'.join(sep_dir_default)
+        sep_dir = os.path.join(sep_dir_default, '.'.join(os.path.basename(fname).split('-bld',1)[:-1]) + '.hdf5')
+        
+        sep_fnames = glob(sep_dir)
+        if len(sep_fnames) == 1:
+            sep_fname = sep_fnames[0]
+        elif len(sep_fnames) == 0:
+            #find in same class folder
+            sep_fname = os.path.join(os.path.dirname(fname),'.'.join(os.path.basename(fname).split('-bld',1)[:-1]) +'.hdf5')
+        else:
+            raise FileNotFoundError("Which sep file do you want? ")
+    else:
+        sep_fnames = glob(sep_fname)
+        if len(sep_fnames) == 1:
+            sep_fname = sep_fnames[0]
+        else:
+            filedir = os.path.dirname(sep_fname)
+            sep_fname = os.path.join(filedir, os.path.basename(fname).split('-bld')[0] + '.hdf5')
+    if sep_fname != fname:
+        sep = h5py.File(sep_fname,'r')
+        print(f"Find sep file {sep_fname}to find long-freq time rfi.") 
+        from util import get_data
+        T_sep = get_data(sep,polar = 'merged')
+    else:
+        T_sep = deepcopy(T_ori)
+        print(f"Use the input sub file to find long-freq time rfi.") 
+        
     from markRFI import real_rms
     rms_frange = args.rms_frange
     rms_sigma = args.rms_sigma
@@ -272,11 +231,15 @@ if __name__ == '__main__':
         protect_use = np.zeros_like(freq,dtype='bool')
     else:
         protect_use = (freq>mw_frange[0])&(freq<mw_frange[1])
-    
-    ####################### time RFI ################################
+        
     t_rfi = np.isnan(T)
     Tt = deepcopy(T)
-    Tt[:,protect_use] = 0
+    Tt[:,protect_use] = 0  
+    T_sep[:,protect_use] = 0
+    if len(T_sep.shape) == 3:
+        T_sep = np.mean(T_sep, axis=2, dtype='float64')   
+
+    ####################### time RFI ################################
     
     if time_rfi:
         lf_beams = args.lf_beams
@@ -297,7 +260,7 @@ if __name__ == '__main__':
             longf_args['rfi_width_lim'] = args.lf_rfi_last
             longf_args['ext_add'] = args.lf_ext
             print("long freq args:",longf_args)
-            l_rfi = mask_time_rfi(Tt,freq, rtype = 'long-freq',plot = plot,pdf = pdf,
+            l_rfi = mask_time_rfi(T_sep,freq, rtype = 'long-freq',plot = plot,pdf = pdf,
                                   **longf_args)
             t_rfi = t_rfi | l_rfi
             
@@ -327,108 +290,22 @@ if __name__ == '__main__':
             
             t_rfi = t_rfi | s_rfi
 
-            T[s_rfi] = 0
-
-    if len(is_rfi_num)>0:
-        T = np.delete(T,is_rfi_num,axis = 0)
-        
-    ########################### smooth ###############################3
-    s_method_freq = args.s_method_freq
-    s_sigma_freq = args.s_sigma_freq
-    s_method_t = args.s_method_t
-    s_sigma_t = args.s_sigma_t
-    
-    from hifast.utils.misc import smooth1d
-    if  s_method_t in ['gaussian', 'boxcar', 'median']:
-        print('Smooth ing ...')
-        T = smooth1d(T,axis = 0,sigma = s_sigma_t, method = s_method_t)
-    
-    if  s_method_freq in ['gaussian', 'boxcar', 'median']:
-        print('Smooth ing ...')
-        T = smooth1d(T,axis = 1,sigma = s_sigma_freq, method = s_method_freq)
-    
-    if len(is_rfi_num)>0:
-        T_ = np.full(T_ori.shape,np.nan)
-        T_[not_rfi_num,:] = T
-        T = deepcopy(T_)
-        
-    ###################### freq period RFI ##########################    
-    is_rfio = f['is_rfi'][()] if 'is_rfi' in f.keys() else None 
-    
-    if period_rfi:
-        #mark RFI 
-        from markRFI import find_RFI
-        rfi_thr = args.rfi_thr
-        
-        if plot:
-            ylim = args.ylim
-
-            tn = not_rfi_num[0]
-            spec = deepcopy(T[tn,:])
-            RMS = real_rms(spec,freq,rms_sigma,rms_frange)
-            is_rfi_mw = (spec > RMS * rfi_thr)
-            is_rfi_ = is_rfi_mw & (~protect_use)
-            _,theory = find_RFI(spec,freq,is_rfi_,RMS = RMS,
-                rfi_fit_use = 'two groups',plot = plot,pdf=pdf,ylim=ylim,**find_args)
-            
-        ##############iter#################    
-        pd_rfi = np.full(T.shape[:2], False, dtype=bool)
-        if save_rfi_list:
-            rfi_freq_list = np.full((T.shape[0],len(theory)+50),np.nan)
-
-        log.info("Looking for period RFI...")
-        for tn in tqdm(range(T.shape[0])):
-            if tn in not_rfi_num:
-                spec = deepcopy(T[tn,:]) 
-                #RMS = rms(spec,freq,rms_frange)
-                RMS = real_rms(spec,freq,rms_sigma,rms_frange)
-                is_rfi_mw = (spec > RMS * rfi_thr)
-                is_rfi = (spec > RMS * rfi_thr) & (~protect_use)
-                try:
-                    pd_rfi[tn,:],rfi_theory = find_RFI(spec,freq,is_rfi,RMS = RMS,
-                        rfi_fit_use = rfi_groups ,plot = False,**find_args)
-
-                    if save_rfi_list:
-                        if len(rfi_theory) < rfi_freq_list.shape[1]:
-                            rfi_theory = np.pad(rfi_theory,(0,rfi_freq_list.shape[1] - len(rfi_theory)))
-                        elif len(rfi_theory) > rfi_freq_list.shape[1]:
-                            rfi_theory = rfi_theory[:rfi_freq_list.shape[1]]
-
-                        rfi_freq_list[tn,:] = rfi_theory
-
-                except ValueError:
-                    pd_rfi[tn,:] = True
-                    log.warning(f"tn={tn} has a ValueError !")
-                    import traceback
-                    traceback.print_exc()    
-
-
-        log.info("Finish finding period RFI...")
-    
-    if period_rfi & time_rfi:
-        rfi_mask = pd_rfi | t_rfi
+    if time_rfi:
+        rfi_mask = deepcopy(t_rfi)
     else:
-        if period_rfi:
-            rfi_mask = deepcopy(pd_rfi)
+        raise ValueError("Are you really want to mask time RFI?")
+    
+    
+    is_rfi_ori = f['is_rfi'][()] if 'is_rfi' in f.keys() else None 
+    if is_rfi_ori is not None:
         if time_rfi:
-            rfi_mask = deepcopy(t_rfi)
-            
-    if is_rfio is not None:
-        if period_rfi | time_rfi:
-            rfi_mask = rfi_mask | is_rfio
+            rfi_mask = rfi_mask | is_rfi_ori
             log.warning("'is_rfi' alredy exists, found again and use union set.")
         else:
-            rfi_mask = is_rfio
+            rfi_mask = is_rfi_ori
             print("Use 'is_rfi' in itself.")
 
-    
     if np.sum(rfi_mask) > 0:
-
-        time_coherent_per = args.time_coherent_per
-        if (time_coherent_per > 0)&(time_coherent_per <1):
-            per_use = (np.sum(rfi_mask,axis = 0)/rfi_mask.shape[0] > time_coherent_per)
-            rfi_mask[:,per_use] = True
-
         if not keep_rfi:
             if keep_polar: 
                 T_ret = deepcopy(T3)
@@ -447,13 +324,13 @@ if __name__ == '__main__':
             vmin_max = args.vmin_max
             from util import plot_waterfall
             if keep_polar:
-                plot_waterfall(f,data = T_ret[:,:,0], vmin_max=vmin_max,cmap='plasma',figsize=(18,5),
+                plot_waterfall(f,data = T_ret[:,:,0], vmin_max=vmin_max,cmap='plasma',figsize=(20,5),
                                title = os.path.basename(fileout).split('.')[:-1][0] + '_polar xx',pdf = pdf)
 
-                plot_waterfall(f,data = T_ret[:,:,1], vmin_max=vmin_max,cmap='plasma',figsize=(18,5),
+                plot_waterfall(f,data = T_ret[:,:,1], vmin_max=vmin_max,cmap='plasma',figsize=(20,5),
                                title = os.path.basename(fileout).split('.')[:-1][0] + '_polar yy',pdf = pdf)
             else:
-                plot_waterfall(f,data = T_ret, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),
+                plot_waterfall(f,data = T_ret, vmin_max=vmin_max,cmap='plasma',figsize=(20,5),
                                title = os.path.basename(fileout).split('.')[:-1][0] + '_polar merged',pdf = pdf)              
 
             pdf.close()
@@ -463,6 +340,8 @@ if __name__ == '__main__':
         log.info("Nothing is masked.")
         if plot:
             pdf.close()
+            os.remove(pdfname)
+        T_ret = np.array(0.)
 
     if flux:
         from hifast.core.flux import cali_src
@@ -473,11 +352,6 @@ if __name__ == '__main__':
     dict_out={}
     dict_out['is_rfi'] = rfi_mask
     print("saved 'is_rfi'")
-    if time_rfi:
-        save_tf = args.save_tf
-        if save_tf and (np.sum(t_rfi) > 0):
-            dict_out['time_rfi'] = t_rfi
-            print("saved 'time_rfi'")
     dict_out['freq'] = freq
     if 'ra' in f.keys():
         dict_out['ra'] = ra
@@ -485,15 +359,15 @@ if __name__ == '__main__':
         
     dict_out['mjd'] = mjd
     dict_out[outfield] = T_ret.astype('float32')
-    if period_rfi:
-        if save_rfi_list: dict_out['rfi_list'] = rfi_freq_list
+    
     #save file
     print('Saving...')
     
     from hifast.utils.io import rec_his, save_dict_hdf5,add_extra
     add_extra(f, dict_out)
     f.close()
-    
+    if sep_fname != fname:
+        sep.close()
     header=rec_his(args=args)
 
     if header_in is not None: header.update(header_in)
