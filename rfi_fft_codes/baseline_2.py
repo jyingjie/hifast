@@ -518,7 +518,10 @@ def mean_fit_ripple(data, nspec,func = 'iter'):
     n = nspec // 2
     if func == 'iter':
         print(f'mean {2*n}')
-        import bottleneck as bn
+        try:
+            import bottleneck as bn
+        except ModuleNotFoundError:
+            bn = np
         tlen = data.shape[0]
         t1 = np.arange(tlen)-n
         t2 = np.arange(tlen)+n
@@ -547,7 +550,10 @@ def med_fit_ripple(data, nspec,func = 'iter'):
     n = nspec // 2
     if func == 'iter':
         print(f'median {2*n}')
-        import bottleneck as bn
+        try:
+            import bottleneck as bn
+        except ModuleNotFoundError:
+            bn = np
     
         tlen = data.shape[0]
         t1 = np.arange(tlen)-n

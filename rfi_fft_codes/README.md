@@ -2,29 +2,29 @@
 
 Author: Xu Chen, NAOC, 2021.Jun ~ Aug
 
-先用cli_baseline多项式去基线，然后的顺序看g15_pipe.sh
+1. 先用cli_baseline多项式去基线
+2. cli_mark_tRFI找时域RFI
+3. cli_baseline_fft去驻波
+4. cli_baseline再去一次基线
+5. cli_multi找偏振很大的RFI、坐标系修正
+6. （可以合并通道）
+然后成图
 
 有bug请联系stellarxu@qq.com
 
 to do list:
 0.92 MHz 周期脉冲RFI
 
+参数具体设置参见notebook(需要配置可以可视化调参数jupyterlab环境)
+(推荐)表示我推荐使用的方法。
+(测试)表示最好用一个波束在notebook里测试，可以先试默认值
+(默认)一般可以使用默认值
 
-## cli_markRFI标记rfi
 
-eg:
-```
-python cli_markRFI.py $subname --outdir ./data \
-        --lf --sf --lf_beams ['05','06','13'] \
-        --sf_frange 1380 1382 --sf_times 10 --sf_thr 10 --sf_rfi_last 20 --sf_T_thr_times 3 \
-        --lf_frange 1400 1450 --lf_times 1.5 --lf_thr 0 --lf_rfi_last 50 --lf_ext 10 \
-        --period_rfi \
-        --s_method_freq gaussian --s_sigma_freq 3 --s_method_t boxcar --s_sigma_t 7 \
-        --rfi_thr 3 --rms_frange 1400 1403 --mw_frange 1419 1425 --rfi_groups 'two groups' \
-        --rfi_width_lim 20 --ext_sec 20 --freq_thr .3 --freq_step 8.1 \
-        --mask_RFI_method 'fixed freq' --ext_edge 3 --mask_thr 2 --mask_all_theory --freq_from_theory .5 \
-        --plot -f --save_tf --vmin_max -.05 .05 || exit 1 
-```
+
+## cli_mark_tRFI标记rfi
+
+
 ### 时域
 
 * --time_rfi：标记时域上突然出现的RFI，根据占据的频率长度，分为short-freq/long-freq。
@@ -32,106 +32,37 @@ python cli_markRFI.py $subname --outdir ./data \
 
 * --sf
 * --sf_frange: 一个典型的1～2MHz宽时域RFI，经常出现在1380～1382MHz。
-* --sf_file: 或者可以指定一个二维数组的npy文件路径，在里面循环找，例如以下是只找时域RFI:
+* --sf_file: 或者可以指定一个二维数组的npy文件路径，在里面循环找。
+* --sf_frange_step(推荐):如果sf_frange和sf_file不指定，将以这个step(MHz)在频率上循环，对每个区间找一次时域RFI
 ```
-time_rfi_file = '/data/inspur_disk01/userdir/ucas_students/xuc/FAST/G15/newG15/time_rfi_list.npy'
-python cli_markRFI.py $subname --outdir ./data \
-        --sf \
-        --sf_file $time_rfi_file --sf_times 1.8 --sf_thr 0 --sf_rfi_last 20 --sf_T_thr_times 3 \
-        --plot --ylim -1 5 --vmin_max -.05 .05 -f  || exit 1 
-        
-INFO: Looking for short-freq time RFI in [1378 1384] ... [markRFI]
-Found :D
-INFO: Looking for short-freq time RFI in [1310 1315] ... [markRFI]
-Found :D
-INFO: Looking for short-freq time RFI in [1320 1325] ... [markRFI]
-Found :D
-Finish
-```
-* --sf_frange_step:如果sf_frange和sf_file不指定，将以这个step(MHz)在频率上循环，对每个区间找一次时域RFI
-```
-python cli_markRFI.py $subname \
-        --outdir $outdir \
+python cli_mark_tRFI.py $subname \
         --mw_frange 1420.3 1423.3 --sf_frange_step 20 \
         --sf --sf_times 3 --sf_thr 0 --sf_rfi_last 10 --sf_T_thr_times 3 \
         --lf --lf_frange 1400 1450 --lf_times 1.5 --lf_thr 0 --lf_rfi_last 50 --lf_ext 10 \
-        --plot --ylim -.5 .5 --vmin_max -.05 .05 -f  || exit 1 
+        --plot --ylim -.5 .5 --vmin_max -.05 .05 -f  || exit 1 --outdir $outdir \
 ```
 
-* --sf_times: 大于各谱线之中，中值的10倍，初步认为异常
-* --sf_thr: 边缘处与附近值的差是中值的倍数，找出时间方向的边缘处陡峭的
-* --sf_rfi_last: 持续出现的谱线数
-* --sf_T_thr_times: 选定区域后，大于温度阈值的被标记
-* --sf_ext: 选定区域后，扩展边缘
+* --sf_times(测试): 大于各谱线之中，中值的*倍，初步认为异常
+* --sf_thr(测试): 边缘处与附近值的差是中值的倍数，找出时间方向的边缘处陡峭的
+* --sf_rfi_last(测试): 持续出现的谱线数
+* --sf_T_thr_times(测试): 选定区域后，大于温度阈值的被标记
+* --sf_ext(测试): 选定区域后，扩展边缘，一般为0
 
 * --lf
 * --lf_beams: 已知出现大卫星干扰的波束，其他不搜寻。如果不设置就对所有波束搜寻。
-* --lf_frange: 大范围频率
-* --lf_times: 大于各谱线之中，中值1.5倍，初步认为异常.
-* --lf_thr: 不需要边缘陡峭，所以设为0
-* --lf_rfi_last: 持续出现的谱线数
-* --lf_ext: 选定区域后，扩展边缘
-
-* --save_tf: 将sf单独保存为```dict_out['short_rfi']```
+* --lf_frange: 大范围频率，[1400,1460]或者避开银河系[1421,1460]，RFI集中的频率
+* --lf_times(测试): 大于各谱线之中，中值*倍，初步认为异常.
+* --lf_thr(默认): 不需要边缘陡峭，所以设为0
+* --lf_rfi_last(测试): 持续出现的谱线数
+* --lf_ext(测试): 选定区域后，扩展边缘
 
 输出文件名含tr
 
-### 频域
-* --period_rfi: 标记频率上周期变化的RFI
-
-* --s_method_freq,--s_method_t:平滑方法，'gaussian', 'boxcar', 'median', 'None'
- 
-  --s_sigma_freq,--s_sigma_t: sigma同前面定义
-
-* --rfi_thr: 大于rms rfi_thr倍的会被记为rfi
-* --rms_frange: 用于计算rms的干净频率区间
-* --rms_sigma: 如果区间有干扰，还是用该频率减去一个高斯平滑，得到准确的rms。此为高斯滤波的sigma。
-* --mw_frange: 一个大致可能存在信号的区间，先保护起来，后面不会用它预估rfi位置
-* --rfi_groups: rfi的形态呈现为8.1MHz间隔的几组，分类进行更精确的拟合。'two groups','three groups','all'
-* --rfi_width_lim: 粗找rfi区域时，其宽度应该大于的通道数。太细的可能是驻波，可能是点源，排除
-* --ext_sec: 粗找到rfi后，扩充边界的通道数
-* --freq_thr: 对粗测的rfi中心分类时，可以偏离预计中心一段频率。
-* --freq_step: 对粗测的rfi中心分类时，预计中心的间隔大约为8.1MHz。
-
-分类后进行直线拟合，得到rfi的精确分布。如果大于rfi_thr的区域落在rfi精确理论频率上，则被标记为真rfi，可以防止高流量的源被标记。
-
-输出文件名含pdr
-
-### 标记
-
-* --ext_edge: 结果扩展边缘的通道数
-* --mask_thr: 只mask超过rms的几倍。很小的rfi会保留。
-* --mask_RFI_method: 'fixed freq' 对于小rfi，固定mask宽度
-* --mask_all_theory: 是否理论的全mask，这样会非常干净(输出文件名含strict)
-      --freq_from_theory: 很小的去掉多少频率(固定宽度)
-  
-* --mask_RFI_method: '2 sides' 从中心向两边按step循环，确定mask边界，比较慢
-      --small_rfi_times: 小于RMS这个倍数的不标记
-      --chan_step: step通道数
-      --freq_from_theory: mask rfi最大的宽度
-  例如
-  ```
-  python cli_markRFI.py $subname --outdir ./data \
-        --sf --lf --lf_beams ['05','06','13'] \
-        --sf_frange 1380 1382 --sf_times 10 --sf_thr 10 --sf_rfi_last 20 --sf_T_thr_times 3 \
-        --lf_frange 1400 1450 --lf_times 1.5 --lf_thr 0 --lf_rfi_last 50 --lf_ext 10 \
-        --period_rfi \
-        --s_method_freq gaussian --s_sigma_freq 3 --s_method_t boxcar --s_sigma_t 7 \
-        --rfi_thr 3 --rms_frange 1400 1403 --mw_frange 1419 1425 --rfi_groups 'two groups' \
-        --rfi_width_lim 20 --ext_sec 20 --freq_thr .3 --freq_step 8.1 \
-        --mask_RFI_method '2 sides' --ext_edge 10 --mask_thr 2 --freq_from_theory 3\
-        --small_rfi_times 2 --chan_step 5 \
-        --plot -f --vmin_max -.05 .05 --save_tf|| exit 1 
-  ```
-  
-* --time_coherent_per: 如果该频率，例如90%都被标记了，那么整条都被标记为RFI。不怎么用。
-* --save_rfi_list: 是否保存各条谱线周期rfi理论值，```dict_out['rfi_list']```
-* --save_tf:是否保存 time rfi，```dict_out['time_rfi']```
 
 输出的文件中```dict_out['is_rfi']```为二维的mask
 
 ### 其他参数
-
+* --mw_frange(测试): 银河系(或者M31，M33都)存在的区域
 * --ylim: 画谱线的上下限 
 * --flux: 流量定标
 * -c, --cali_fname: 定标源
@@ -144,125 +75,59 @@ python cli_markRFI.py $subname \
 ## cli_baseline_fft去驻波
 
 ### 对RFI
-* --rfi_method: 防止大rfi/强源干扰fft，提供7种方法：'subtract trpdr',
-                      'subtract tr','subtract rfi', 'lower','set zeros','set noise','near ripple'
-  推荐'near ripple'
+* --rfi_method: 防止大rfi/强源干扰fft，简化版只提供'near ripple'方法
 
-* --rms_sigma: 如果区间有干扰，还是用该频率减去一个高斯平滑，得到准确的rms。此为高斯滤波的sigma。
+* --rms_sigma,--rms_frange(测试): 如果区间有干扰，还是用该频率减去一个高斯平滑，得到准确的rms。此为高斯滤波的sigma。
 * -rfi, --rfi_fname: 指定标记rfi的文件。无则自动到输入文件的上一级名为/rfi/的文件夹里找含-tr的文件，找不到则在当前路径找。
 
-* --mw_frange: 银河系(或者M31，M33都)存在的区域
+* --mw_frange(测试): 银河系(或者M31，M33都)存在的区域
 
-1. 'near ripple'使用高流量处附近的驻波替代。例如
+ 'near ripple'使用高流量处附近的驻波替代。例如
     ```
     fname = subnames[1]
     outdir = './data'
     sepname='/data/inspur_disk01/userdir/jyj/FAST/jingyj/M31_snapshot/data/M31_SnapShot_6_snapshot-M'
-    python cli_baseline_fft.py $fname --outdir $outdir \
-            -sep $sepname  --s_method_t boxcar --s_sigma_t 100 \
-            --mw_frange 1420.3 1423.3 --rms_sigma 6 --rms_frange 1390 1400 \
-            --rfi_method 'near ripple' --times_lower_thr 4 \
-            --rfi_width_lim 15 --ext_sec 20 --ext_freq 1.3 \
-            --fft_method rfft --chan_wide 10 --chan_narr 3 \
-            --amp_thr_mean_factor 3 --amp_thr_factor 4 --choose_method 'interpolate' \
-            --rip_base --rip_1mhz --rip_0_04mhz --fft_ylim -5 60 \
-            --plot --ylim -1 .5 --vmin_max -.05 .05 -f --fill_rfi nan --keep_polar || exit 1 
+    python /data/inspur_disk01/userdir/ucas_students/xuc/FAST/G15/test_pipe/cli_baseline_fft.py $fname \
+        --outdir $outdir -sep $sepname  \
+        --mw_frange 1420.3 1423.3 --rms_sigma 6 --rms_frange 1390 1400 \
+        --rfi_method 'near ripple' --times_lower_thr 4 \
+        --rfi_width_lim 15 --ext_sec 20 --ext_freq 1.3 \
+        --fft_method rfft --chan_wide 5 --chan_narr 3 \
+        --amp_thr_mean_factor 1.05 --amp_thr_factor 1.4 --choose_method 'all' \
+        --rip_base --rip_1mhz --rip_0_04mhz --fft_ylim -5 160 \
+        --plot --ylim -1 .5 --vmin_max -.05 .05 -f --fill_rfi nan --keep_polar || exit 1 
     ```
     * 只需要已知时域rfi的文件，即*-tr*。    
       如果没有时域RFI，设置-rfi 'none'即可。
-    * --times_lower_thr:大于RMS这么多倍的会被替代
-    * --rfi_width_lim,--ext_sec: 以上处理的范围，宽度阈值和扩展通道数(同周期rfi里的含义)
-    * --ext_freq: 扩展边缘(MHz)，再寻找强流量两边的最低点，先使用左/右边的一段代替强流量处
+    * --times_lower_thr(测试):大于RMS这么多倍的会被替代
+    * --rfi_width_lim(测试): 要替换的rfi/源，频率上的宽度应该大于一阈值(通道数)
+    * --ext_sec(测试): (接上面的)并向两边扩展通道数
+    * --ext_freq(默认): 先扩展边缘(MHz)，再寻找强流量两边的最低点，先使用左/右边的一段更干净一点的代替强流量处
     
     * 输出文件名含fft_blde.
-
-2. 'subtract trpdr'用原始值减去滤波值。例如
-    ```
-    python cli_baseline_fft.py $subname --outdir ./data \
-        --mw_frange 1420 1421 --rms_sigma 6 --rms_frange 1390 1400 \
-        --rfi_method 'subtract trpdr' --sg_window 1.0 --sg_polyorder 7 --gauss_sigma 1 \
-        # 这里略去相同的fft参数
-    ```
-    * 需要已知周期rfi和时域rfi的文件，即*-tr_pdr*
-    * --sg_window --sg_polyorder: savgol_filter的窗口大小(MHz)和阶数. 存在周期rfi区域减去sg滤波值替代。存在时域RFI区域除以sg滤波值替代。
-    * --gauss_sigma: 银河系存在的地方临时用一个高斯平滑减下去
-    * 最后会除去所有超过3$\sigma$的强源或者异常点。
-    
-    * 输出文件名含fft_bldp.
-    
-3. 'subtract tr'用原始值减去滤波值。例如
-    ```
-    python cli_baseline_fft.py $subname --outdir ./data \
-        --mw_frange 1420 1421 --rms_sigma 6 --rms_frange 1390 1400 \
-        --rfi_method 'subtract tr' --sg_window 1.0 --sg_polyorder 7 --gauss_sigma 1 \
-        --times_lower_thr 1.7   \
-        # 这里略去相同的fft参数
-    ```
-    * 只需要已知时域rfi的文件，即*-tr*
-    * --times_lower_thr: 大于RMS这么多倍的会被处理，低一些会干净。所以不需要已知pdr。
-    * --sg_window --sg_polyorder: savgol_filter的窗口大小(MHz)和阶数.存在减去sg滤波值替代
-    * --gauss_sigma: 银河系存在的地方临时用一个高斯平滑减下去
-
-    * 输出文件名含fft_bldt.
-    
- 4. 'subtract rfi'用原始值减去滤波值。例如
-    ```
-    python cli_baseline_fft.py $subname --outdir ./data \
-        --mw_frange 1420 1421 --rms_sigma 6 --rms_frange 1390 1400 \
-        --rfi_method 'subtract rfi' --sg_window 1.0 --sg_polyorder 7 \
-        --times_lower 1.0e4 --times_lower_thr 2   \
-        # 这里略去相同的fft参数
-    ```
-    * 需要已知周期rfi的文件，即*pdr*
-    * --sg_window --sg_polyorder: savgol_filter的窗口大小(MHz)和阶数.存在减去sg滤波值替代
-    * --times_lower_thr: 减去滤波值后，大于RMS这么多倍的会被降低
-    * --times_lower: 把高流量压低，比如原来的1/1e4
-    
-    * 输出文件名含fft_bldr.
- 
-5. 'lower'降低高流量。不需要rfi文件。例如
-    ```
-    python cli_baseline_fft.py $subname  --rms_frange 1390 1400 \
-        --rfi_method 'lower' --times_lower 1.0e4 --times_lower_thr 2 \
-        -# 这里略去相同的fft参数
-    ```
-    * --times_lower_thr:大于RMS这么多倍的会被降低
-    * --times_lower: 把高流量压低，比如原来的1/1e4
-    
-    * 输出文件名含fft_bldl.
-    
-6.7. 'set zeros','set noise'高流量全部置零/标准差为RMS的正态分布噪声。不需要rfi文件。例如
-    ```
-    python cli_baseline_fft.py $subname --outdir ./data --rms_frange 1390 1400 \
-        --rfi_method 'set zeros'  --times_lower_thr 2 \
-        # 这里略去相同的fft参数
-    ```
-    * --times_lower_thr:大于RMS这么多倍的会被降低
-    * 输出文件名含fft_bldz/fft_bldn.
-    
 
 
 ### fft去驻波
 
-* --fft_method: 目前只提供rfft，mean的方法见‘cli_baseline_mean去基线‘
+* --fft_method(默认): 目前只提供rfft，mean和median的方法见‘cli_baseline_mean去基线‘
 
-* --amp_thr_mean_factor: fourier空间的平均振幅大于阈值的模，会被识别为已知的几种驻波。这里输入的是中值的倍数
-* --amp_thr_factor: fourier空间的每一谱线的振幅大于阈值，会被选中为驻波一部分被去除。这里输入的是中值的倍数
-* --chan_wide: 距离驻波的模的中心左右各(2 * chann - 1)个通道数的模，作为驻波的一部分被选中，这里为由于fourier空间中峰比较宽，多选一些
-  --chan_narr: 同理，窄一些的
-* --choose_method: 选择fourier模的方法，'all'或者'interpolate'
+* --amp_thr_mean_factor(测试): fourier空间的平均振幅大于阈值的模，会被识别为已知的几种驻波。这里输入的是中值的倍数
+* --amp_thr_factor(测试): fourier空间的每一谱线的振幅大于阈值，会被选中为驻波一部分被去除。这里输入的是中值的倍数
+* --chan_wide(测试): 距离驻波的模的中心左右各(2 * chann - 1)个通道数的模，作为驻波的一部分被选中，这里为由于fourier空间中峰比较宽，多选一些
+  --chan_narr(测试): 同理，窄一些的
+* --choose_method(测试): 选择fourier模的方法，'all'或者'interpolate'
   
 * --rip_base: 去除基频(实空间的常数)
 * --rip_1mhz: fft去除1.08mhz 驻波，单镜都有的
 * --rip_2mhz: fft去除1.92mhz 驻波，只有M06 yy有
 * --rip_0_04mhz: fft去除0.039mhz 驻波，很弱的偏振驻波，由于光纤反射
 
-* --fft_ylim: 画fft模的上下限 
+* --fft_ylim(测试): 画fft模的上下限 
 
 * --fill_rfi: 对输入的rfi区域，可以填nan或者保持原样。对应'nan','rfi'。需要注意只有输入对应RFI文件才能填nan。
 
 ### 其他参数
-* smooth 参数同前面
+* smooth 参数同前面cli_baseline。一般不用平滑
 * --ylim: 画谱线的上下限 
 * --flux: 流量定标
 * -c, --cali_fname: 定标源
@@ -292,9 +157,9 @@ python cli_baseline_mean.py $fname --outdir $outdir \
 需要注意，由于不同谱线基线不同，还需要使用cli_baseline.py多项式去一次基线。
 
 
-## cli_RFIshape利用同一谱线不同频率的RFI波形
+## cli_RFIshape利用同一谱线不同频率的8mhz 周期RFI波形
 
-利用同一谱线不同频率的RFI波形，分离污染了M31的RFI
+利用同一谱线不同频率的RFI波形，分离污染了M31的RFI。新数据没有此RFI。
 
 eg.
 ```

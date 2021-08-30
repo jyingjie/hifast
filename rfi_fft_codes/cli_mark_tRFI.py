@@ -51,16 +51,16 @@ if __name__ == '__main__':
                        help='freq range exists short-freq time rfi ')
     parser.add_argument('--sf_file',         
                         help='freq range exists short-freq time rfi npy filename')
-    parser.add_argument('--sf_frange_step',type = int,
+    parser.add_argument('--sf_frange_step',type = int,default=20,
                         help='if sf_frange is None and sf_file is None, cycle in whole freq band.')
     
-    parser.add_argument('--sf_times', type=float, default=10,
+    parser.add_argument('--sf_times', type=float, default=3,
                        help='first threhold, rfi is this times of median value')
-    parser.add_argument('--sf_thr', type=float, default=10,
+    parser.add_argument('--sf_thr', type=float, default=1,
                        help='sharp edge on time axis. diff above this times of next point will be recognized.')
-    parser.add_argument('--sf_rfi_last',type=float, default=20, 
+    parser.add_argument('--sf_rfi_last',type=float, default=10, 
                        help='rfi lasts at least 20 spec numbers')
-    parser.add_argument('--sf_T_thr_times',type=float, default=2, 
+    parser.add_argument('--sf_T_thr_times',type=float, default=3, 
                        help='T above thr will be masked (default 2 times RMS)')
     parser.add_argument('--sf_ext',type = int,default=0, 
                        help='extend edge')
@@ -74,10 +74,10 @@ if __name__ == '__main__':
     parser.add_argument('--lf_times', type=float, default=1.5,
                        help='first threhold, rfi is this times of median value')
     parser.add_argument('--lf_thr', type=float, default=0,
-                       help='sharp edge on time axis. diff above this times of next point will be recognized.')
-    parser.add_argument('--lf_rfi_last',type=float, default=20, 
+                       help='set 0 and do not change')
+    parser.add_argument('--lf_rfi_last',type=float, default=50, 
                        help='rfi lasts at least 20 spec numbers')
-    parser.add_argument('--lf_ext',type = int,default=10, 
+    parser.add_argument('--lf_ext',type = int,default=1, 
                        help='extend edge')
 
     
