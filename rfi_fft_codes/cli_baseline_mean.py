@@ -156,19 +156,26 @@ if __name__ == '__main__':
     if rfi_fname is not None:
         if rfi_fname == 'none':
             print("Don't use rfi file.")
+        else:
+            rfi_fnames = glob(rfi_fname)
+            if len(rfi_fnames) == 1:
+                rfi_fname = rfi_fnames[0]
+            else:
+                filedir = os.path.dirname(rfi_fname)
+                rfi_fname = os.path.join(filedir, '.'.join(os.path.basename(file_spec).split('.',1)[:-1]) + '-bld-tr.hdf5')
     else:
         rfi_dir_default = os.path.dirname(file_spec).split('/')[:-1]
         rfi_dir_default.append('rfi')
         
         rfi_dir_default = '/'.join(rfi_dir_default)
         outpart = '*-tr*.hdf5'
-        rfi_dir = os.path.join(rfi_dir_default, '.'.join(os.path.basename(file_spec).split('.')[:-1]) + f'{outpart}')
+        rfi_dir = os.path.join(rfi_dir_default, '.'.join(os.path.basename(file_spec).split('specs',1)[:-1]) + f'{outpart}')
 
         rfi_fnames = glob(rfi_dir)
         if len(rfi_fnames) == 1:
             rfi_fname = rfi_fnames[0]
         elif len(rfi_fnames) == 0:
-            rfi_dir = os.path.join(os.path.dirname(file_spec),'.'.join(os.path.basename(file_spec).split('.')[:-1]) + f'{outpart}')
+            rfi_dir = os.path.join(os.path.dirname(file_spec),'.'.join(os.path.basename(file_spec).split('specs',1)[:-1]) + f'{outpart}')
             rfi_fnames = glob(rfi_dir)
             if len(rfi_fnames) < 3:
                 rfi_fname = rfi_fnames[0]

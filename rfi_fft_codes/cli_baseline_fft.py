@@ -59,13 +59,13 @@ if __name__ == '__main__':
     parser.add_argument('--rms_frange', type=float, nargs=2,
                        help='freq range to compute rms')
     
-    parser.add_argument('--times_lower_thr', type=float, default=2, 
+    parser.add_argument('--times_lower_thr', type=float, default=4, 
                        help='above * times of rms will be lowered')
-    parser.add_argument('--ext_freq',type=float, 
+    parser.add_argument('--ext_freq',type=float, default = 1.3,
                         help='extend freq range to replace (mhz)')
-    parser.add_argument('--rfi_width_lim', type=float, 
+    parser.add_argument('--rfi_width_lim', type=float, default=15,
                        help='rfi should contain more channels than limit')
-    parser.add_argument('--ext_sec', type=int,
+    parser.add_argument('--ext_sec', type=int,default=20,
                        help='extend channel number of start and end of each section')
         
     ## fft remove ripple
@@ -188,7 +188,7 @@ if __name__ == '__main__':
     s_sigma_freq = args.s_sigma_freq
     s_method_t = args.s_method_t
     s_sigma_t = args.s_sigma_t
-    if (s_method_freq is not 'None') or (s_method_t is not 'None'):
+    if (s_method_freq != 'None') or (s_method_t != 'None'):
         fpart += 's'
     
     if args.trans: fpart += '_T'
@@ -259,22 +259,27 @@ if __name__ == '__main__':
     if rfi_fname is not None:
         if rfi_fname == 'none':
             print("Don't use rfi file.")
+        else:
+            rfi_fnames = glob(rfi_fname)
+            if len(rfi_fnames) == 1:
+                rfi_fname = rfi_fnames[0]
+            else:
+                filedir = os.path.dirname(rfi_fname)
+                rfi_fname = os.path.join(filedir, '.'.join(os.path.basename(file_spec).split('.',1)[:-1]) + '-tr.hdf5')
     else:
         rfi_dir_default = os.path.dirname(file_spec).split('/')[:-1]
         rfi_dir_default.append('rfi')
         
         rfi_dir_default = '/'.join(rfi_dir_default)
-        if rfi_method =='subtract trpdr' or rfi_method =='subtract rfi':
-            outpart = '*-tr_pdr.hdf5'
-        if rfi_method =='subtract tr' or rfi_method =='near ripple':
+        if rfi_method =='near ripple':
             outpart = '*-tr*.hdf5'
-        rfi_dir = os.path.join(rfi_dir_default, '.'.join(os.path.basename(file_spec).split('.')[:-1]) + f'{outpart}')
+        rfi_dir = os.path.join(rfi_dir_default, '.'.join(os.path.basename(file_spec).split('-bld',1)[:-1]) + f'{outpart}')
 
         rfi_fnames = glob(rfi_dir)
         if len(rfi_fnames) == 1:
             rfi_fname = rfi_fnames[0]
         elif len(rfi_fnames) == 0:
-            rfi_dir = os.path.join(os.path.dirname(file_spec),'.'.join(os.path.basename(file_spec).split('.')[:-1]) + f'{outpart}')
+            rfi_dir = os.path.join(os.path.dirname(file_spec),'.'.join(os.path.basename(file_spec).split('-bld',1)[:-1]) + f'{outpart}')
             rfi_fnames = glob(rfi_dir)
             if len(rfi_fnames) < 3:
                 rfi_fname = rfi_fnames[0]
@@ -292,7 +297,7 @@ if __name__ == '__main__':
             if 'time_rfi' in rfi.keys():
                 t_rfi = rfi['time_rfi'][()]
             else:
-                if rfi_method =='subtract tr' or rfi_method =='near ripple':
+                if rfi_method =='near ripple':
                     t_rfi = is_rfi
                 else:
                     t_rfi = np.full(is_rfi.shape,False)
@@ -333,8 +338,18 @@ if __name__ == '__main__':
             is_rfi = is_rfi[:,is_];t_rfi = is_rfi[:,is_]
     
     # load data
-    sep_fname = args.sep_fname    
-    if sep_fname is None:
+    sep_fname = args.sep_fname  
+    if sep_fname is not None:
+        if sep_fname == 'none':
+            print("Don't use sep file.")
+        else:
+            sep_fnames = glob(sep_fname)
+            if len(sep_fnames) == 1:
+                sep_fname = sep_fnames[0]
+            else:
+                filedir = os.path.dirname(sep_fname)
+                sep_fname = os.path.join(filedir, os.path.basename(file_spec).split('-bld')[0] + '.hdf5')
+    else:
         # find higher class folder
         sep_dir_default = os.path.dirname(file_spec).split('/')[:-1]
         sep_dir_default.append('sep')
@@ -349,21 +364,14 @@ if __name__ == '__main__':
             sep_fname = os.path.join(os.path.dirname(file_spec),'.'.join(os.path.basename(file_spec).split('-bld',1)[:-1]) +'.hdf5')
         else:
             raise FileNotFoundError("Which sep file do you want? ")
-    else:
-        sep_fnames = glob(sep_fname)
-        if len(sep_fnames) == 1:
-            sep_fname = sep_fnames[0]
-        else:
-            filedir = os.path.dirname(sep_fname)
-            sep_fname = os.path.join(filedir, os.path.basename(file_spec).split('-bld')[0] + '.hdf5')
+    if sep_fname != 'none':
+        sep = h5py.File(sep_fname,'r')
+        print(f"Find sep file {sep_fname}") 
+        from util import get_data
+        T_sep = get_data(sep,polar = 'merged',xrange = frange)
 
-    sep = h5py.File(sep_fname,'r')
-    print(f"Find sep file {sep_fname}") 
-    from util import get_data
-    T_sep = get_data(sep,polar = 'merged',xrange = frange)
-
-    if T_sep.shape != T.shape:
-        raise ValueError(f"sep data shape {T_sep.shape} is not matched with sub data shape {T.shape}.")
+        if T_sep.shape != T.shape:
+            raise ValueError(f"sep data shape {T_sep.shape} is not matched with sub data shape {T.shape}.")
     
     mw_frange = args.mw_frange
     if mw_frange is None:
@@ -529,12 +537,12 @@ if __name__ == '__main__':
         pdf.close()
         log.info(f"Plot to {pdfname}")
         
-        
-    #sep remove standing waves 
-    if keep_polar: 
-        rmsw_data = T_sep - sw_fit
-    else:
-        rmsw_data = np.mean(T_sep,axis = 2) - sw_fit
+    if sep_fname != 'none':    
+        #sep remove standing waves 
+        if keep_polar: 
+            rmsw_data = T_sep - sw_fit
+        else:
+            rmsw_data = np.mean(T_sep,axis = 2) - sw_fit
         
     # fill rfi with ?
     if fill_rfi == 'nan':
