@@ -53,13 +53,14 @@ def get_baseline(x, ys, axis=None, *, s_method=None, s_sigma=None, average_every
     else:
         ys = ys
 
-    if average_every is not None and average_every !=0:
+    if average_every is not None and average_every != 0:
         drop = False
         x_ori = x
         x = average_every_n(x, average_every, drop=drop)
         ys = average_every_n(ys, average_every, axis=axis, drop=drop)
         if exclude is not None:
-            exclude = average_every_n(exclude, average_every, axis=axis, drop=drop).astype('bool')
+            exclude = average_every_n(
+                exclude, average_every, axis=axis, drop=drop).astype('bool')
     # after smooth(average), check nan, posinf, neginf
     if check:
         is_finite = np.isfinite(ys)
@@ -75,19 +76,19 @@ def get_baseline(x, ys, axis=None, *, s_method=None, s_sigma=None, average_every
     # select baseline method
     if method == 'arPLS':
         if 'sym' in bl_para.keys():
-            bl_para = bl_para.copy() # shallow copy
+            bl_para = bl_para.copy()  # shallow copy
             del bl_para['sym']
         BL = BL_arPLS(**bl_para)
         use_x = False
     elif method == 'asPLS':
         if 'sym' in bl_para.keys():
-            bl_para = bl_para.copy() # shallow copy
+            bl_para = bl_para.copy()  # shallow copy
             del bl_para['sym']
         BL = BL_asPLS(**bl_para)
         use_x = False
     elif method == 'srPLS':
         if 'sym' in bl_para.keys():
-            bl_para = bl_para.copy() # shallow copy
+            bl_para = bl_para.copy()  # shallow copy
             del bl_para['sym']
         BL = BL_srPLS(**bl_para)
         use_x = False
@@ -113,48 +114,51 @@ def get_baseline(x, ys, axis=None, *, s_method=None, s_sigma=None, average_every
     if exclude is not None:
         exclude = np.moveaxis(exclude, axis, -1)
     shape_bak = ys.shape
-    #ys = ys.reshape((-1,shape_bak[-1])) #will copy the data
-    #or np.apply_along_axis
+    # ys = ys.reshape((-1,shape_bak[-1])) #will copy the data
+    # or np.apply_along_axis
     bls = np.zeros_like(ys)
     if return_f:
-        weis = np.zeros_like(ys,dtype=np.float32)
+        weis = np.zeros_like(ys, dtype=np.float32)
     if verbose:
         from tqdm import tqdm
-        iter_ = tqdm(np.ndindex(*(shape_bak[:-1])), total=ys.size/shape_bak[-1], desc='CPU 0: ', mininterval=2)
+        iter_ = tqdm(np.ndindex(
+            *(shape_bak[:-1])), total=ys.size/shape_bak[-1], desc='CPU 0: ', mininterval=2)
     else:
-        iter_= np.ndindex(*(shape_bak[:-1]))
+        iter_ = np.ndindex(*(shape_bak[:-1]))
 
     for ii in iter_:
-        y = ys[ii+ np.s_[:,]]
+        y = ys[ii + np.s_[:, ]]
         if exclude is not None:
-            _exclude = exclude[ii+ np.s_[:,]]
+            _exclude = exclude[ii + np.s_[:, ]]
         else:
             _exclude = None
         if use_x:
             bl = BL.fit(x, y, _exclude)
         else:
             bl = BL.fit(y, _exclude)
-        bls[ii+ np.s_[:,]] = bl
+        bls[ii + np.s_[:, ]] = bl
         if return_f:
-            weis[ii+ np.s_[:,]] = BL.wei
+            weis[ii + np.s_[:, ]] = BL.wei
     # move back
-    bls = np.moveaxis(bls,-1,axis)
+    bls = np.moveaxis(bls, -1, axis)
     if return_f:
-            weis = np.moveaxis(weis,-1,axis)
+        weis = np.moveaxis(weis, -1, axis)
     if average_every is not None:
-        bls = interp.interp1d(x, bls, axis=axis, kind='linear', fill_value ='extrapolate')(x_ori)
+        bls = interp.interp1d(x, bls, axis=axis, kind='linear',
+                              fill_value='extrapolate')(x_ori)
     if return_f:
         # move back
         ys = np.moveaxis(ys, -1, axis)
         if ch:
-            return bls[:,0], ys[:,0], x, weis[:,0]
+            return bls[:, 0], ys[:, 0], x, weis[:, 0]
         else:
             return bls, ys, x, weis
     else:
         if ch:
-            return bls[:,0]
+            return bls[:, 0]
         else:
             return bls
+
 
 def get_baseline_mp(n, x, ys, *, exclude=None,  **kwargs):
     """
@@ -170,6 +174,7 @@ def get_baseline_mp(n, x, ys, *, exclude=None,  **kwargs):
     n = min(n, len(ys))
     from functools import partial
     from multiprocessing import Process, Queue
+
     def get_baseline_q(q, *args, **kwargs):
         res = get_baseline(*args, **kwargs)
         q.put(res)
@@ -178,23 +183,23 @@ def get_baseline_mp(n, x, ys, *, exclude=None,  **kwargs):
     if exclude is not None:
         exclude_list = np.array_split(exclude, n)
     else:
-        exclude_list = [None,] * n
+        exclude_list = [None, ] * n
     ys_list = np.array_split(ys, n)
     for ys, exclude in zip(ys_list, exclude_list):
         q = Queue()
-        p = Process(target=get_baseline_q, args=(q, x, ys), kwargs={'exclude':exclude, **kwargs})
+        p = Process(target=get_baseline_q, args=(q, x, ys),
+                    kwargs={'exclude': exclude, **kwargs})
         if 'verbose' in kwargs.keys():
-            kwargs['verbose']=False
+            kwargs['verbose'] = False
 
-        ps+= [p]
-        qs+= [q]
+        ps += [p]
+        qs += [q]
     for p in ps:
         p.start()
     res = np.vstack([q.get()for q in qs])
     for p in ps:
-        p.join() # need after q.get()
+        p.join()  # need after q.get()
     return np.stack(res)
-
 
 # Cell
 class BL_arPLS(object):
@@ -209,29 +214,33 @@ class BL_arPLS(object):
     ratio:
     niter:
     """
+
     def __init__(self, lam=10**12, offset=2, deg=3, ratio=0.01, niter=100, rew=True):
         self.lam = lam
         self.offset = offset
         self.deg = deg
         self.ratio = ratio
         self.niter = niter
-        if not rew : self.niter = 1
+        if not rew:
+            self.niter = 1
+
     def _reweight(self, d):
         # make d- and get w^t with m and s
-        dn = d[d<0]
+        dn = d[d < 0]
         m = np.mean(dn)
         s = np.std(dn)
-        wt = 1.0/(1 + np.exp( 2* (d-(self.offset*s-m))/s ))
+        wt = 1.0/(1 + np.exp(2 * (d-(self.offset*s-m))/s))
         return wt
 
     def fit(self, y, exclude=None, wei=None):
         # Adaptation of the Matlab code in Baek et al 2015 and python code in https://github.com/charlesll/rampy
         N = len(y)
-        D= sparse.csc_matrix(sparse.eye(N))
+        D = sparse.csc_matrix(sparse.eye(N))
         #D= self._diff(D)
-        diff_fun= lambda x: x[:,1:]- x[:,:-1] # x is a csc sparse matrix
+        def diff_fun(x): return x[:, 1:] - \
+            x[:, :-1]  # x is a csc sparse matrix
         for i in range(self.deg):
-            D= diff_fun(D)
+            D = diff_fun(D)
         w = np.ones(N) if wei is None else np.copy(wei)
         if exclude is not None:
             w[exclude] = 0
@@ -245,7 +254,7 @@ class BL_arPLS(object):
             if exclude is not None:
                 wt[exclude] = 0
             # check exit condition and backup
-            ratio_fit= norm(w-wt)/norm(w)
+            ratio_fit = norm(w-wt)/norm(w)
             if ratio_fit < self.ratio:
                 break
             w = wt
@@ -255,12 +264,13 @@ class BL_arPLS(object):
         self.wei = w
         return bl
 
+
 class BL_srPLS(BL_arPLS):
     def _reweight(self, d):
         dn = abs(d)
         m = np.mean(dn)/3
         s = np.std(dn)/3
-        wt = 1.0/(np.exp( 2* (abs(d)-(self.offset*s-m))/s ))
+        wt = 1.0/(np.exp(2 * (abs(d)-(self.offset*s-m))/s))
         return wt
 
 # Cell
@@ -274,6 +284,7 @@ class BL_base(object):
     ratio:
     niter:
     """
+
     def __init__(self, offset=2, deg=3, ratio=0.01, niter=100, rew=True, sym=False):
         self.offset = offset
         self.deg = deg
@@ -284,17 +295,17 @@ class BL_base(object):
 
     def _reweight_a(self, d):
         # make d- and get w^t with m and s
-        dn = d[d<0]
+        dn = d[d < 0]
         m = np.mean(dn)
         s = np.std(dn)
-        wt = 1.0/(1 + np.exp( 2* (d-(self.offset*s-m))/s ))
+        wt = 1.0/(1 + np.exp(2 * (d-(self.offset*s-m))/s))
         return wt
 
     def _reweight_s(self, d):
         dn = abs(d)
         m = np.mean(dn)/3
         s = np.std(dn)/3
-        wt = 1.0/(np.exp( 2* (abs(d)-(self.offset*s-m))/s ))
+        wt = 1.0/(np.exp(2 * (abs(d)-(self.offset*s-m))/s))
         return wt
 
     def _fit(self, x, y, w):
@@ -314,7 +325,7 @@ class BL_base(object):
             if exclude is not None:
                 wt[exclude] = 0
             # check exit condition and backup
-            ratio_fit= norm(w-wt)/norm(w)
+            ratio_fit = norm(w-wt)/norm(w)
             if ratio_fit < self.ratio:
                 break
             w = wt
@@ -323,6 +334,7 @@ class BL_base(object):
             self.success = True if ratio_fit <= self.ratio else False
         self.wei = w
         return bl
+
 
 class BL_Chebyshev(BL_base):
     """
@@ -334,6 +346,7 @@ class BL_Chebyshev(BL_base):
     ratio:
     niter:
     """
+
     def pred(self, x):
         return np.polynomial.chebyshev.chebval(x, self.para)
 
@@ -341,6 +354,7 @@ class BL_Chebyshev(BL_base):
         para = np.polynomial.chebyshev.chebfit(x, y, self.deg, w=w)
         self.para = para
         return self.pred(x)
+
 
 class BL_poly(BL_base):
     """
@@ -352,6 +366,7 @@ class BL_poly(BL_base):
     ratio:
     niter:
     """
+
     def pred(self, x):
         return np.polynomial.polynomial.polyval(x, self.para)
 
@@ -359,6 +374,7 @@ class BL_poly(BL_base):
         para = np.polynomial.polynomial.polyfit(x, y, self.deg, w=w)
         self.para = para
         return self.pred(x)
+
 
 class BL_sin_poly(BL_base):
     """
@@ -370,6 +386,7 @@ class BL_sin_poly(BL_base):
     ratio:
     niter:
     """
+
     def __init__(self, f, ptype='poly', opt_para={}, **kwarg):
         super().__init__(**kwarg)
         if np.isscalar(f):
@@ -377,11 +394,12 @@ class BL_sin_poly(BL_base):
         self.f = f
         self.ptype = ptype
         self.set_opt_para(**opt_para)
+
     def _fun(self, x, *arg):
         arg = np.asarray(arg)
         coef = arg[-(self.deg + 1):]
         y = np.zeros_like(x)
-        for _A, _f, _p in zip(*np.split(arg[:-(self.deg + 1)],3)):
+        for _A, _f, _p in zip(*np.split(arg[:-(self.deg + 1)], 3)):
             y += _A*np.sin(2*np.pi*_f*x + _p)
         if self.ptype == 'poly':
             y += np.polynomial.polynomial.polyval(x, coef)
@@ -402,14 +420,15 @@ class BL_sin_poly(BL_base):
 
     def _fit(self, x, y, w):
         nsin = len(self.f)
-        self.w=w
-        std = np.std(y[w>=0.99])
+        self.w = w
+        std = np.std(y[w >= 0.99])
         p0 = [std] + [std/2]*(nsin-1)
-        p0 += self.f + [0,]*nsin
+        p0 += self.f + [0, ]*nsin
         p0 += [0]*(self.deg+1)
 
         #err_func = self._err_func(x, y, w, *arg)
-        res = optimize.minimize(self._err_func, p0, args=(x,y,w), method=self.opt_method, **self.opt_kwarg)
+        res = optimize.minimize(self._err_func, p0, args=(
+            x, y, w), method=self.opt_method, **self.opt_kwarg)
         self.para = res.x
         self.fit_res = res
         return self._fun(x, *res.x)
@@ -438,12 +457,13 @@ class BL_sin_poly_2(BL_sin_poly):
     def _fit(self, x, y, w):
         nsin = len(self.f)
         self.w = w
-        std = np.std(y[w>=1])
+        std = np.std(y[w >= 1])
         p0 = [std] + [std/2]*(nsin-1)
-        p0 += self.f + [0,]*nsin
+        p0 += self.f + [0, ]*nsin
         p0 += [0]*(self.deg+1)
 
-        res = optimize.curve_fit(self._fun, x, y, p0, sigma=1./w, **self.opt_kwarg)
+        res = optimize.curve_fit(
+            self._fun, x, y, p0, sigma=1./w, **self.opt_kwarg)
 
         self.para = res[0]
         self.fit_res = res
@@ -469,13 +489,16 @@ class BL_asPLS(BL_arPLS):
 #         s = np.std(dn,ddof=1)
 #         wt = 1.0/(1 + np.exp( self.offset* (d-s)/s ))
 #         return wt
+
     def fit(self, y, exclude=None, wei=None):
         N = len(y)
         D = sparse.csc_matrix(sparse.eye(N))
         #D= self._diff(D)
-        diff_fun= lambda x: x[:,1:]- x[:,:-1] # x is a csc sparse matrix
+
+        def diff_fun(x): return x[:, 1:] - \
+            x[:, :-1]  # x is a csc sparse matrix
         for i in range(self.deg):
-            D= diff_fun(D)
+            D = diff_fun(D)
         w = np.ones(N) if wei is None else np.copy(wei)
         alpha = np.ones(N)
         if exclude is not None:
@@ -483,14 +506,14 @@ class BL_asPLS(BL_arPLS):
         H = D.dot(D.transpose()).multiply(self.lam)
         for i in range(self.niter):
             W = sparse.spdiags(w, 0, N, N)
-            Z = W + H.multiply(alpha[:,None])
+            Z = W + H.multiply(alpha[:, None])
             z = linalg.spsolve(Z, w*y)
             d = y - z
             wt = self._reweight(d)
             if exclude is not None:
                 wt[exclude] = 0
             # check exit condition and backup
-            ratio_fit= norm(w-wt)/norm(w)
+            ratio_fit = norm(w-wt)/norm(w)
             if ratio_fit < self.ratio:
                 break
             w = wt
@@ -504,9 +527,8 @@ class BL_asPLS(BL_arPLS):
 
 # Cell
 def sub_baseline(freq, yss, *, njoin=None, nproc=1, exclude_fun=None, s_method_t=None, s_sigma_t=None,
-        s_method_freq=None, s_sigma_freq=None, average_every_freq=None, method=None, bl_para=None, verbose=True,
-        ):
-
+                 s_method_freq=None, s_sigma_freq=None, average_every_freq=None, method=None, bl_para=None, verbose=True,
+                 ):
     """
     freq: array, shape:(n,) ; Frequency.
     yss: array, shape:(m,n,2)
@@ -523,7 +545,7 @@ def sub_baseline(freq, yss, *, njoin=None, nproc=1, exclude_fun=None, s_method_t
     bl_para: baseline fitting parameter
     verbose:
     """
-    #check
+    # check
     if yss.ndim != 3:
         raise(ValueError('yss should has 3-dim'))
     if yss.shape[1] != len(freq):
@@ -538,10 +560,11 @@ def sub_baseline(freq, yss, *, njoin=None, nproc=1, exclude_fun=None, s_method_t
             yss = smooth1d_fft(np.arange(yss.shape[0]), yss, s_sigma_t, axis=0)
         else:
             raise(ValueError('not support the method'))
+
     def apply(yss):
         if njoin is not None:
             shape_add = yss.shape[1:]
-            yss = yss.reshape((-1,njoin) + shape_add)
+            yss = yss.reshape((-1, njoin) + shape_add)
             yssm = np.nanmean(yss, axis=1)
         else:
             yssm = yss
@@ -551,9 +574,10 @@ def sub_baseline(freq, yss, *, njoin=None, nproc=1, exclude_fun=None, s_method_t
             exclude = None
         s_method_freq_local = s_method_freq
         if s_method_freq_local == 'PLS':
-                # use arPLS, lam from s_sigma ( s_sigma_freq)
-                yssm = get_baseline_mp(nproc, freq, yssm, axis=1, method='arPLS', bl_para={'lam': para['s_sigma'], "offset":2, 'deg':2}, verbose=verbose)
-                s_method_freq_local = None
+            # use arPLS, lam from s_sigma ( s_sigma_freq)
+            yssm = get_baseline_mp(nproc, freq, yssm, axis=1, method='arPLS', bl_para={
+                                   'lam': para['s_sigma'], "offset": 2, 'deg': 2}, verbose=verbose)
+            s_method_freq_local = None
         print(s_method_freq_local)
         bls = get_baseline_mp(nproc, freq, yssm, axis=1, exclude=exclude, s_method=s_method_freq_local, s_sigma=s_sigma_freq, average_every=average_every_freq,
                               method=method, bl_para=bl_para, verbose=verbose)
