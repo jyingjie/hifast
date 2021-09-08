@@ -208,16 +208,21 @@ def repalce_near(data,freq,time_rfi,mw_use=None,times_lower_thr=None,rms_sigma =
     for tn in tqdm(range(data.shape[0])):
         if tn in not_rfi_num:
             spec = deepcopy(data[tn,:])
+            MAX = np.max(spec)
+            if np.sum(mw_use)>0:
+                spec[mw_use] = MAX * 20
+                
             RMS = real_rms(spec,freq,sigma=rms_sigma,rms_vrange=rms_frange)
 
             thr = RMS*times_lower_thr
-            low_use = (np.abs(spec) > thr) | time_rfi[tn] | mw_use
+            low_use = (np.abs(spec) > thr) | time_rfi[tn] #| mw_use
             start,end = get_startend(low_use,rfi_width_lim, ext_sec)
 
             newspec = deepcopy(spec)
             newspec_ = deepcopy(spec)
             #usespec = np.zeros_like(spec)
             for s,e in zip(start,end):
+                # used to find two min values as sin valleys
                 spec1 = np.zeros_like(freq)
                 s0 = s - ext
                 if s0 < 0:s0 = 0
@@ -227,10 +232,11 @@ def repalce_near(data,freq,time_rfi,mw_use=None,times_lower_thr=None,rms_sigma =
 
                 peak = np.max(spec[s:e])
                 peak_loc = np.where(spec1 == peak)[0][0]
-                spec1l = deepcopy(spec1);spec1l[peak_loc:] = 20
+                spec1l = deepcopy(spec1);spec1l[peak_loc:] = MAX * 20
                 l1 = np.argmin(spec1l)
-                spec1r = deepcopy(spec1);spec1r[:peak_loc] = 20
+                spec1r = deepcopy(spec1);spec1r[:peak_loc] = MAX * 20
                 r1 = np.argmin(spec1r)
+                # [l1:r1] will be replaced, length = L
                 #print(l1,r1)
                 L = r1 - l1
                 if l1 - L < 0:
@@ -251,7 +257,7 @@ def repalce_near(data,freq,time_rfi,mw_use=None,times_lower_thr=None,rms_sigma =
                     s1 = r1
                     e1 = r1 + L
                 #print(direc,s1,e1)
-
+                # [s1:e1] will be copied into [l1:r1]
                 try:
                     newspec_[l1:r1] = newspec[s1:e1]
                     newspec[s:e] = newspec_[s:e]

@@ -379,10 +379,7 @@ if __name__ == '__main__':
             print("don't contain MW")
             mw_use = np.zeros_like(freq,dtype='bool')
         else:
-            if rfi_method == 'subtract':
-                raise ValueError("--mw_range is None!")
-            else:
-                mw_use = None
+            mw_use = None
     else:
         mw_use = (freq>=mw_frange[0])&(freq<=mw_frange[1])
     

@@ -35,11 +35,13 @@ to do list:
 * --sf_file: 或者可以指定一个二维数组的npy文件路径，在里面循环找。
 * --sf_frange_step(推荐):如果sf_frange和sf_file不指定，将以这个step(MHz)在频率上循环，对每个区间找一次时域RFI
 ```
-python cli_mark_tRFI.py $subname \
+sepname='/data/inspur_disk01/userdir/jyj/FAST/jingyj/M31_snapshot/data/M31_SnapShot_6_snapshot-M'
+python cli_mark_tRFI.py $subname --outdir ./data \
+        --lf_sepname $sepname --frange 1330 1460 \
         --mw_frange 1420.3 1423.3 --sf_frange_step 20 \
-        --sf --sf_times 3 --sf_thr 0 --sf_rfi_last 10 --sf_T_thr_times 3 \
+        --sf --sf_times 1.3 --sf_thr 0 --sf_rfi_last 10 --sf_T_thr_times 2.5 \
         --lf --lf_frange 1400 1450 --lf_times 1.5 --lf_thr 0 --lf_rfi_last 50 --lf_ext 10 \
-        --plot --ylim -.5 .5 --vmin_max -.05 .05 -f  || exit 1 --outdir $outdir \
+        --plot --ylim -.5 .5 --vmin_max -.05 .05 -f  || exit 1 
 ```
 
 * --sf_times(测试): 大于各谱线之中，中值的*倍，初步认为异常
@@ -55,6 +57,8 @@ python cli_mark_tRFI.py $subname \
 * --lf_thr(默认): 不需要边缘陡峭，所以设为0
 * --lf_rfi_last(测试): 持续出现的谱线数
 * --lf_ext(测试): 选定区域后，扩展边缘
+* --lf_sepfile: 如果输入的是'input_subname'，None则从sub文件找lf；否则从sep文件找。
+    自动搜索的路径顺序是上一级是/sep/、sub文件所在路径或者指定的路径
 
 输出文件名含tr
 

@@ -32,6 +32,8 @@ if __name__ == '__main__':
                        help='default is same with the input file')
     parser.add_argument('-f', '--force', action='store_true',
                         help='overwriting file if out file exists')
+    parser.add_argument('--frange', type=float, nargs=2,
+                       help='freq range')
     
     parser.add_argument('--rms_frange', type=float, nargs=2,
                        help='freq range to compute rms')
@@ -102,7 +104,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     fname = args.fname
     outdir = args.outdir
-    
+    frange = args.frange
     # flux
     flux = args.flux
     cali_fname=args.cali_fname
@@ -171,6 +173,13 @@ if __name__ == '__main__':
     
     T = T[ind_sort]           
     freq= f['freq'][()]
+    
+    # fdelta = freq[1] - freq[0]
+    if frange is not None:
+        is_ = (freq >= frange[0]) & (freq <= frange[1])
+        freq = freq[is_]
+        T = T[:,is_]
+            
     if 'ra' in f.keys():
         ra= f['ra'][()][ind_sort]
         dec= f['dec'][()][ind_sort]
@@ -183,7 +192,7 @@ if __name__ == '__main__':
         header_in=None
         
     T_ori = deepcopy(T)
-    
+
     
     # load data
     sep_fname = args.lf_sepname 
@@ -212,11 +221,17 @@ if __name__ == '__main__':
         else:
             filedir = os.path.dirname(sep_fname)
             sep_fname = os.path.join(filedir, os.path.basename(fname).split('-bld')[0] + '.hdf5')
+    
     if sep_fname != fname:
         sep = h5py.File(sep_fname,'r')
         print(f"Find sep file {sep_fname}to find long-freq time rfi.") 
         from util import get_data
-        T_sep = get_data(sep,polar = 'merged')
+        T_sep = get_data(sep,polar = 'merged',xrange = frange)
+        
+        if len(T_sep.shape) == 3:
+            T_sep = np.mean(T_sep, axis=2, dtype='float64')  
+        if T_sep.shape != T.shape:
+            raise ValueError(f"sep data shape {T_sep.shape} is not matched with sub data shape {T.shape}.")
     else:
         T_sep = deepcopy(T_ori)
         print(f"Use the input sub file to find long-freq time rfi.") 
@@ -236,8 +251,6 @@ if __name__ == '__main__':
     Tt = deepcopy(T)
     Tt[:,protect_use] = 0  
     T_sep[:,protect_use] = 0
-    if len(T_sep.shape) == 3:
-        T_sep = np.mean(T_sep, axis=2, dtype='float64')   
 
     ####################### time RFI ################################
     

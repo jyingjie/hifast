@@ -35,7 +35,7 @@ echo $fname
 python /data/inspur_disk01/userdir/ucas_students/xuc/FAST/G15/test_pipe/cli_mark_tRFI.py $fname \
         --outdir $outdir \
         --mw_frange 1420.3 1423.3 --sf_frange_step 20 \
-        --sf --sf_times 3 --sf_thr 0 --sf_rfi_last 10 --sf_T_thr_times 2.5 \
+        --sf --sf_times 1.3 --sf_thr 0 --sf_rfi_last 10 --sf_T_thr_times 2.5 \
         --lf --lf_frange 1400 1450 --lf_times 1.5 --lf_thr 0 --lf_rfi_last 50 --lf_ext 10 \
         --plot --ylim -.5 .5 --vmin_max -.05 .05 -f  || exit 1 
 done
