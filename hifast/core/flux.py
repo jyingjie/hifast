@@ -42,7 +42,7 @@ def get_K_Jy_cali(cali_fname, nB, freq, ra=None, dec=None, mjd=None):
 #         ra= fs['ra'][()]
 #         dec= fs['dec'][()]
     # 
-    K_Jy = interp.interp1d(freq_c, K_Jy, kind='quadratic', fill_value= "extrapolate")(freq)
+    K_Jy = interp.interp1d(freq_c, K_Jy, kind='linear', fill_value= "extrapolate")(freq)
     K_Jy = K_Jy[None,:,None]
     if need_ratio:
         K_Jy = K_Jy*get_ratio(nB, freq)[0][None,:,None]

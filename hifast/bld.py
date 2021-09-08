@@ -305,7 +305,7 @@ if __name__ == '__main__':
      
   
     if flux:
-        from .flux import cali_src
+        from .core.flux import cali_src
         print('Flux calibrating ...')
         T = cali_src(T, nB, freq, cali_fname, ra=ra, dec=dec, mjd=mjd)
     

@@ -3,6 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - python=3.9
+  - "libblas=*=*mkl"
   - numpy=1.21.0
   - matplotlib=3.4.2
   - scipy=1.7.0
@@ -13,8 +14,14 @@ dependencies:
   - pandas=1.3.0
   - tqdm=4.61.1
   - pip=21.1.3
+  - jupyterlab=3.0.16
+  - ipympl=0.7.0
+  - ipywidgets=7.6.3
+  - nbresuse
+  - jupyterlab-system-monitor
   - ipykernel
   - ipython
   - pip:
     - et-xmlfile==1.1.0
     - pyastronomy==0.16.0
+    - mpl-interactions==0.18.0
