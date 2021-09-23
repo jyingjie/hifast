@@ -268,7 +268,7 @@ def repalce_near(data,freq,time_rfi,mw_use=None,times_lower_thr=None,rms_sigma =
                     traceback.print_exc()  
                     newspec[s:e] = np.random.normal(scale=RMS, size=int(e-s))
 
-            strange = np.where(np.abs(newspec) > 3 * RMS)[0]
+            strange = np.where(np.abs(newspec) > times_lower_thr * RMS)[0]
             newspec[strange] = np.random.normal(scale=RMS, size=len(strange))
 
             data_rep[tn,:] = newspec
@@ -454,7 +454,7 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
     
     if plot:
         if not quick_test:
-            tn = not_rfi_num[10]
+            tn = not_rfi_num[0]
         if pdf is not None:
             plt.switch_backend('agg')   
             

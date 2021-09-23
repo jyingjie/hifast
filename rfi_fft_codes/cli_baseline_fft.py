@@ -488,7 +488,7 @@ if __name__ == '__main__':
         vmin_max = args.vmin_max
         one_spec = args.one_spec
         print(" 'Wait for plotting patiently, you must.' Master Yoda said.")
-        tn = not_rfi_num[10]
+        tn = not_rfi_num[0]
         def plot_in_pdf(data_rep,T,sw_fit,rmsw_data,polar,pdf = None,one_spec = False,frange = None,
                         ylim = None,vmin_max=None):
             global tn, freq
