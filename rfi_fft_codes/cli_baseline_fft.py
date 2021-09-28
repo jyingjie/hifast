@@ -104,6 +104,8 @@ if __name__ == '__main__':
                         help='vmin vmax in plotting waterfall')
     parser.add_argument('--one_spec', action='store_true',
                        help='plot only one spec or mean specs')
+    parser.add_argument('--offset', type=float, 
+                        help='offset when plotting second spec')
     
     parser.add_argument('-T', '--trans', action='store_true',
                        help='trans')
@@ -319,6 +321,7 @@ if __name__ == '__main__':
             if len(Tr.shape) == 3:
                 Tr = np.mean(Tr, axis=2, dtype='float64')
             is_rfi = np.isnan(Tr)
+            t_rfi = deepcopy(is_rfi)
         
         whole_rfi = np.all(is_rfi,axis = 1)
         not_rfi_num = np.arange(T.shape[0])[~whole_rfi]
@@ -487,28 +490,33 @@ if __name__ == '__main__':
         ylim = args.ylim
         vmin_max = args.vmin_max
         one_spec = args.one_spec
+        offset = args.offset
         print(" 'Wait for plotting patiently, you must.' Master Yoda said.")
         tn = not_rfi_num[0]
         def plot_in_pdf(data_rep,T,sw_fit,rmsw_data,polar,pdf = None,one_spec = False,frange = None,
-                        ylim = None,vmin_max=None):
+                        ylim = None,vmin_max=None,offset = None):
             global tn, freq
             fig = plt.figure(figsize=(40,4))
             ax = fig.add_subplot(111)
             if not one_spec:
+                if offset is None:
+                    offset = .5
                 ax.hlines([0,-.5],freq[0],freq[-1],alpha = .8)
                 ax.plot(freq,np.nanmean(data_rep[tn:tn+10,:],axis = 0),'b',label='rm rfi',alpha = .5)
                 ax.plot(freq,np.nanmean(T[tn:tn+10,:],axis = 0),label='original')
                 ax.plot(freq,np.nanmean(sw_fit[tn:tn+10,:],axis = 0),label='ripple')
-                ax.plot(freq,np.nanmean(rmsw_data[tn:tn+10,:],axis = 0) - .5,label='result')
+                ax.plot(freq,np.nanmean(rmsw_data[tn:tn+10,:],axis = 0) - offset,label='result')
                 ax.set_title(f'ten specs mean, polar {polar}')
                 if ylim is not None:
                     ax.set_ylim(ylim[0],ylim[1])
             else:
+                if offset is None:
+                    offset = 2
                 ax.hlines([0,-2],freq[0],freq[-1],alpha = .8)
                 ax.plot(freq,data_rep[tn,:],'b',label='rm rfi',alpha = .5)
                 ax.plot(freq,T[tn,:],label='original')
                 ax.plot(freq,sw_fit[tn,:],label='ripple')
-                ax.plot(freq,rmsw_data[tn,:] - 2,label='result')
+                ax.plot(freq,rmsw_data[tn,:] - offset,label='result')
                 ax.set_title(f'single spec, polar {polar}')
                 if ylim is not None:
                     ax.set_ylim(ylim[0],ylim[1])
@@ -525,11 +533,11 @@ if __name__ == '__main__':
             
         if keep_polar:
             plot_in_pdf(data_rep_xx,T_xx,sw_fit_xx,rmsw_data[:,:,0],polar='xx',pdf = pdf,frange=frange,
-                        one_spec = one_spec, ylim = ylim,vmin_max=vmin_max)
+                        one_spec = one_spec, ylim = ylim,vmin_max=vmin_max,offset =offset )
             plot_in_pdf(data_rep_yy,T_yy,sw_fit_yy,rmsw_data[:,:,1],polar='yy',pdf = pdf,frange=frange,
-                       one_spec = one_spec, ylim = ylim,vmin_max=vmin_max)
+                       one_spec = one_spec, ylim = ylim,vmin_max=vmin_max,offset =offset)
         else:
-            plot_in_pdf(data_rep,T,sw_fit,rmsw_data,polar='merged',pdf = pdf,frange=frange,)
+            plot_in_pdf(data_rep,T,sw_fit,rmsw_data,polar='merged',pdf = pdf,frange=frange,offset =offset)
         
         pdf.close()
         log.info(f"Plot to {pdfname}")
