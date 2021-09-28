@@ -496,10 +496,10 @@ if __name__ == '__main__':
             ax = fig.add_subplot(111)
             if not one_spec:
                 ax.hlines([0,-.5],freq[0],freq[-1],alpha = .8)
-                ax.plot(freq,np.mean(data_rep[tn-5:tn+5,:],axis = 0),'b',label='rm rfi',alpha = .5)
-                ax.plot(freq,np.mean(T[tn-5:tn+5,:],axis = 0),label='original')
-                ax.plot(freq,np.mean(sw_fit[tn-5:tn+5,:],axis = 0),label='ripple')
-                ax.plot(freq,np.mean(rmsw_data[tn-5:tn+5,:],axis = 0) - .5,label='result')
+                ax.plot(freq,np.nanmean(data_rep[tn:tn+10,:],axis = 0),'b',label='rm rfi',alpha = .5)
+                ax.plot(freq,np.nanmean(T[tn:tn+10,:],axis = 0),label='original')
+                ax.plot(freq,np.nanmean(sw_fit[tn:tn+10,:],axis = 0),label='ripple')
+                ax.plot(freq,np.nanmean(rmsw_data[tn:tn+10,:],axis = 0) - .5,label='result')
                 ax.set_title(f'ten specs mean, polar {polar}')
                 if ylim is not None:
                     ax.set_ylim(ylim[0],ylim[1])

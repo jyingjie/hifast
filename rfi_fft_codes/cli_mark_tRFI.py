@@ -285,7 +285,7 @@ if __name__ == '__main__':
         frange_step = args.sf_frange_step
         
         if shortf_rfi:
-            tn = not_rfi_num[0]
+            tn = np.argmin(np.abs(np.nansum(data[not_rfi_num,:],axis = 1)))
             spec = deepcopy(T[tn,:])
             RMS = real_rms(spec,freq,rms_sigma,rms_frange)
             
