@@ -12,7 +12,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument('fname',
                         help='file name')
-    parser.add_argument('-n', '--nproc', type=int,
+    parser.add_argument('-n', '--nproc', type=int, default=1,
                         help='number process')
     parser.add_argument('-f', '--force', action='store_true',
                         help='overwriting file if out file exists')
@@ -235,7 +235,7 @@ if __name__ == '__main__':
     
     if method in ['S', 'SP']:
         fit_args_2 = {}
-        fit_args_2['f'] = args.sin_f_2
+        fit_args_2['sin_f'] = args.sin_f_2
         fit_args_2['offset'] = args.offset_2
         fit_args_2['deg'] = args.deg_2
         fit_args_2['ratio'] = args.ratio_2
@@ -318,8 +318,8 @@ if __name__ == '__main__':
         's_sigma_freq': s_sigma_freq,
         's_method_freq': s_method_freq,
         'average_every_freq': average_every_freq,
-        'bl_para': fit_args,
-               }
+        }
+        para.update(fit_args)
         
         method_b = 'sin_poly'
         bounds = [(0.,1.), (0.899, 0.961), (0, 2*np.pi), (-1,1)]
@@ -328,8 +328,8 @@ if __name__ == '__main__':
         's_sigma_freq': s_sigma_freq_2,
         's_method_freq': s_method_freq_2,
         'average_every_freq': average_every_freq_2,
-        'bl_para': fit_args_2,
-               }
+        }
+        para2.update(fit_args_2)
         T_bld1 = sub_baseline(freq, T, njoin=njoin, nproc=nproc, s_method_t=s_method_t, s_sigma_t=s_sigma_t, method=method_a, **para)
         #exclude_fun = lambda x:abs(x) > 1.2*np.diff(np.percentile(x, [16,84], axis=1), axis=0)[0][:,None,:]
         if exclude_m == 0:
@@ -349,8 +349,8 @@ if __name__ == '__main__':
         's_sigma_freq': s_sigma_freq,
         's_method_freq': s_method_freq,
         'average_every_freq': average_every_freq,
-        'bl_para': fit_args,
-               }
+        }
+        para.update(fit_args)
         T = sub_baseline(freq, T, njoin=njoin, nproc=nproc, s_method_t=s_method_t, s_sigma_t=s_sigma_t, method=method, **para)
         
     if trans:

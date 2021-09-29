@@ -24,10 +24,12 @@ def get_ratio(nB, freq=None):
 
 def get_K_Jy_cali(cali_fname, nB, freq, ra=None, dec=None, mjd=None):
     """
+    K/Jy from Calibator
+    ----------------------
     cali_fname: quasar calibration file name
     nB: source beam number
     freq: 
-    ra, dec, mjd: properties of source
+    ra, dec, mjd: properties of spectra, needed if only Beam 1 in cali_fname
     """
     
     with  h5py.File(cali_fname,'r') as fs:
@@ -42,15 +44,17 @@ def get_K_Jy_cali(cali_fname, nB, freq, ra=None, dec=None, mjd=None):
 #         ra= fs['ra'][()]
 #         dec= fs['dec'][()]
     # 
-    K_Jy = interp.interp1d(freq_c, K_Jy, kind='linear', fill_value= "extrapolate")(freq)
-    K_Jy = K_Jy[None,:,None]
+    K_Jy = interp.interp1d(freq_c, K_Jy, kind='quadratic', fill_value= "extrapolate", axis=0)(freq)
+    K_Jy = K_Jy[None,...] # mjd axis
+    if K_Jy.ndim == 2:
+        K_Jy = K_Jy[...,None] # polar axis
     if need_ratio:
         K_Jy = K_Jy*get_ratio(nB, freq)[0][None,:,None]
     return K_Jy
 
 def cali_src(T, nB, freq, cali_fname=None, ra=None, dec=None, mjd=None):
     """
-    calibrate the source flux
+    flux calibration using fixed factor or Calibator 
     -----------------------
     T: array_like
        Temperature of the spectra. Shape is (m,n) or (m,n,2), where n is freq sample number.
