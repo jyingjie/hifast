@@ -1,22 +1,46 @@
 #  安装 fast_python 模块
-配置环境：
-可以用已经存在的Python 3 环境 或者 用conda新建一个Python环境（推荐）:
+## 配置环境：
+* 用conda配置环境（推荐）:
+  
+  下载conda环境配置文件[hifast_env.yml](../hifast_env.yml)，
+  * 更新已存在的conda环境使其满足hifast的依赖库：
+     ```
+     $ conda env update --file hifast_env.yml 
+     ```
+  * 或者用conda新建一个环境：
+     ```
+     $ conda env create -n myenv --file hifast_env.yml 
+     ```
+     可以修改myenv为其他字符。之后用
+     ```
+     $ conda activate myenv
+     ```
+     或
+     ```
+     $ source activate myenv
+     ```
+     来切换到对应的环境。
 
-下载conda环境配置文件[hifast_env.yml](../hifast_env.yml)，然后执行
-```
-conda env create -n myenv --file hifast_env.yml 
-```
-可以修改myenv为其他字符。之后用
-```
-conda activate myenv
-```
-或
-```
-source activate myenv
-```
-来切换到对应的环境。
+* 使用离线包配置环境（测试；目前仅支持Centos 7 x64）
+ 下载 https://pan.cstcloud.cn/s/GsO5kcYQQQ
+  
+  首次配置：
+  ```
+  $ mkdir ~/hifast_env
+  $ tar -zxvf hifast_env.centos7_x64.tar.gz -C ~/hifast_env
+  $ source ~/hifast_env/bin/activate
+  (hifast_env) $ conda-unpack
+  ```
+  之后激活环境用：
+  ```
+   $ source ~/hifast_env/bin/activate
+  ```
+  移除环境用：
+  ```
+   (hifast_env) $ source ~/hifast_env/bin/deactivate
+  ```
+## 安装
 
-下面开始安装
 * 方法一： 用pip联网直接安装：
 
   见 [wikis/Install](../../wikis/Install)
@@ -26,35 +50,27 @@ source activate myenv
   下载安装包后**先 cd 切换到代码(setup.py)所在目录下**
   * 安装
     ```
-    python -m pip install . --upgrade 
-    ```
-    或
-    ```
-    python setup.py install -f
+    $ python -m pip install . --upgrade 
     ```
   * 卸载
     ```
-    pip uninstall hifast
+    $ pip uninstall hifast
     ```
-    或
-    ```
-    python -c 'import hifast;print(hifast.__file__)'
-    ```
-    找到安装后的文件夹，删除。
   * 提示
-    <br/>由于包文件里包括c代码，因此必须安装后才能正确 import。另外由于Python在 import 时是从当前路径开始搜索包，因此不要在安装包（setup.py）所在目录下执行hifast相关命令。
+    <br/>由于包文件里包括c代码，因此必须安装后才能正确 import。另外由于Python在 import 时是从当前路径开始搜索包，
+    因此不要在安装包（setup.py）所在目录下执行 hifast相关命令。
 
 # 示例
-
+  
 ## 准备
 
- + 在任意位置新建文件夹 test, 在test下新建文件夹 data ,
- + 下载 Tcal文件夹(  https://pan.cstcloud.cn/s/AfnCB96cT2s 提取码：cqwy  ) 放到你的 home 目录 . (*2020-12-07后的代码需更新此文件*)
+  + 在任意位置新建文件夹 test, 在test下新建文件夹 data ,
+  + 下载 Tcal文件夹(  https://pan.cstcloud.cn/s/AfnCB96cT2s 提取码：cqwy  ) 放到你的 home 目录 . (*2020-12-07后的代码需更新此文件*)
 
   **Note:**
 
    * hifast中以cli开头的可以在终端中用 ```python -m hifast.cli_xxx``` 来执行，后接输入的文件名和```-```加一个字母或```--```加多个字母的参数。
-   * 运行```python -m hifast.cli_xxx -h``` 显示帮助。
+   *  ```python -m hifast.cli_xxx -h``` 显示帮助。
    * 对于生成的hdf5文件，在终端执行
      * ```h5dump -g /Header XXX.hdf5``` 显示生成该文件时用的参数。
      * ```h5dump -n XXX.hdf5``` 显示文件中有什么内容
