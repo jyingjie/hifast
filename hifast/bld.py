@@ -18,6 +18,16 @@ if __name__ == '__main__':
                         help='overwriting file if out file exists')
     parser.add_argument('--frange', type=float, nargs=2,
                        help='freq range')
+    # interaction
+    parser.add_argument('-i', '--interact', action='store_true',
+                       help='interaction')
+    parser.add_argument('--ylim', nargs='+', default=['auto'],
+                       help='ylim')
+    parser.add_argument('--figsize', type=float, nargs=2, default=(10,7),
+                       help='figsize')
+    parser.add_argument('--length', type=int, nargs=1, default=20,
+                       help='spetra numbe used to test')
+    
     parser.add_argument('--nB_radec', type=int, default=1, 
                        help='Beam number of the radec file name')
     parser.add_argument('--outdir',
@@ -88,12 +98,33 @@ if __name__ == '__main__':
                        help='')
     
     args = parser.parse_args()
+    
+    if args.interact:
+        import h5py
+        from . import _bld_i
+        fs = h5py.File(args.fname,'r')
+        if 'T' in fs.keys():
+            T = fs['T']
+        elif 'Ta' in fs.keys():
+            T = fs['Ta']
+        elif 'flux' in fs.keys():
+            T = fs['flux']
+        _bld_i.T2p = T
+        _bld_i.freq = fs['freq'][:]
+        _bld_i.frange = args.frange
+        _bld_i.nproc = args.nproc
+        _bld_i.length = args.length
+        _bld_i.figsize = args.figsize
+        _bld_i.ylim = args.ylim[0] if len(args.ylim) ==1 else args.ylim
+        _bld_i.main()
+        sys.exit()
+    
     nproc = args.nproc
     file_spec = args.fname
     outdir = args.outdir
     trans= args.trans
     flux = args.flux
-    
+    # determine output filename and check it  
     fpart = '-flux_' if args.flux else '-'
     fpart += 'bld'
     if args.trans: fpart += '_T'
@@ -106,102 +137,15 @@ if __name__ == '__main__':
             print(f"File exists {fileout}")
             print('exit... Using -f to overwrite it.')
             sys.exit()
+    # import 
+    import numpy as np
+    import h5py
+    from scipy import ndimage
+    from .core.baseline import get_baseline, get_baseline_mp, sub_baseline
+    from .utils.misc import extend_Trues, average_every_n, smooth1d, smooth1d_fft
     exclude_m = args.exclude_m
     no_radec = args.no_radec
-    
-import numpy as np
-import h5py
-from scipy import ndimage
-from .core.baseline import get_baseline, get_baseline_mp, sub_baseline
-from .utils.misc import extend_Trues, average_every_n, smooth1d, smooth1d_fft
-
-def gen_radec_file(file_spec, paras):
-    import subprocess
-    process = subprocess.Popen([sys.executable, '-m' , 'hifast.cli_radec', file_spec] + paras, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    #process.wait()
-    print(*process.communicate())
-    if process.returncode !=0:
-        raise(ValueError(f'fail to generate the radec file of {file_spec}'))
-def get_radec(file_spec, nB, nB_radec, mjd):
-
-    Replace_nB= lambda path,nB: os.path.join(os.path.dirname(path), re.sub(r'-M[0-1][0-9]',f"-M{nB:02d}",os.path.basename(path)))
-    file_radec= '.'.join(file_spec.split('.')[:-1])+'-radec.hdf5'
-    file_radec= Replace_nB(file_radec, nB_radec)
-
-    f = h5py.File(file_radec,'r')
-    #check if mjd match
-    mjd_match= False if len(mjd)!=len(f['mjd'][:]) else (mjd==f['mjd'][:]).all()
-    if not mjd_match:
-        print('the mjd of spec file is not same with that in ',file_radec)
-        sys.stdout.flush()
-        file_radec_2= Replace_nB(file_radec, nB)
-        if not os.path.exists(file_radec_2):
-            print('try to generate ', file_radec_2)
-            sys.stdout.flush()
-            header = f['Header'].attrs
-            import json
-            for key in header.keys():
-                argv = json.loads(header[key])['argv']
-                if 'cli_radec' not in argv:
-                    continue
-                paras = []
-                for s in argv.split():
-                    if s[:1] == '-':
-                        paras += [s,]
-            gen_radec_file(file_spec, paras)
-            sys.stdout.flush()
-        f.close()
-        f= h5py.File(file_radec_2,'r')
-        print('using', file_radec_2)
-        sys.stdout.flush()
-    #check again
-    mjd_match= False if len(mjd)!=len(f['mjd'][:]) else (mjd==f['mjd'][:]).all()
-    if not mjd_match:
-        raise(ValueError(f'the mjd of spec file is not same with that in {file_radec_2} Abort...'))
-    #load     
-    ra= f['ra'+'%d'%nB][:]
-    dec= f['dec'+'%d'%nB][:]
-    if 'is_extrapo' in f.keys():
-        is_extrapo = f['is_extrapo'][:]
-    else:
-        is_extrapo = None
-    f.close()
-    return ra, dec, is_extrapo
-
-def array_split(arr, size, base=None):
-    if base is None:
-        return np.array_split(arr, size)
-    else:
-        len_t = len(arr)
-        n_ = int(np.ceil(len_t/base))
-        split_ = base*np.cumsum(np.array([n_//size+1,]*(n_%size) + [n_//size,]*(size- n_%size)))[:-1]
-        return np.array_split(arr, split_)
-
-class TEMPFile(object):
-    def __init__(self, outdir):
-        import uuid
-        tmpdir = os.path.join(outdir,'tmp')
-        os.makedirs(tmpdir, exist_ok=True)
-        ftmp_part = os.path.join(tmpdir,f"pid_{os.getpid()}_{uuid.uuid4().hex}")
-        ftmp_part += '_rank_'
-        self.ftmp_part = ftmp_part
-        
-    def save(self, rank=None, **kwargs):
-        if 'rank' in kwargs.keys():
-            raise(ValueError("can't save variable named as 'rank'"))
-        for key in kwargs.keys():
-            if rank is None:
-                [np.save(self.ftmp_part + f'{i}_{key}.npy', data) for i, data in enumerate(kwargs[key])]
-            else:
-                np.save(self.ftmp_part + f'{rank}_{key}.npy', kwargs[key])
-    def load(self, rank, name, rm=True):
-        fname = self.ftmp_part + f'{rank}_{name}.npy'
-        res = np.load(fname)
-        if rm:
-            os.remove(fname)
-        return res
-    
-if __name__ == '__main__':
+    # 
     frange = args.frange
     nB_radec = args.nB_radec
     cali_fname = args.cali_fname
@@ -243,13 +187,14 @@ if __name__ == '__main__':
         fit_args_2['rew'] = False  # only fit once
     
      
-    nB = int(re.findall(r'-M[0-1][0-9]',file_spec)[-1][2:])
-
+    nB = int(re.findall(r'-M[0-1][0-9]',file_spec)[-1][2:]) # used in flux cali
     fs = h5py.File(file_spec,'r')
     mjd = fs['mjd'][()]
+    freq = fs['freq'][:]
     if not no_radec:
         if 'ra' not in fs.keys():
-            ra, dec, is_extrapo = get_radec(file_spec, nB, nB_radec, mjd)
+            from add_radec import get_radec
+            ra, dec, is_extrapo = get_radec(fs, nB_radec)
         else:
             ra = fs['ra'][()]
             dec = fs['dec'][()]
@@ -267,16 +212,6 @@ if __name__ == '__main__':
             raise(ValueError(f'flux already exists, please remove \"--flux\"'))
     if flux:
         outfield = 'flux'
-
-
-    ind_sort = np.argsort(mjd)
-    mjd = mjd[ind_sort]
-    if not no_radec:
-        ra = ra[ind_sort]
-        dec = dec[ind_sort]
-    T = T[ind_sort]
-    freq = fs['freq'][:]
-
     if frange is not None:
         is_ = (freq >= frange[0]) & (freq <= frange[1])
         freq = freq[is_]
@@ -292,26 +227,20 @@ if __name__ == '__main__':
             print('radec file has no header')
     else:
         header_in = None
-
     #close files
     # fs.close() # don't close, load extra later
-
-    if trans:
-        T = T.transpose((1,0,2))
-        if flux:
-            raise()
-#     if smooth_t:
-#         T = ndimage.gaussian_filter1d(T, smooth_t_sigma, axis=0)
-     
-  
+    # flux cali
     if flux:
         from .core.flux import cali_src
         print('Flux calibrating ...')
         T = cali_src(T, nB, freq, cali_fname, ra=ra, dec=dec, mjd=mjd)
     
+    if trans:
+        T = T.transpose((1,0,2))
+        freq_bak = freq
+        freq = np.arange(T.shape[1])
     ## subtract baseline
     verbose = True
-    
     if method == 'S' or method == 'SP':
         method_a = 'arPLS'
         para = {
@@ -355,6 +284,7 @@ if __name__ == '__main__':
         
     if trans:
         T = T.transpose((1,0,2))
+        freq = freq_bak
     print(f"Saving...")
     dict_out= {}
     dict_out['mjd'] = mjd

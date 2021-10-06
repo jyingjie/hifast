@@ -24,4 +24,4 @@ dependencies:
   - jupyterlab-system-monitor
   - pip:
     - pyastronomy==0.16.0
-    - mpl-interactions==0.18.0
+    - mpl_interactions[jupyter]==0.18.1
