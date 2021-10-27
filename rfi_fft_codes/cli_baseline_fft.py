@@ -377,7 +377,7 @@ if __name__ == '__main__':
     print(f"Freq band to fft: {fft_frange}")         
             
     if MARGIN:
-        from baseline_2 import replace_margin_side
+        from baseline_2 import replace_margin_side, get_margin_num
         margin_args = {}
         margin_width = margin_lim*2 - min(delta_fl,delta_fr)
         margin_args['margin_width'] = margin_width
@@ -490,7 +490,7 @@ if __name__ == '__main__':
     
     T_ori = deepcopy(T)
     freq_ori = deepcopy(freq)    
-    
+
     from baseline_2 import replace_rfi,fit_ripple
     if len(T.shape) == 3:
         if keep_polar:
@@ -524,11 +524,13 @@ if __name__ == '__main__':
                                    is_on = is_on, plot = plot,pdf=pdf,title='polar yy',**fit_args)
             if MARGIN:
                 # cut back ...
+                margin1, margin2 = get_margin_num(margin,side)
+                margin2 = len(freq) - margin2
                 for arr_type in ['data_rep','sw_fit','T']:
                     for arr_pol in ['xx','yy']:
-                        exec(f"{arr_type}_{arr_pol} = {arr_type}_{arr_pol}[:,margin:-margin]")
+                        exec(f"{arr_type}_{arr_pol} = {arr_type}_{arr_pol}[:,margin1:margin2]")
                 freq = deepcopy(freq_ori)
-                is_rfi = is_rfi[:,margin:-margin]
+                is_rfi = is_rfi[:,margin1:margin2]
                 print(f"data is cut back to {[freq[0],freq[-1]]}MHz")
         else:
             T = np.mean(T, axis=2, dtype='float64')
@@ -547,10 +549,12 @@ if __name__ == '__main__':
                                    plot = plot,pdf=pdf,title='polar merged',**fit_args)
             if MARGIN:
                 # cut back ...
+                margin1, margin2 = get_margin_num(margin,side)
+                margin2 = len(freq) - margin2
                 for arr_type in ['data_rep','sw_fit','T']:
-                    exec(f"{arr_type} = {arr_type}[:,margin:-margin]")
+                    exec(f"{arr_type} = {arr_type}[:,margin1:margin2]")
                 freq = deepcopy(freq_ori)
-                is_rfi = is_rfi[:,margin:-margin]
+                is_rfi = is_rfi[:,margin1:margin2]
     else:
         raise ValueError('data should be 3D, and has 2 polars') 
 

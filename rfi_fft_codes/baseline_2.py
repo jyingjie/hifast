@@ -153,7 +153,7 @@ def replace_margin_side(data,freq,is_rfi,mw_use,margin_width = 20,ext_freq = 1.3
     fdelta = freq[1]-freq[0]
     fext1 = np.arange(freq[0]-margin*fdelta,freq[0],fdelta)
     fext2 = np.arange(freq[-1],freq[-1]+margin*fdelta,fdelta)    
-    print("Margin from two sides ...")
+    print(f"Margin from {side} side(s) ...")
 
     if side == 'both':
         data_ = np.hstack((pads,data,pads))
@@ -197,6 +197,15 @@ def replace_margin_side(data,freq,is_rfi,mw_use,margin_width = 20,ext_freq = 1.3
             mw_use = np.hstack((mw_use,pad))
             
     return data_,freq_,is_rfi,mw_use,margin
+
+def get_margin_num(margin,side):
+    if side == 'both': 
+        margin1 = margin; margin2 = -margin
+    elif side == 'left': 
+        margin1 = margin; margin2 = 0
+    elif side == 'right': 
+        margin2 = margin; margin1 = 0  
+    return margin1,margin2
 
 def replace_rfi_lower(data,freq,method,times_lower_thr=3,times_lower=None,
                       rms_sigma = 5,rms_frange=None):
