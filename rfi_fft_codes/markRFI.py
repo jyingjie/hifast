@@ -157,9 +157,11 @@ def get_startend(is_rfi,rfi_width_lim = None,ext_sec= 0):
     """
     if is_rfi.any() == False:
         raise ValueError("Input array has no Trues.")
-    
+    ori_rfi = deepcopy(is_rfi)
     if is_rfi[0] == True:
         is_rfi[0] = False
+    if is_rfi[-1] == True:
+        is_rfi[-1] = False
         
     starend = np.hstack((np.diff(is_rfi+0),0))
     start_ = np.where(starend==1)[0]
@@ -180,7 +182,8 @@ def get_startend(is_rfi,rfi_width_lim = None,ext_sec= 0):
             starend_use = ((end_-start_)>rfi_width_lim[0])&((end_-start_)<rfi_width_lim[1])
 
         if starend_use.any() == False:
-            raise ValueError("No Trues meet width condition.")
+            log.warning("No True meets width condition.")
+            return [],[]
 
         start = start_[starend_use] - ext_sec
         end = end_[starend_use] + ext_sec
@@ -189,7 +192,10 @@ def get_startend(is_rfi,rfi_width_lim = None,ext_sec= 0):
         start[start<0] = 0 
     N = len(is_rfi) - 1 
     if max(end) > N:
-        end[end>N] =N
+        end[end>N] = N
+        
+    if ori_rfi[-1] ==True:
+        end[-1] = N
     
     return start,end
 
@@ -659,28 +665,37 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
                 ax.set_ylim(ylim[0],ylim[1])
             if pdf is not None:
                 pdf.savefig();plt.close()
+            else:
+                plt.show()
         return  is_timerfi
     
     #from markRFI import get_startend
-    try:
-        start,end = get_startend(is_pat,rfi_width_lim = rfi_width_lim,ext_sec=0)
-    except ValueError as V:
-        #import traceback
-        #traceback.print_exc() 
-        #print(f"{V}.Not found.")
-        return  is_timerfi
-       
+#     try:
+    start,end = get_startend(is_pat,rfi_width_lim = rfi_width_lim,ext_sec=0)
+#     except ValueError as V:
+#         #import traceback
+#         #traceback.print_exc() 
+#         #print(f"{V}.Not found.")
+#         return  is_timerfi
+    
     pat_diff = np.abs(np.diff(pat_mean,append = 0))
+    if len(start) > 0:
+        print(f"rfis start at tn = {start}, end in tn = {end}")
+        for s,e in zip(start,end):
+            #cond = ((pat_diff[s] - pat_diff[s-1])/pat_med > thr) & ((pat_diff[e] - pat_diff[e+1])/pat_med > thr)
+            cond = (pat_diff[s]/pat_med > thr)& (pat_diff[e]/pat_med > thr)
+            if cond:
+                is_timerfi[s:e] = True
 
-    for s,e in zip(start,end):
-        #cond = ((pat_diff[s] - pat_diff[s-1])/pat_med > thr) & ((pat_diff[e] - pat_diff[e+1])/pat_med > thr)
-        cond = (pat_diff[s]/pat_med > thr)& (pat_diff[e]/pat_med > thr)
-        if cond:
-            is_timerfi[s:e] = True
-            
-    if ext_add > 0:
-        from hifast.utils.misc import extend_Trues
-        is_timerfi = extend_Trues(is_timerfi,axis = 0,ext_add = ext_add)
+        if ext_add > 0:
+            from hifast.utils.misc import extend_Trues
+            is_timerfi = extend_Trues(is_timerfi,axis = 0,ext_add = ext_add)
+            s,e = get_startend(is_timerfi)
+            print(f"After extension, rfis start at tn = {s}, end in tn = {e}")
+#     else:
+#         print("No True meets width condition.")
+    if is_timerfi[1] == True: is_timerfi[0] = True
+    if is_timerfi[-2] == True: is_timerfi[-1] = True
     
     if plot:  
         if pdf is not None:
@@ -701,6 +716,8 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
             ax.set_ylim(ylim[0],ylim[1])
         if pdf is not None:
             pdf.savefig();plt.close()
+        else:
+            plt.show()
             
     return  is_timerfi
 
@@ -710,8 +727,7 @@ def mask_sf(data,freq,T_thr_times = None,frange = None,RMS = None,**kwargs):
     Other parameters are the same as previous.
     """
     ret = np.zeros_like(data,dtype = 'bool')
-    
-    
+
     f_use = (freq>frange[0])&(freq<frange[1])
     
     is_timerfi = find_t(data,freq,frange =frange,plot_lf = False,**kwargs)
@@ -739,7 +755,7 @@ def mask_sf(data,freq,T_thr_times = None,frange = None,RMS = None,**kwargs):
     return ret
 
 def mask_time_rfi(data,freq,T_thr_times = None,rtype = 'short-freq',frange = None,file = None,
-                  RMS = None,frange_step = 40,**kwargs):
+                  RMS = None,frange_step = 40,lf_mask_whole=True,**kwargs):
     """
     rtype: 'short-freq','long-freq'
     frange: freq range
@@ -780,6 +796,13 @@ def mask_time_rfi(data,freq,T_thr_times = None,rtype = 'short-freq',frange = Non
                 print("No long-freq time rfi is found.")
                 return ret
             ret[is_timerfi,:] = True
+            if lf_mask_whole: 
+                print("Mask the whole spec with rfi :(")
+            else:
+                mask_use = (freq>frange[0])&(freq<frange[1])
+                print(f"Mask spec with rfi in freq range {frange}")
+                ret[:,~mask_use] = False
+                
             print("Found :D")
         else:
             raise ValueError("frange should like [fmin,fmax].")

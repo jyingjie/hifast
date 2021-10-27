@@ -40,7 +40,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--sub_method', default='mean', choices=['mean','median'],
                        help='method to remove baseline')
-    parser.add_argument('--nspec',type=int, default=10,
+    parser.add_argument('--nspec',type=int, default=200,
                         help='average how many specs to fit baseline.')
     parser.add_argument('--func', default='iter', choices=['iter','smooth'],
                        help='function to mean or median')
@@ -120,6 +120,7 @@ if __name__ == '__main__':
     # load data
     fs = h5py.File(file_spec,'r')
     mjd = fs['mjd'][()]
+    is_on = fs['is_on'][()]
     
     no_radec = args.no_radec
     if not no_radec:
@@ -148,6 +149,7 @@ if __name__ == '__main__':
     ra = ra[ind_sort]
     dec = dec[ind_sort]
     T = T[ind_sort]
+    is_on = T[is_on]
         
     # read RFI
     from glob import glob
@@ -256,13 +258,13 @@ if __name__ == '__main__':
             ori_shape = T_xx.shape
             print("polar xx ...")
             # get standing waves
-            sw_fit_xx = fit_ripple(T_xx,method = sub_method, **fit_args)
+            sw_fit_xx = fit_ripple(T_xx,method = sub_method,is_on=is_on, **fit_args)
             print("polar yy ...")
-            sw_fit_yy = fit_ripple(T_yy,method = sub_method,  **fit_args)
+            sw_fit_yy = fit_ripple(T_yy,method = sub_method,is_on=is_on, **fit_args)
             
         else:
             T = np.mean(T, axis=2, dtype='float64')   
-            sw_fit = fit_ripple(T,method = sub_method,  **fit_args)
+            sw_fit = fit_ripple(T,method = sub_method,is_on=is_on,  **fit_args)
     else:
         raise ValueError('data should be 3D, and has 2 polars') 
 

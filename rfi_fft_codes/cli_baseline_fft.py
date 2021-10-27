@@ -28,8 +28,14 @@ if __name__ == '__main__':
                        help='sep file name')
     parser.add_argument('-f', '--force', action='store_true',
                         help='overwriting file if out file exists')
+    # freq range
     parser.add_argument('--frange', type=float, nargs=2,
-                       help='freq range')
+                       help='freq range of result')
+    parser.add_argument('--fft_frange', type=float, nargs=2,
+                       help='freq range to fft')
+    parser.add_argument('--margin_lim', type=float, default = 10,
+                        help='to decide when frange will be margin and width')
+    
     parser.add_argument('--nB_radec', type=int, default=1, 
                        help='Beam number in the radec file name')
     parser.add_argument('--outdir',
@@ -49,11 +55,11 @@ if __name__ == '__main__':
     parser.add_argument('--s_sigma_t', type=int, default=10,
                        help='smooth spec along time sigma')
     
-    ## replace big RFI
+    # replace big RFI or sources
     parser.add_argument('--rfi_method', default='near ripple', choices=['near ripple'],
                         help='method to replace big RFI')
     parser.add_argument('--mw_frange', type=float, nargs=2,
-                       help='milky way freq range')  
+                       help='milky way freq range, or None')  
     parser.add_argument('--rms_sigma', type=float, default = 6,
                        help='gauss filter sigma to compute real rms')
     parser.add_argument('--rms_frange', type=float, nargs=2,
@@ -68,10 +74,10 @@ if __name__ == '__main__':
     parser.add_argument('--ext_sec', type=int,default=20,
                        help='extend channel number of start and end of each section')
         
-    ## fft remove ripple
+    # fft remove ripple
     parser.add_argument('--fft_method', default='rfft', choices=['rfft'],
                        help='method to remove ripples')
-    # fft method
+    ## fft method
     parser.add_argument('--amp_thr_mean_factor', type=float, default=1.05, 
                        help='above mean amptitude threshold will be chosed')
     parser.add_argument('--amp_thr_factor', type=float, default=1.4, 
@@ -83,7 +89,7 @@ if __name__ == '__main__':
     parser.add_argument('--choose_method', default='all', choices=['all','interpolate'],
                        help='method to choose components in fft')
 
-    # remove which component in fft ?
+    ## remove which component in fft? (only 4 types now)
     parser.add_argument('--rip_base', action='store_true',
                        help='remove constant components')
     parser.add_argument('--rip_1mhz', action='store_true',
@@ -107,6 +113,7 @@ if __name__ == '__main__':
     parser.add_argument('--offset', type=float, 
                         help='offset when plotting second spec')
     
+    # other
     parser.add_argument('-T', '--trans', action='store_true',
                        help='trans')
     parser.add_argument('--keep_polar', action='store_true',
@@ -296,14 +303,14 @@ if __name__ == '__main__':
         
         if 'is_rfi' in rfi.keys():
             is_rfi = rfi['is_rfi'][()]
-            if 'time_rfi' in rfi.keys():
-                t_rfi = rfi['time_rfi'][()]
-            else:
-                if rfi_method =='near ripple':
-                    t_rfi = is_rfi
-                else:
-                    t_rfi = np.full(is_rfi.shape,False)
-                    log.warning("rfi file doesn't contain key 'time_rfi',so don't use short time rfi.")
+#             if 'time_rfi' in rfi.keys():
+#                 t_rfi = rfi['time_rfi'][()]
+#             else:
+#                 if rfi_method =='near ripple':
+#                     t_rfi = is_rfi
+#                 else:
+#                     t_rfi = np.full(is_rfi.shape,False)
+#                     log.warning("rfi file doesn't contain key 'time_rfi',so don't use short time rfi.")
             rfi.close()
             if len(is_rfi.shape) == 3:
                 # use 2D rfi mask
@@ -321,24 +328,75 @@ if __name__ == '__main__':
             if len(Tr.shape) == 3:
                 Tr = np.mean(Tr, axis=2, dtype='float64')
             is_rfi = np.isnan(Tr)
-            t_rfi = deepcopy(is_rfi)
+            # t_rfi = is_rfi
         
         whole_rfi = np.all(is_rfi,axis = 1)
         not_rfi_num = np.arange(T.shape[0])[~whole_rfi]
         is_rfi_num = np.arange(T.shape[0])[whole_rfi]
     else:
-        is_rfi = None;t_rfi = None
+        is_rfi = None;#t_rfi = None
         not_rfi_num = np.arange(T.shape[0])
         is_rfi_num = np.array([])
-
+    
+    # freq range .......
     freq = fs['freq'][:]
+    full_frange = [freq[0],freq[-1]]
     fdelta = freq[1] - freq[0]
-    if frange is not None:
-        is_ = (freq >= frange[0]) & (freq <= frange[1])
-        freq = freq[is_]
-        T = T[:,is_,:]
-        if rfi_fname != 'none':
-            is_rfi = is_rfi[:,is_];t_rfi = is_rfi[:,is_]
+    # frange to fft
+    fft_frange = args.fft_frange
+    if fft_frange is None:
+        fft_frange = [freq[0]-fdelta,freq[-1]]
+    
+    # frange of result
+    if frange is None:
+        frange = [freq[0]-fdelta,freq[-1]]
+    print(f"Result freq band: {frange}")
+    
+    
+    delta_fl = frange[0]-fft_frange[0]
+    delta_fr = fft_frange[1]-frange[1]
+    if (delta_fl < 0) or (delta_fr < 0):
+        raise ValueError(f"fft_frange {fft_frange} should >= frange {frange}")
+
+    MARGIN = False; side_left = False; side_right = False
+    margin_lim = args.margin_lim
+    
+    if (delta_fl<=margin_lim): 
+        if ((fft_frange[0] - full_frange[0])>margin_lim): 
+            fft_frange[0] = fft_frange[0] - margin_lim
+        else:    
+            MARGIN = True
+            side_left = True
+    if  (delta_fr<=margin_lim):           
+        if ((full_frange[1]-fft_frange[1])>margin_lim):
+            fft_frange[1] =  fft_frange[1] + margin_lim
+        else:
+            MARGIN = True
+            side_right = True
+            
+    print(f"Freq band to fft: {fft_frange}")         
+            
+    if MARGIN:
+        from baseline_2 import replace_margin_side
+        margin_args = {}
+        margin_width = margin_lim*2 - min(delta_fl,delta_fr)
+        margin_args['margin_width'] = margin_width
+        margin_args['ext_freq'] = args.ext_freq
+        if side_left & side_right:
+            side = 'both'
+        elif side_left:
+            side = 'left'
+        elif side_right:
+            side = 'right'
+        margin_args['side'] = side
+        print(f"Margin data along freq axis ... {side} side, width {margin_width} mhz")
+            
+    # to fft 
+    is_ = (freq >= fft_frange[0]) & (freq <= fft_frange[1])
+    freq = freq[is_]
+    T = T[:,is_,:]
+    if rfi_fname != 'none':
+        is_rfi = is_rfi[:,is_];#t_rfi = is_rfi 
     
     # load data
     sep_fname = args.sep_fname  
@@ -371,7 +429,7 @@ if __name__ == '__main__':
         sep = h5py.File(sep_fname,'r')
         print(f"Find sep file {sep_fname}") 
         from util import get_data
-        T_sep = get_data(sep,polar = 'merged',xrange = frange)
+        T_sep = get_data(sep,polar = 'merged',xrange = fft_frange)
 
         if T_sep.shape != T.shape:
             raise ValueError(f"sep data shape {T_sep.shape} is not matched with sub data shape {T.shape}.")
@@ -430,16 +488,26 @@ if __name__ == '__main__':
     else:
         print(f"M{nB} in beam M06, input rip_2mhz = {args.rip_2mhz}")
     
+    T_ori = deepcopy(T)
+    freq_ori = deepcopy(freq)    
+    
     from baseline_2 import replace_rfi,fit_ripple
     if len(T.shape) == 3:
         if keep_polar:
-            T3 = deepcopy(T)
             T_xx = T[:,:,0]
             T_yy = T[:,:,1]
+             
+            if MARGIN:
+                # margin edges
+                T_xx,_,_,_,_ = replace_margin_side(T_xx,freq,is_rfi,mw_use=None,**margin_args)
+                T_yy,freq,is_rfi,mw_use,margin = replace_margin_side(T_yy,freq,is_rfi,mw_use,**margin_args)
+                print(f"data is extended to {[freq[0],freq[-1]]}MHz")
+#                 t_rfi = is_rfi
+                
             ori_shape = T_xx.shape
             print("polar xx ...")
             # replace big rfi
-            data_rep_xx = replace_rfi(T_xx,freq,is_rfi,time_rfi=t_rfi,
+            data_rep_xx = replace_rfi(T_xx,freq,time_rfi=is_rfi,
                                                method = rfi_method,mw_use =mw_use,**rep_args)
             data_rep_xx = do_smooth(data_rep_xx,
                                              s_method_t,s_sigma_t,s_method_freq,s_sigma_freq)
@@ -447,45 +515,78 @@ if __name__ == '__main__':
             sw_fit_xx = fit_ripple(data_rep_xx, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
                                    is_on = is_on, plot = plot,pdf=pdf,title='polar xx',**fit_args)
             print("polar yy ...")
-            data_rep_yy = replace_rfi(T_yy,freq,is_rfi,time_rfi=t_rfi,
+            data_rep_yy = replace_rfi(T_yy,freq,time_rfi=is_rfi,
                                                method = rfi_method,mw_use =mw_use,**rep_args)
             data_rep_yy = do_smooth(data_rep_yy,
                                              s_method_t,s_sigma_t,s_method_freq,s_sigma_freq)
             
             sw_fit_yy = fit_ripple(data_rep_yy, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
                                    is_on = is_on, plot = plot,pdf=pdf,title='polar yy',**fit_args)
-            
+            if MARGIN:
+                # cut back ...
+                for arr_type in ['data_rep','sw_fit','T']:
+                    for arr_pol in ['xx','yy']:
+                        exec(f"{arr_type}_{arr_pol} = {arr_type}_{arr_pol}[:,margin:-margin]")
+                freq = deepcopy(freq_ori)
+                is_rfi = is_rfi[:,margin:-margin]
+                print(f"data is cut back to {[freq[0],freq[-1]]}MHz")
         else:
             T = np.mean(T, axis=2, dtype='float64')
-            T_ori = deepcopy(T)
+            if MARGIN:
+                # margin edges
+                T,freq,is_rfi,mw_use,margin = replace_margin_side(T,freq,is_rfi,mw_use,**margin_args)
+                t_rfi = is_rfi
+                
             ori_shape = T.shape
             
             # replace big rfi
-            data_rep, is_rfi_no_mw = replace_rfi(T,freq,is_rfi,time_rfi=t_rfi,
+            data_rep, is_rfi_no_mw = replace_rfi(T,freq,time_rfi=is_rfi,
                                                           method = rfi_method,mw_use =mw_use,**rep_args)
             # get standing waves
             sw_fit = fit_ripple(data_rep, freq,fft_method,is_rfi_num,not_rfi_num,ori_shape,
                                    plot = plot,pdf=pdf,title='polar merged',**fit_args)
+            if MARGIN:
+                # cut back ...
+                for arr_type in ['data_rep','sw_fit','T']:
+                    exec(f"{arr_type} = {arr_type}[:,margin:-margin]")
+                freq = deepcopy(freq_ori)
+                is_rfi = is_rfi[:,margin:-margin]
     else:
         raise ValueError('data should be 3D, and has 2 polars') 
 
+    ori_shape = T_ori.shape
     
-    #sub remove standing waves 
+    #remove standing waves 
     if keep_polar: 
         sw_fit = np.append(sw_fit_xx,sw_fit_yy)
+        #print(sw_fit.shape,sw_fit_xx.shape,sw_fit_yy.shape,ori_shape)
         sw_fit = sw_fit.reshape((2,ori_shape[0],ori_shape[1])).transpose((1,2,0))
-        rmsw_data = T3 - sw_fit
-    else:
-        rmsw_data = T_ori - sw_fit
+
+    rmsw_data = T_ori - sw_fit
     
+    # frange of result
+    is_ = (freq >= frange[0]) & (freq <= frange[1])
+    freq = freq[is_]
+    if rfi_fname != 'none':
+        is_rfi = is_rfi[:,is_]#;t_rfi = is_rfi[:,is_] 
+        
+    if keep_polar:
+        rmsw_data = rmsw_data[:,is_,:]
+        for arr_type in ['data_rep','sw_fit','T']:
+            for arr_pol in ['xx','yy']:
+                exec(f"{arr_type}_{arr_pol} = {arr_type}_{arr_pol}[:,is_]")
+    else:
+        rmsw_data = rmsw_data[:,is_]
+        for arr_type in ['data_rep','sw_fit','T']:
+            exec(f"{arr_type} = {arr_type}[:,is_,:]")
+        
     # fill rfi with ?
     if fill_rfi == 'nan':
         if rfi_fname != 'none':
             rmsw_data[is_rfi] = np.nan
     elif fill_rfi == 'rfi':
         pass
-    
-           
+     
     if plot:
         ylim = args.ylim
         vmin_max = args.vmin_max
@@ -546,15 +647,17 @@ if __name__ == '__main__':
         #sep remove standing waves 
         if keep_polar: 
             rmsw_data = T_sep - sw_fit
+            rmsw_data = rmsw_data[:,is_,:]
         else:
             rmsw_data = np.mean(T_sep,axis = 2) - sw_fit
-        
-    # fill rfi with ?
-    if fill_rfi == 'nan':
-        if rfi_fname != 'none':
-            rmsw_data[is_rfi] = np.nan
-    elif fill_rfi == 'rfi':
-        pass
+            rmsw_data = rmsw_data[:,is_]
+
+        # fill rfi with ?
+        if fill_rfi == 'nan':
+            if rfi_fname != 'none':
+                rmsw_data[is_rfi] = np.nan
+        elif fill_rfi == 'rfi':
+            pass
     
     print(f"Saving...")
     dict_out= {}

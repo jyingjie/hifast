@@ -11,170 +11,84 @@ from copy import deepcopy
 from tqdm import tqdm
 from matplotlib import pyplot as plt
 
-def filter_smooth(spec,fdelta,method = 'savgol',**kwargs):
-    if method == 'savgol':
-        from util import _round_up_to_odd_integer
-        from scipy.signal import savgol_filter
-        sg_window = kwargs['sg_window']
-        sg_polyorder = kwargs['sg_polyorder']
-        window_length = _round_up_to_odd_integer(sg_window/fdelta)
-        sm = savgol_filter(spec,window_length = window_length ,polyorder=sg_polyorder,)
-    elif method == 'gaussian':
-        from hifast.utils.misc import smooth1d
-        s_sigma = kwargs['s_sigma']
-        sm = smooth1d(spec,axis = 0,sigma = s_sigma, method = 'gaussian')
-    return sm
 
-def replace_rfi_substract_old(data,freq,is_rfi,mw_use,sg_window,sg_polyorder, 
-                          times_lower,times_lower_thr,rms_sigma,rms_frange):
-    """
-    replace big RFI to reduce the impact in FFT
-    
-    Parameters:
-    data: np array
-    sg_window: scipy.signal.savgol_filter window length (unit MHz)
-    sg_polyorder: scipy.signal.savgol_filter polyorder
-    """
-    fdelta = freq[1]-freq[0] 
-    
-    if time_rfi is not None:
-        whole_rfi = np.all(time_rfi,axis = 1)
-        is_rfi_num = np.arange(data.shape[0])[whole_rfi]
-        not_rfi_num = np.arange(data.shape[0])[~whole_rfi]
+def replace_spec(tn,spec,freq,low_use,rfi_width_lim, ext_sec, ext, RMS, MAX = None,test=False):
+    if MAX is None:
+        MAX = np.nanmax(spec)
+    from markRFI import rms,get_startend
+    if np.sum(low_use) == 0:
+        return spec
+#     from hifast.utils.misc import smooth1d
+
+    start,end = get_startend(low_use,rfi_width_lim, ext_sec)
+    if len(start) == 0:
+        print(f"tn={tn} raised a warning")
+        return spec
+    N = len(freq)
+    newspec = deepcopy(spec)
+    newspec_ = deepcopy(spec)
+    if test:
+        usespec = np.zeros_like(spec)
+        rep_area = np.zeros_like(spec,dtype='bool')
+
+    for s,e in zip(start,end):
+        # used to find two min values as sin valleys
+        spec1 = np.zeros_like(freq)
+        s0 = s - ext
+        s0 = max(s0,0)
+        e0 = e + ext
+        e0 = min(e0,N-1)
+
+        spec1[s0:e0] = spec[s0:e0]
+#         sm = smooth1d(spec1,method='gaussian',sigma=rms_sigma)
+        
+        peak = np.max(spec[s:e])
+        peak_loc = np.where(spec1 == peak)[0][0]
+        spec1l = deepcopy(spec1); spec1r = deepcopy(spec1)
+#         spec1l = deepcopy(sm); spec1r = deepcopy(sm)
+        spec1l[peak_loc:] = MAX * 20
+        l1 = np.argmin(spec1l)
+        
+        spec1r[:peak_loc] = MAX * 20
+        r1 = np.argmin(spec1r)
+        if test:
+            rep_area[l1:r1] = True
+        # [l1:r1] will be replaced, length = L
+        #print(l1,r1)
+        L = r1 - l1
+        if l1 - L < 0:
+            direc = 'right'
+        elif r1 + L > N - 1:
+            direc = 'left'
+        else:
+            rmsl = rms(newspec[l1 - L:l1],freq[l1 - L:l1])
+            rmsr = rms(newspec[r1:r1 + L],freq[r1:r1 + L])
+            if rmsl < rmsr:
+                direc = 'left' 
+            else:
+                direc = 'right'
+        if direc == 'left':
+            s1 = l1 - L
+            e1 = l1
+        elif direc == 'right':
+            s1 = r1
+            e1 = r1 + L
+        #print(direc,s1,e1)
+        # [s1:e1] will be copied into [l1:r1]
+        try:
+            newspec_[l1:r1] = newspec[s1:e1]
+            newspec[s:e] = newspec_[s:e]
+            if test:
+                usespec[s1:e1] = 1
+        except ValueError:
+            log.info(f"tn = {tn} has a ValueError, will replace with noise")
+            import traceback
+            traceback.print_exc()  
+            newspec[s:e] = np.random.normal(scale=RMS, size=int(e-s))
+    if test:
+        return newspec,usespec,rep_area 
     else:
-        not_rfi_num = np.arange(data.shape[0])
-    data_rep = np.full(data.shape,np.nan)
-
-    from util import _round_up_to_odd_integer
-    window_length = _round_up_to_odd_integer(sg_window/fdelta)
-    from markRFI import real_rms
-    from scipy.signal import savgol_filter
-    for tn in tqdm(range(data.shape[0])):
-        if tn in not_rfi_num:
-            spec = deepcopy(data[tn,:])
-            RMS = real_rms(spec,freq,sigma=rms_sigma,rms_vrange=rms_frange)
-            newspec = deepcopy(spec)
-            newspec[mw_use] = 0
-            sg = savgol_filter(newspec,window_length = window_length ,polyorder=sg_polyorder,)
-            newspec[is_rfi[tn]] = spec[is_rfi[tn]] - sg[is_rfi[tn]]
-            newspec[mw_use] = np.random.normal(scale=RMS,size = np.sum(mw_use)) 
-            data_rep[tn,:] = newspec
-
-    
-    #RMS = real_rms(data_rep[0,:],freq,sigma=rms_sigma,rms_vrange=rms_frange)
-    
-    thr_lower = RMS*times_lower_thr
-    low_use = (np.abs(data_rep) > thr_lower)
-    from hifast.utils.misc import extend_Trues
-    low_use = extend_Trues(low_use,ext_add =10,leng_lim = 20,axis = -1)
-
-    data_rep = deepcopy(data_rep)
-    data_rep[low_use] = data[low_use]/times_lower
-    
-    return data_rep
-
-
-def replace_rfi_substract(data,freq,is_rfi,time_rfi,mw_use,sg_window,sg_polyorder, s_sigma,
-                          rms_sigma,rms_frange,times_lower_thr = 5):
-    """
-    replace big RFI to reduce the impact in FFT
-    
-    Parameters:
-    data: np array
-    sg_window: scipy.signal.savgol_filter window length (unit MHz)
-    sg_polyorder: scipy.signal.savgol_filter polyorder
-    """
-    fdelta = freq[1]-freq[0] 
-    
-    from markRFI import real_rms
-    if time_rfi is not None:
-        whole_rfi = np.all(time_rfi,axis = 1)
-        is_rfi_num = np.arange(data.shape[0])[whole_rfi]
-        not_rfi_num = np.arange(data.shape[0])[~whole_rfi]
-    else:
-        not_rfi_num = np.arange(data.shape[0])
-    
-    data_rep = np.full(data.shape,np.nan)
-    for tn in tqdm(range(data.shape[0])):
-        if tn in not_rfi_num:
-            spec = deepcopy(data[tn,:])
-            RMS = real_rms(spec,freq,sigma=rms_sigma,rms_vrange=rms_frange)
-            
-            newspec = deepcopy(spec)
-            
-            newspec[mw_use] = 0
-            sg_sm = filter_smooth(spec,fdelta,method = 'savgol',sg_window=sg_window,
-                                  sg_polyorder=sg_polyorder)
-            # period rfi and source
-            newspec[is_rfi[tn]] = spec[is_rfi[tn]] - sg_sm[is_rfi[tn]]
-            # mw 
-            newspec[mw_use] = np.random.normal(scale=RMS,size = np.sum(mw_use)) 
-            if np.sum(time_rfi[tn]) > 0:
-                gauss_sm = filter_smooth(spec,fdelta,method ='gaussian',s_sigma = s_sigma)
-                # time RFI 
-                newspec[time_rfi[tn]] = (spec[time_rfi[tn]] / gauss_sm[time_rfi[tn]] - 1)
-                cond = time_rfi[tn] & (np.abs(newspec) > RMS * 2)
-                newspec[cond] = spec[cond]
-            strange = np.where(np.abs(newspec) > times_lower_thr* RMS)[0]
-            newspec[strange] = np.random.normal(scale=RMS, size=len(strange))
-
-            data_rep[tn] = newspec
-
-    return data_rep
-
-def replace_rfi_substract2(data,freq,time_rfi,mw_use,sg_window,sg_polyorder, s_sigma,
-                          rms_sigma,rms_frange,times_low_thr,times_lower_thr = 5):
-    """
-    replace big RFI to reduce the impact in FFT
-    
-    Parameters:
-    data: np array
-    sg_window: scipy.signal.savgol_filter window length (unit MHz)
-    sg_polyorder: scipy.signal.savgol_filter polyorder
-    
-    """
-    fdelta = freq[1]-freq[0] 
-    
-    from markRFI import real_rms
-    if time_rfi is not None:
-        whole_rfi = np.all(time_rfi,axis = 1)
-        is_rfi_num = np.arange(data.shape[0])[whole_rfi]
-        not_rfi_num = np.arange(data.shape[0])[~whole_rfi]
-    else:
-        not_rfi_num = np.arange(data.shape[0])
-
-    data_rep = np.full(data.shape,np.nan)
-    from hifast.utils.misc import extend_Trues
-
-    for tn in tqdm(range(data.shape[0])):
-        if tn in not_rfi_num:
-            spec = deepcopy(data[tn,:])
-            RMS = real_rms(spec,freq,sigma=rms_sigma,rms_vrange=rms_frange)
-
-            thr = RMS*times_low_thr
-            low_use = (np.abs(spec) > thr)    
-            low_use = extend_Trues(low_use,ext_add =10,leng_lim = 20,axis = -1)
-
-            newspec = deepcopy(spec)
-            newspec[mw_use] = 0
-            sg_sm = filter_smooth(spec,fdelta,method = 'savgol',sg_window=sg_window,
-                                  sg_polyorder=sg_polyorder)
-            # period rfi and source
-            newspec[low_use] = spec[low_use] - sg_sm[low_use]
-            # mw 
-            newspec[mw_use] = np.random.normal(scale=RMS,size = np.sum(mw_use)) 
-            if np.sum(time_rfi[tn]) > 0:
-                gauss_sm = filter_smooth(spec,fdelta,method ='gaussian',s_sigma = s_sigma)
-                # time RFI 
-                newspec[time_rfi[tn]] = (spec[time_rfi[tn]] / gauss_sm[time_rfi[tn]] - 1)
-                cond = time_rfi[tn] & (np.abs(newspec) > thr * 2)
-                newspec[cond] = spec[cond]
-            strange = np.where(np.abs(newspec) > times_lower_thr * RMS)[0]
-            newspec[strange] = np.random.normal(scale=RMS, size=len(strange))
-
-            data_rep[tn] = newspec
-
-    return data_rep
+        return newspec
 
 def repalce_near(data,freq,time_rfi,mw_use=None,times_lower_thr=None,rms_sigma = None,
                  ext_freq = None,rms_frange=None,rfi_width_lim=None, ext_sec=None):
@@ -187,10 +101,10 @@ def repalce_near(data,freq,time_rfi,mw_use=None,times_lower_thr=None,rms_sigma =
     ext_sec: extend channel number of start and end of each section
     """
     fdelta = freq[1]-freq[0] 
-    N = len(freq)
+    
     ext = int(np.around(ext_freq / fdelta))
     
-    from markRFI import real_rms,rms,get_startend
+    from markRFI import real_rms,rms
     if time_rfi is not None:
         whole_rfi = np.all(time_rfi,axis = 1)
         is_rfi_num = np.arange(data.shape[0])[whole_rfi]
@@ -204,11 +118,12 @@ def repalce_near(data,freq,time_rfi,mw_use=None,times_lower_thr=None,rms_sigma =
         
     data_rep = np.full(data.shape,np.nan)
     from hifast.utils.misc import extend_Trues
-
+    MAX = np.nanmax(data)*20
     for tn in tqdm(range(data.shape[0])):
         if tn in not_rfi_num:
             spec = deepcopy(data[tn,:])
-            MAX = np.max(spec)
+#             spec[time_rfi[tn]&(spec<0)] = 0
+            
             if np.sum(mw_use)>0:
                 spec[mw_use] = MAX * 20
                 
@@ -216,64 +131,72 @@ def repalce_near(data,freq,time_rfi,mw_use=None,times_lower_thr=None,rms_sigma =
 
             thr = RMS*times_lower_thr
             low_use = (np.abs(spec) > thr) | time_rfi[tn] #| mw_use
-            start,end = get_startend(low_use,rfi_width_lim, ext_sec)
-
-            newspec = deepcopy(spec)
-            newspec_ = deepcopy(spec)
-            #usespec = np.zeros_like(spec)
-            for s,e in zip(start,end):
-                # used to find two min values as sin valleys
-                spec1 = np.zeros_like(freq)
-                s0 = s - ext
-                if s0 < 0:s0 = 0
-                e0 = e + ext
-                if e0 > N - 1:e0 = N -1
-                spec1[s0:e0] = spec[s0:e0]
-
-                peak = np.max(spec[s:e])
-                peak_loc = np.where(spec1 == peak)[0][0]
-                spec1l = deepcopy(spec1);spec1l[peak_loc:] = MAX * 20
-                l1 = np.argmin(spec1l)
-                spec1r = deepcopy(spec1);spec1r[:peak_loc] = MAX * 20
-                r1 = np.argmin(spec1r)
-                # [l1:r1] will be replaced, length = L
-                #print(l1,r1)
-                L = r1 - l1
-                if l1 - L < 0:
-                    direc = 'right'
-                elif r1 + L > N - 1:
-                    direc = 'left'
-                else:
-                    rmsl = rms(newspec[l1 - L:l1],freq[l1 - L:l1])
-                    rmsr = rms(newspec[r1:r1 + L],freq[r1:r1 + L])
-                    if rmsl < rmsr:
-                        direc = 'left' 
-                    else:
-                        direc = 'right'
-                if direc == 'left':
-                    s1 = l1 - L
-                    e1 = l1
-                elif direc == 'right':
-                    s1 = r1
-                    e1 = r1 + L
-                #print(direc,s1,e1)
-                # [s1:e1] will be copied into [l1:r1]
-                try:
-                    newspec_[l1:r1] = newspec[s1:e1]
-                    newspec[s:e] = newspec_[s:e]
-                    #usespec[s1:e1] = 1
-                except ValueError:
-                    log.info(f"tn = {tn} has a ValueError")
-                    import traceback
-                    traceback.print_exc()  
-                    newspec[s:e] = np.random.normal(scale=RMS, size=int(e-s))
-
+            
+            newspec = replace_spec(tn,spec,freq,low_use,rfi_width_lim, ext_sec,
+                                   ext, RMS, MAX)
+                
             strange = np.where(np.abs(newspec) > times_lower_thr * RMS)[0]
             newspec[strange] = np.random.normal(scale=RMS, size=len(strange))
 
             data_rep[tn,:] = newspec
             
     return data_rep
+
+def replace_margin_side(data,freq,is_rfi,mw_use,margin_width = 20,ext_freq = 1.3,side = 'both'):
+    margin = int(len(freq)/(freq[-1]-freq[0])*margin_width)
+
+    from baseline_2 import replace_spec
+    N = data.shape[0]
+    MAX = np.nanmax(data)*20
+    pads = np.full((N,margin),MAX)    
+
+    fdelta = freq[1]-freq[0]
+    fext1 = np.arange(freq[0]-margin*fdelta,freq[0],fdelta)
+    fext2 = np.arange(freq[-1],freq[-1]+margin*fdelta,fdelta)    
+    print("Margin from two sides ...")
+
+    if side == 'both':
+        data_ = np.hstack((pads,data,pads))
+        freq_ = np.hstack((fext1,freq,fext2))
+    elif side == 'left':
+        data_ = np.hstack((pads,data))
+        freq_ = np.hstack((fext1,freq))
+    elif side == 'right': 
+        data_ = np.hstack((data,pads))
+        freq_ = np.hstack((freq,fext2))
+        
+    ext = int(np.around(ext_freq / fdelta))
+
+    from markRFI import real_rms
+    whole_rfi = np.all(is_rfi,axis = 1)
+    is_rfi_num = np.arange(data.shape[0])[whole_rfi]
+        
+    for ti in tqdm(range(N)):
+        if ti not in is_rfi_num:
+            spec_ = data_[ti]
+            low_use = (spec_ == np.inf)
+            RMS = real_rms(spec_,freq_,sigma=6,rms_vrange=[1390,1400])
+
+            newspec = replace_spec(ti,spec_,freq_,low_use,rfi_width_lim=0, ext_sec=1, ext = ext, RMS=RMS, MAX = MAX)
+            newspec[-1] = 0
+            data_[ti] = newspec
+        
+    if mw_use is not None:    
+        pads = np.full((N,margin),False)
+        pads[is_rfi_num,:] = True
+        
+        pad = np.full(margin,False) 
+        if side == 'both':
+            is_rfi = np.hstack((pads,is_rfi,pads))
+            mw_use = np.hstack((pad,mw_use,pad))
+        elif side == 'left':
+            is_rfi = np.hstack((pads,is_rfi))
+            mw_use = np.hstack((pad,mw_use))
+        elif side == 'right':   
+            is_rfi = np.hstack((is_rfi,pads))
+            mw_use = np.hstack((mw_use,pad))
+            
+    return data_,freq_,is_rfi,mw_use,margin
 
 def replace_rfi_lower(data,freq,method,times_lower_thr=3,times_lower=None,
                       rms_sigma = 5,rms_frange=None):
@@ -295,20 +218,14 @@ def replace_rfi_lower(data,freq,method,times_lower_thr=3,times_lower=None,
         data_low[low_use] = np.random.normal(scale=RMS, size=data.shape)[low_use]
     return data_low
 
-def replace_rfi(data,freq,is_rfi = None,time_rfi = None, method='subtract with pd',
+def replace_rfi(data,freq,time_rfi = None, method='subtract with pd',
                 mw_use = None, **rep_args):
     
     log.info(f"Replace RFI with {method} method ...")
     if method == 'near ripple':
         data_rep = repalce_near(data,freq,time_rfi=time_rfi,mw_use=mw_use,**rep_args)
-    elif method == 'subtract trpdr':
-        data_rep = replace_rfi_substract(data,freq,is_rfi,time_rfi,mw_use,**rep_args)
-    elif method == 'subtract tr':
-        data_rep = replace_rfi_substract2(data,freq,time_rfi,mw_use,**rep_args)
     elif (method == 'lower') or (method == 'set zeros') or (method == 'set noise'):
         data_rep = replace_rfi_lower(data,freq,method=method,**rep_args)
-    elif method == 'subtract rfi':
-        data_rep = replace_rfi_substract_old(data,freq,is_rfi,mw_use,**rep_args)
     else:
         raise ValueError("Unsupport replace RFI method!")
         
@@ -345,7 +262,7 @@ def find_loc(amp,x,amp_thr,xlim,rip_mhz=True,Print=True):
 def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_factor = 1.05,
                    amp_thr_factor = 1.5,is_on = None,chan_wide = 5,chan_narr = 3,choose_method = 'all',
                    rip_base = True,rip_1mhz= True,rip_2mhz = False,rip_0_04mhz = False,
-                   plot = False,pdf = None,title = None,fft_ylim = None,
+                   plot = False,pdf = None,title = None,fft_ylim = None, # smooth_phase = False,phase_sig=10,
                    quick_test = False, fftf = None,amp_data = None, x = None, tn = None):
     """
     fit baseline ripple (standing wave) by FFT
@@ -408,8 +325,10 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
     #use_8mhz = np.zeros_like(x,dtype = 'bool')
     
     if rip_1mhz:
-        for s1 in range(len(loc1s)):
-            use_1mhz |= (np.abs(np.arange(len(x))-loc1s[s1]) < chan_wide)
+        #for s1 in range(len(loc1s)):
+        use_1mhz = (np.abs(np.arange(len(x))-loc1s[0]) < chan_wide)
+        if len(loc1s) == 2:
+            use_1mhz |= (np.abs(np.arange(len(x))-loc1s[1]) < chan_narr)
         use[use_1mhz] = True
     if rip_2mhz:
         use_2mhz = (np.abs(np.arange(len(x))-loc2) < chan_wide)
@@ -447,8 +366,30 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
     
     amp_data_inpd[amp_data_inpd < 0] = 0
     
+    # phase
+    phi_data = fftf.phi
+#     if not smooth_phase:
+#         phi_inpd = phi_data
+#     else:
+#         phi_inpd = deepcopy(phi_data)
+#         phi = phi_data[:,loc1]
+#         from hifast.utils.misc import smooth1d
+#         phi_inpd[~is_on,loc1] = smooth1d(phi[~is_on],method='gaussian',sigma=phase_sig)
+#         if np.sum(is_on) < 0.2*len(is_on):
+#             phase_sig = phase_sig / 5
+#         phi_inpd[is_on,loc1] = smooth1d(phi[is_on],method='gaussian',sigma=phase_sig)
+
+#         fig = plt.figure(figsize = (10,3))
+#         plt.plot(phi,'.')
+#         plt.plot(phi_inpd[:,loc1],'.')
+#         plt.xlabel("specs num")
+#         plt.ylabel("phi(rad)")
+#         if pdf is not None:
+#             pdf.savefig();plt.close()
+#         else:
+#             plt.show()
     # IFFT
-    A_data_inpd =  amp_data_inpd * np.exp(1j*fftf.phi)
+    A_data_inpd =  amp_data_inpd * np.exp(1j*phi_data)
     A_data_ifft = np.real(np.fft.irfft(A_data_inpd,n=data_rep.shape[1]))
     print("Finished ifft.")
     
@@ -529,6 +470,8 @@ def mean_fit_ripple(data, nspec,func = 'iter'):
         except ModuleNotFoundError:
             bn = np
         tlen = data.shape[0]
+        if tlen < 2*n:
+            print("use all specs to mean")
         t1 = np.arange(tlen)-n
         t2 = np.arange(tlen)+n
         t1[t1 < 0] = 0;t2[t2 < 2*n] = 2*n
@@ -560,8 +503,9 @@ def med_fit_ripple(data, nspec,func = 'iter'):
             import bottleneck as bn
         except ModuleNotFoundError:
             bn = np
-    
         tlen = data.shape[0]
+        if tlen < 2*n:
+            print("use all specs to median")
         t1 = np.arange(tlen)-n
         t2 = np.arange(tlen)+n
         t1[t1 < 0] = 0;t2[t2 < 2*n] = 2*n
@@ -594,10 +538,21 @@ def fit_ripple(data,freq=None, method='rfft', is_rfi_num=None,not_rfi_num=None,o
         
         return A_data_ifft        
     elif method == 'mean':
-        sw = mean_fit_ripple(data,**fit_args)
+        sw_on = mean_fit_ripple(data[is_on],**fit_args)
+        sw_off = mean_fit_ripple(data[~is_on],**fit_args)
+        
+        sw = np.zeros_like(data)
+        sw[is_on] = sw_on
+        sw[~is_on] = sw_off
+        
         return sw
     elif method == 'median':
-        sw = med_fit_ripple(data,**fit_args)
+        sw_on = med_fit_ripple(data[is_on],**fit_args)
+        sw_off = med_fit_ripple(data[~is_on],**fit_args)
+        
+        sw = np.zeros_like(data)
+        sw[is_on] = sw_on
+        sw[~is_on] = sw_off
         return sw
     
     

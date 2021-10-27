@@ -4,6 +4,33 @@
 import numpy as np
 from copy import deepcopy
 
+def vopt2vrad(vopt):
+    """
+    velocity: optical to radio
+    """
+    c = 299792.458
+    vrad = c -c**2/(c + vopt)
+    return vrad
+
+def vrad2vopt(vrad):
+    """
+    velocity: radio to optical
+    """
+    c = 299792.458
+    vopt = c**2/(c - vrad) - c
+    return vopt
+
+def redshift(v , relative = False):
+    c = 299792.458
+    beta = v / c
+    
+    if relative:
+        g = 1 / np.sqrt(1 - beta ** 2)
+        z = (1 + v / c) * g - 1
+        return z
+    else:
+        return betas
+
 def percent_vminmax(data,percent = None):
     if percent != None:
         vmin = np.nanpercentile(data,q = (1-percent)/2* 100,interpolation='nearest')
@@ -159,6 +186,8 @@ def get_data(f,polar='average',xrange = None):
         data =T[:,:,1]
     elif polar=='merged':
         data =T
+    else:
+        raise TypeError(f"Unsupport polar type {polar}")
     if xrange != None:
         x1,x2 = np.min(xrange),np.max(xrange)
         is_use = (x>=x1)&(x<=x2)

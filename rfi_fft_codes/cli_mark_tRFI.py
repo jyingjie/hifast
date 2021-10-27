@@ -53,7 +53,7 @@ if __name__ == '__main__':
                        help='freq range exists short-freq time rfi ')
     parser.add_argument('--sf_file',         
                         help='freq range exists short-freq time rfi npy filename')
-    parser.add_argument('--sf_frange_step',type = int,default=20,
+    parser.add_argument('--sf_frange_step',type = int,default=30,
                         help='if sf_frange is None and sf_file is None, cycle in whole freq band.')
     
     parser.add_argument('--sf_times', type=float, default=3,
@@ -81,7 +81,6 @@ if __name__ == '__main__':
                        help='rfi lasts at least 20 spec numbers')
     parser.add_argument('--lf_ext',type = int,default=1, 
                        help='extend edge')
-
     
     ## flux calibration
     parser.add_argument('--flux', action='store_true',
@@ -285,7 +284,8 @@ if __name__ == '__main__':
         frange_step = args.sf_frange_step
         
         if shortf_rfi:
-            tn = np.argmin(np.abs(np.nansum(data[not_rfi_num,:],axis = 1)))
+            print("########################")
+            tn = np.argmin(np.abs(np.nansum(Tt[not_rfi_num,:],axis = 1)))
             spec = deepcopy(T[tn,:])
             RMS = real_rms(spec,freq,rms_sigma,rms_frange)
             
