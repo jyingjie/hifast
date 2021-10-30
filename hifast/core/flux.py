@@ -68,7 +68,7 @@ def cali_src(T, nB, freq, cali_fname=None, ra=None, dec=None, mjd=None):
     mjd: array_like; (m,)
     """
     
-    if cali_fname is None:
+    if cali_fname is None or cali_fname=='none':
         K_Jy = Get_gain(ra, dec, mjd, nB, freq)[0] * 25.6   #K/Jy
         K_Jy= K_Jy[:,:,None]
     else:

@@ -154,7 +154,7 @@ if __name__ == '__main__':
                        help='')
     parser.add_argument('--show', action='store_true',
                        help='')
-    parser.add_argument('--inter', default='none',
+    parser.add_argument('--inter',
                        help='interpolation parameter in plt.imshow')
     parser.add_argument('--ftype', default='png',
                        help='png or pdf')

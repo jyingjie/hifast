@@ -306,7 +306,7 @@ if __name__ == '__main__':
     #print('ra range in generated cube fits file', np.min(ra_grid), np.max(ra_grid))
     #print('dec range in generated cube fits file', np.min(dec_grid), np.max(dec_grid))
     out, nums= grid.gridding(ra, dec, Ta, ra_grid, dec_grid, r=r_cut, method=method) 
-    hdu = fits.PrimaryHDU(out, header=header)
+    hdu = fits.PrimaryHDU(out.astype('float32'), header=header)
     print(f'Saving to {outname}.')
     hdu.writeto(outname,overwrite=False)
     # save the spec count in each grid
