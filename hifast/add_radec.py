@@ -7,6 +7,7 @@ import os
 import re
 import sys
 
+
 def get_nB(path):
     return int(re.findall(r'-M[0-1][0-9]', os.path.basename(path))[-1][2:])
 
@@ -54,7 +55,7 @@ def get_radec(file_spec, nB_radec=1):
 
     nB = get_nB(file_spec)
     # ra dec file
-    file_radec = '.'.join(file_spec.split('.')[:-1])+'-radec.hdf5'
+    file_radec = file_spec.rsplit('specs_T', 1)[0] + 'specs_T-radec.hdf5'
     #file_radec = re.findall(r'.*-specs_T', file_radec)+'-radec.hdf5'
     file_radec = Replace_nB(file_radec, nB_radec)
     f = h5py.File(file_radec, 'r')

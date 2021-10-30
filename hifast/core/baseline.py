@@ -528,7 +528,7 @@ class BL_masPLS(BL_asPLS, BL_arPLS):
         return BL_arPLS._reweight(self, *args, **kwargs)
 
 # Cell
-def sub_baseline(freq, yss, *, nproc=1, exclude_fun=None, inplace=False,
+def sub_baseline(freq, yss, *, subtract=True, nproc=1, exclude_fun=None, inplace=False,
                  njoin=1, s_method_t='none', s_sigma_t=None,
                  method='arPLS', s_method_freq='none', s_sigma_freq=None, average_every_freq=None,
                  lam=1e8, deg=2, offset=2, ratio=0.01, niter=100, sin_f=[0.925, ], rew=True, opt_para=None,
@@ -600,6 +600,8 @@ def sub_baseline(freq, yss, *, nproc=1, exclude_fun=None, inplace=False,
                           method=method, bl_para=bl_para, verbose=verbose)
 
     if njoin is not None and njoin > 1:
-        return yss_ori - bls[np.searchsorted(np.arange(0,yss_ori.shape[0],njoin), 1+np.arange(yss_ori.shape[0]))-1]
-    else:
+        bls = bls[np.searchsorted(np.arange(0,yss_ori.shape[0],njoin), 1+np.arange(yss_ori.shape[0]))-1]
+    if subtract:
         return yss_ori - bls
+    else:
+        return bls
