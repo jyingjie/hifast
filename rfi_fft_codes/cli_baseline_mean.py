@@ -56,8 +56,8 @@ if __name__ == '__main__':
     
     parser.add_argument('--ylim', type=float, nargs=2,
                         help='set ylim in plotting spec')
-    parser.add_argument('--vmin_max', type=float, nargs=2,
-                        help='vmin vmax in plotting waterfall')
+    parser.add_argument('--per_vmin_max', type=float, 
+                        help='percent vmin vmax in plotting waterfall')
     parser.add_argument('--one_spec', action='store_true',
                        help='plot only one spec or mean specs')
     parser.add_argument('--fill_rfi', default='rfi', choices=['nan','rfi'],
@@ -149,7 +149,7 @@ if __name__ == '__main__':
     ra = ra[ind_sort]
     dec = dec[ind_sort]
     T = T[ind_sort]
-    is_on = T[is_on]
+    is_on = is_on[ind_sort]
         
     # read RFI
     from glob import glob
@@ -211,7 +211,7 @@ if __name__ == '__main__':
                 Tr = np.mean(Tr, axis=2, dtype='float64')
             is_rfi = np.isnan(Tr)
     else:
-        is_rfi = None 
+        is_rfi = np.full(T.shape[:2],False) 
     
     freq = fs['freq'][:]
     if frange is not None:
@@ -285,12 +285,12 @@ if __name__ == '__main__':
            
     if plot:
         ylim = args.ylim
-        vmin_max = args.vmin_max
+        per_vmin_max = args.per_vmin_max
         one_spec = args.one_spec
         print(" 'Wait for plotting patiently, you must.' Master Yoda said")
         tn = 10
         def plot_in_pdf(T,sw_fit,rmsw_data,polar,pdf = None,one_spec = False,frange = None,
-                        ylim = None,vmin_max=None):
+                        ylim = None,per_vmin_max=None):
             global tn, freq
             fig = plt.figure(figsize=(40,4))
             ax = fig.add_subplot(111)
@@ -315,19 +315,20 @@ if __name__ == '__main__':
             pdf.savefig();plt.close()
 
             from util import plot_waterfall
-            plot_waterfall(fs,data = T, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),xrange = frange,
+            plot_waterfall(fs,data = T, per_vmin_max=per_vmin_max,cmap='plasma',figsize=(18,5),xrange = frange,
                            title = os.path.basename(file_spec).split('.')[:-1][0],pdf = pdf)
 
-            plot_waterfall(fs,data = rmsw_data, vmin_max=vmin_max,cmap='plasma',figsize=(18,5),pdf = pdf,xrange = frange,
+            plot_waterfall(fs,data = rmsw_data, per_vmin_max=per_vmin_max,cmap='plasma',figsize=(18,5),pdf = pdf,xrange = frange,
                            title = f'remove baseline, polar {polar}')
             
         if keep_polar:
             plot_in_pdf(T_xx,sw_fit_xx,rmsw_data[:,:,0],polar='xx',pdf = pdf,frange = frange,
-                        one_spec = one_spec, ylim = ylim,vmin_max=vmin_max)
+                        one_spec = one_spec, ylim = ylim,per_vmin_max=per_vmin_max)
             plot_in_pdf(T_yy,sw_fit_yy,rmsw_data[:,:,1],polar='yy',pdf = pdf,frange = frange,
-                       one_spec = one_spec, ylim = ylim,vmin_max=vmin_max)
+                       one_spec = one_spec, ylim = ylim,per_vmin_max=per_vmin_max)
         else:
-            plot_in_pdf(T,sw_fit,rmsw_data,polar='merged',pdf = pdf,frange = frange)
+            plot_in_pdf(T,sw_fit,rmsw_data,polar='merged',pdf = pdf,frange = frange,
+                       one_spec = one_spec, ylim = ylim,per_vmin_max=per_vmin_max)
 
         
         pdf.close()
