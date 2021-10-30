@@ -200,7 +200,7 @@ def replace_margin_side(data,freq,is_rfi,mw_use,margin_width = 20,ext_freq = 1.3
 
 def get_margin_num(margin,side):
     if side == 'both': 
-        margin1 = margin; margin2 = -margin
+        margin1 = margin2 = margin
     elif side == 'left': 
         margin1 = margin; margin2 = 0
     elif side == 'right': 
