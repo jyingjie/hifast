@@ -4,6 +4,23 @@
 import numpy as np
 from copy import deepcopy
 
+def _round_up_to_odd_integer(value):
+    c = np.ceil(value)
+    if np.isscalar(c):
+        if c % 2 == 0:
+            r = c + 1
+        else:
+            r = c
+    else:
+        r = np.zeros(c.shape[0])
+        for i in range(c.shape[0]):
+            if c[i] % 2 == 0:
+                r[i] = c[i] + 1
+            else:
+                r[i] = c[i]
+    return r.astype('int')
+
+
 def vopt2vrad(vopt):
     """
     velocity: optical to radio

@@ -57,7 +57,10 @@ if __name__ == '__main__':
     
     # replace big RFI or sources
     parser.add_argument('--rfi_method', default='near ripple', choices=['near ripple'],
-                        help='method to replace big RFI')
+                        help='method to replace big RFI or source')
+    parser.add_argument('--not_rep_near', action='store_true',
+                       help='do not replace big RFI or source, but will still check strange high pionts')
+    
     parser.add_argument('--mw_frange', type=float, nargs=2,
                        help='milky way freq range, or None')  
     parser.add_argument('--rms_sigma', type=float, default = 6,
@@ -82,10 +85,10 @@ if __name__ == '__main__':
                        help='above mean amptitude threshold will be chosed')
     parser.add_argument('--amp_thr_factor', type=float, default=1.4, 
                        help='above amptitude threshold will be chosed in every spec')
-    parser.add_argument('--chan_wide', type=int, default=5, 
-                       help='channel numbers near 1mhz to be chosed (wide)')
-    parser.add_argument('--chan_narr', type=int, default=3, 
-                       help='channel numbers near 1mhz to be chosed (narrow)')
+    parser.add_argument('--comp_wide', type=int, default=5, 
+                       help='component width [\mu s] to be chosed (near 1mhz should be wide)')
+    parser.add_argument('--comp_narr', type=int, default=3, 
+                       help='component width [\mu s] to be chosed (0.04mhz, 0.5mhz etc should be narrow)')
     parser.add_argument('--choose_method', default='all', choices=['all','interpolate'],
                        help='method to choose components in fft')
 
@@ -153,6 +156,7 @@ if __name__ == '__main__':
         rep_args['rfi_width_lim'] = args.rfi_width_lim
         rep_args['ext_sec'] = args.ext_sec
         rep_args['ext_freq'] = args.ext_freq
+        rep_args['rep_near'] = not args.not_rep_near
             
         print("rep_args:",rep_args)    
     else:
@@ -160,12 +164,12 @@ if __name__ == '__main__':
 
     #fit args
     fit_args = {}
-    cw = args.chan_wide
-    cn = args.chan_narr
+    cw = args.comp_wide
+    cn = args.comp_narr
     choose_method = args.choose_method
     if fft_method =='rfft':
-        fit_args['chan_wide'] = cw
-        fit_args['chan_narr'] = cn
+        fit_args['comp_wide'] = cw
+        fit_args['comp_narr'] = cn
         fit_args['amp_thr_mean_factor'] = args.amp_thr_mean_factor
         fit_args['amp_thr_factor'] = args.amp_thr_factor
         fit_args['choose_method'] = choose_method
@@ -221,8 +225,6 @@ if __name__ == '__main__':
         pdf = PdfPages(pdfname)
     else:
         pdf = None
- 
-    nB = int(re.findall(r'-M[0-1][0-9]',file_spec)[-1][2:])
 
     ################################ load data ###############################
     fs = h5py.File(file_spec,'r')
@@ -264,11 +266,13 @@ if __name__ == '__main__':
     
     # read RFI
     from glob import glob
+    nB = int(re.findall(r'-M[0-1][0-9]',file_spec)[-1][2:])
     
     if rfi_fname is not None:
         if rfi_fname == 'none':
             print("Don't use rfi file.")
         else:
+            rfi_fname = rfi_fname + str(nB).zfill(2) + '*-tr.hdf5'
             rfi_fnames = glob(rfi_fname)
             if len(rfi_fnames) == 1:
                 rfi_fname = rfi_fnames[0]
@@ -311,7 +315,7 @@ if __name__ == '__main__':
 #                 else:
 #                     t_rfi = np.full(is_rfi.shape,False)
 #                     log.warning("rfi file doesn't contain key 'time_rfi',so don't use short time rfi.")
-            rfi.close()
+            
             if len(is_rfi.shape) == 3:
                 # use 2D rfi mask
                 is_rfi = is_rfi[:,:,0]|is_rfi[:,:,1]
@@ -345,34 +349,35 @@ if __name__ == '__main__':
     # frange to fft
     fft_frange = args.fft_frange
     if fft_frange is None:
-        fft_frange = [freq[0]-fdelta,freq[-1]]
+        fft_frange = [freq[0],freq[-1]]
     
     # frange of result
     if frange is None:
-        frange = [freq[0]-fdelta,freq[-1]]
+        frange = [freq[0],freq[-1]]
     print(f"Result freq band: {frange}")
     
     
     delta_fl = frange[0]-fft_frange[0]
     delta_fr = fft_frange[1]-frange[1]
-    if (delta_fl < 0) or (delta_fr < 0):
+    if (delta_fl < -fdelta) or (delta_fr < -fdelta):
         raise ValueError(f"fft_frange {fft_frange} should >= frange {frange}")
 
     MARGIN = False; side_left = False; side_right = False
     margin_lim = args.margin_lim
     
-    if (delta_fl<=margin_lim): 
-        if ((fft_frange[0] - full_frange[0])>margin_lim): 
-            fft_frange[0] = fft_frange[0] - margin_lim
-        else:    
-            MARGIN = True
-            side_left = True
-    if  (delta_fr<=margin_lim):           
-        if ((full_frange[1]-fft_frange[1])>margin_lim):
-            fft_frange[1] =  fft_frange[1] + margin_lim
-        else:
-            MARGIN = True
-            side_right = True
+    if margin_lim > 0:
+        if (delta_fl<=margin_lim): 
+            if ((fft_frange[0] - full_frange[0])>margin_lim): 
+                fft_frange[0] = fft_frange[0] - margin_lim
+            else:    
+                MARGIN = True
+                side_left = True
+        if  (delta_fr<=margin_lim):           
+            if ((full_frange[1]-fft_frange[1])>margin_lim):
+                fft_frange[1] =  fft_frange[1] + margin_lim
+            else:
+                MARGIN = True
+                side_right = True
             
     print(f"Freq band to fft: {fft_frange}")         
             
@@ -382,6 +387,7 @@ if __name__ == '__main__':
         margin_width = margin_lim*2 - min(delta_fl,delta_fr)
         margin_args['margin_width'] = margin_width
         margin_args['ext_freq'] = args.ext_freq
+        margin_args['rms_frange'] = args.rms_frange
         if side_left & side_right:
             side = 'both'
         elif side_left:
@@ -396,7 +402,9 @@ if __name__ == '__main__':
     freq = freq[is_]
     T = T[:,is_,:]
     if rfi_fname != 'none':
-        is_rfi = is_rfi[:,is_];#t_rfi = is_rfi 
+        freqr = rfi['freq'][:]
+        is_ = (freqr >= fft_frange[0]) & (freqr <= fft_frange[1])
+        is_rfi = is_rfi[:,is_]
     
     # load data
     sep_fname = args.sep_fname  
@@ -437,7 +445,7 @@ if __name__ == '__main__':
     mw_frange = args.mw_frange
     if mw_frange is None:
         if (max(freq) <= 1419)|(min (freq)>= 1422):
-            print("don't contain MW")
+            print("Don't contain MW")
             mw_use = np.zeros_like(freq,dtype='bool')
         else:
             mw_use = None
@@ -525,7 +533,9 @@ if __name__ == '__main__':
             if MARGIN:
                 # cut back ...
                 margin1, margin2 = get_margin_num(margin,side)
+#                 print(margin1, margin2)
                 margin2 = len(freq) - margin2
+#                 print( margin2)
                 for arr_type in ['data_rep','sw_fit','T']:
                     for arr_pol in ['xx','yy']:
                         exec(f"{arr_type}_{arr_pol} = {arr_type}_{arr_pol}[:,margin1:margin2]")
@@ -563,7 +573,7 @@ if __name__ == '__main__':
     #remove standing waves 
     if keep_polar: 
         sw_fit = np.append(sw_fit_xx,sw_fit_yy)
-        #print(sw_fit.shape,sw_fit_xx.shape,sw_fit_yy.shape,ori_shape)
+#         print(sw_fit.shape,sw_fit_xx.shape,sw_fit_yy.shape,ori_shape)
         sw_fit = sw_fit.reshape((2,ori_shape[0],ori_shape[1])).transpose((1,2,0))
 
     rmsw_data = T_ori - sw_fit
@@ -671,10 +681,10 @@ if __name__ == '__main__':
     dict_out[outfield] = rmsw_data.astype('float32')
     #dict_out['ripple'] = sw_fit.astype('float32')
     dict_out['freq'] = freq
-    if is_rfi is not None:
+    if is_rfi is not None: 
         dict_out['is_rfi'] = is_rfi
-    if rfi_fname != 'none':      
-        rfi.close()
+    if rfi_fname != 'none': rfi.close()
+    if sep_fname != 'none': sep.close()
     if is_extrapo is not None:
         dict_out['is_extrapo'] = is_extrapo
     #save file

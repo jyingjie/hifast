@@ -12,24 +12,27 @@ from tqdm import tqdm
 from matplotlib import pyplot as plt
 
 
-def replace_spec(tn,spec,freq,low_use,rfi_width_lim, ext_sec, ext, RMS, MAX = None,test=False):
+def replace_spec(tn,spec,freq,low_use,rfi_width_lim, ext_sec, ext,STD, MAX = None,test=False):
     if MAX is None:
         MAX = np.nanmax(spec)
     from markRFI import rms,get_startend
     if np.sum(low_use) == 0:
         return spec
 #     from hifast.utils.misc import smooth1d
-
-    start,end = get_startend(low_use,rfi_width_lim, ext_sec)
-    if len(start) == 0:
-        print(f"tn={tn} raised a warning")
-        return spec
-    N = len(freq)
-    newspec = deepcopy(spec)
-    newspec_ = deepcopy(spec)
     if test:
         usespec = np.zeros_like(spec)
         rep_area = np.zeros_like(spec,dtype='bool')
+        
+    start,end = get_startend(low_use,rfi_width_lim, ext_sec)
+    if len(start) == 0:
+        print(f"tn={tn} raised a warning")
+        if test:
+            return spec,usespec,rep_area 
+        else:
+            return spec
+    N = len(freq)
+    newspec = deepcopy(spec)
+    newspec_ = deepcopy(spec)
 
     for s,e in zip(start,end):
         # used to find two min values as sin valleys
@@ -84,14 +87,14 @@ def replace_spec(tn,spec,freq,low_use,rfi_width_lim, ext_sec, ext, RMS, MAX = No
             log.info(f"tn = {tn} has a ValueError, will replace with noise")
             import traceback
             traceback.print_exc()  
-            newspec[s:e] = np.random.normal(scale=RMS, size=int(e-s))
+            newspec[s:e] = np.random.normal(scale=STD, size=int(e-s)) + np.nanmedian(spec)
     if test:
         return newspec,usespec,rep_area 
     else:
         return newspec
 
 def repalce_near(data,freq,time_rfi,mw_use=None,times_lower_thr=None,rms_sigma = None,
-                 ext_freq = None,rms_frange=None,rfi_width_lim=None, ext_sec=None):
+                 ext_freq = None,rms_frange=None,rfi_width_lim=None, ext_sec=None,rep_near = True):
     """
     replace mw, rfi or others by near ripple section
     
@@ -104,7 +107,7 @@ def repalce_near(data,freq,time_rfi,mw_use=None,times_lower_thr=None,rms_sigma =
     
     ext = int(np.around(ext_freq / fdelta))
     
-    from markRFI import real_rms,rms
+    from markRFI import real_rms,rms,real_std
     if time_rfi is not None:
         whole_rfi = np.all(time_rfi,axis = 1)
         is_rfi_num = np.arange(data.shape[0])[whole_rfi]
@@ -123,26 +126,30 @@ def repalce_near(data,freq,time_rfi,mw_use=None,times_lower_thr=None,rms_sigma =
         if tn in not_rfi_num:
             spec = deepcopy(data[tn,:])
 #             spec[time_rfi[tn]&(spec<0)] = 0
-            
-            if np.sum(mw_use)>0:
-                spec[mw_use] = MAX * 20
                 
             RMS = real_rms(spec,freq,sigma=rms_sigma,rms_vrange=rms_frange)
+            STD = real_std(spec,freq,sigma=rms_sigma,vrange=rms_frange)
+            if rep_near:
+                if np.sum(mw_use)>0:
+                    spec[mw_use] = MAX * 20
+                    
+                thr = RMS*times_lower_thr
+                low_use = (np.abs(spec) > thr) | time_rfi[tn] #| mw_use
 
-            thr = RMS*times_lower_thr
-            low_use = (np.abs(spec) > thr) | time_rfi[tn] #| mw_use
-            
-            newspec = replace_spec(tn,spec,freq,low_use,rfi_width_lim, ext_sec,
-                                   ext, RMS, MAX)
+                newspec = replace_spec(tn,spec,freq,low_use,rfi_width_lim, ext_sec,
+                                       ext,STD, MAX)
+            else:
+                newspec = spec
                 
             strange = np.where(np.abs(newspec) > times_lower_thr * RMS)[0]
-            newspec[strange] = np.random.normal(scale=RMS, size=len(strange))
+            newspec[strange] = np.random.normal(scale=STD, size=len(strange)) + np.nanmedian(spec)
 
             data_rep[tn,:] = newspec
             
     return data_rep
 
-def replace_margin_side(data,freq,is_rfi,mw_use,margin_width = 20,ext_freq = 1.3,side = 'both'):
+def replace_margin_side(data,freq,is_rfi,mw_use,margin_width = 20,ext_freq = 1.3,side = 'both',
+                        rms_frange=None):
     margin = int(len(freq)/(freq[-1]-freq[0])*margin_width)
 
     from baseline_2 import replace_spec
@@ -175,9 +182,9 @@ def replace_margin_side(data,freq,is_rfi,mw_use,margin_width = 20,ext_freq = 1.3
         if ti not in is_rfi_num:
             spec_ = data_[ti]
             low_use = (spec_ == np.inf)
-            RMS = real_rms(spec_,freq_,sigma=6,rms_vrange=[1390,1400])
+            STD = real_std(spec_,freq_,sigma=6,vrange=rms_frange)
 
-            newspec = replace_spec(ti,spec_,freq_,low_use,rfi_width_lim=0, ext_sec=1, ext = ext, RMS=RMS, MAX = MAX)
+            newspec = replace_spec(ti,spec_,freq_,low_use,rfi_width_lim=0, ext_sec=1, ext = ext, STD=STD, MAX = MAX)
             newspec[-1] = 0
             data_[ti] = newspec
         
@@ -269,7 +276,7 @@ def find_loc(amp,x,amp_thr,xlim,rip_mhz=True,Print=True):
     return loc,sw_mhz,rip_mhz
 
 def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_factor = 1.05,
-                   amp_thr_factor = 1.5,is_on = None,chan_wide = 5,chan_narr = 3,choose_method = 'all',
+                   amp_thr_factor = 1.5,is_on = None,comp_wide = None,comp_narr = None,choose_method = 'all',
                    rip_base = True,rip_1mhz= True,rip_2mhz = False,rip_0_04mhz = False,
                    plot = False,pdf = None,title = None,fft_ylim = None, # smooth_phase = False,phase_sig=10,
                    quick_test = False, fftf = None,amp_data = None, x = None, tn = None):
@@ -332,6 +339,20 @@ def fft_fit_ripple(data_rep, freq,is_rfi_num,not_rfi_num,ori_shape,amp_thr_mean_
     use_2mhz = np.zeros_like(x,dtype = 'bool')
     use_0_04mhz = np.zeros_like(x,dtype = 'bool')
     #use_8mhz = np.zeros_like(x,dtype = 'bool')
+    
+#     from util import _round_up_to_odd_integer
+    dx = x[1] - x[0]
+    comp_wide /= 2; comp_narr /= 2 
+    if comp_wide > 0: 
+        chan_wide = int(np.around(comp_wide / dx))
+    else:
+        chan_wide = 0
+    if comp_narr > 0: 
+        chan_narr = int(np.around(comp_narr / dx))
+    else:
+        chan_narr = 0
+    
+    print(f"chan_wide = {2*chan_wide-1}, chan_narrow = {2*chan_narr-1}")
     
     if rip_1mhz:
         #for s1 in range(len(loc1s)):
