@@ -21,20 +21,20 @@ def bool_fun(s):
     used as the type of parser.add_argument
     """
     s = str(s)
-    if s == 'True':
+    if s == 'True' or s.lower() == 'yes':
         return True
-    elif s == "False":
+    elif s == 'False' or s.lower() == 'no':
         return False
     else:
-        raise(ValueError("input must be 'True' or 'False'"))
+        raise(ValueError("input must be 'True'('yes') or 'False'('no')"))
 
 
 def add_common_argument(parser):
     # common
     parser.add_argument('--outdir', default='default',
                         help='The directory of the output file, default is same with the input file')
-    parser.add_argument('--force', '-f', type=bool_fun, choices=[True, False], default='False',
-                        help='if True, overwriting file if output file exists')
+    parser.add_argument('--force', '-f', action='store_true',
+                        help='if set, overwriting file if output file exists')
     parser.add_argument('-g', is_write_out_config_file_arg=True,
                         help='save config to file path')
     parser.add_argument('-c', '--my-config', is_config_file_arg=True,
@@ -121,6 +121,7 @@ def load_hdf5_to_dict(fpath):
     fpath: str
     """
     import h5py
+    from collections import OrderedDict
     dict_out = {}
     fs = h5py.File(fpath, 'r')
     # load Header
@@ -191,7 +192,7 @@ class BaseIO(object):
                 print(f"will overwrite the existing out file {self.fpath_out}")
             else:
                 print(f"File exists {self.fpath_out}")
-                print("exit... Using ' -f True ' to overwrite it.")
+                print("exit... Using ' --force ' to overwrite it.")
                 sys.exit(0)
 
     def _gen_fpath_out(self,):
