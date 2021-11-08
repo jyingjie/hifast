@@ -55,9 +55,11 @@ if __name__ == '__main__':
     #saving
     ##record history
     from .utils.io import *
-    header = rec_his(args=args)
+    import json
+    header = rec_his(args=json.dumps(args.__dict__))
     print('Saving...')
-    save_dict_hdf5(fileout, radec, header=header)
+    radec['Header'] = header
+    save_specs_hdf5(fileout, radec)
     print(f"Saved to {fileout}")
     if plot:
         plot_radec(radec, fileout + '.pdf')

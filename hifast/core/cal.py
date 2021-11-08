@@ -22,7 +22,7 @@ from astropy.io import fits
 from ..utils.tcal import read_tcal
 from ..utils.misc import smooth_axis1_d3, down_sample, median_filter_axis1_d3
 from ..utils.misc import smooth1d
-from ..utils.io import save_dict_hdf5
+from ..utils.io import save_specs_hdf5, MjdChanPolar_to_PolarMjdChan
 
 # Cell
 class FastRawData(object):
@@ -608,11 +608,12 @@ class CalOnOff(FastRawSpec):
                     res[key] = extra[key][inds[sort]]
                 res['mjd'] = mjd
                 res['freq'] = self.freq_use
-                res['T'] = T
+                res['Ta'] = MjdChanPolar_to_PolarMjdChan(T)
                 res['Tcal'] = tc_inter
                 #print(res)
                 outname= self.out_name_base + f"-specs_T_{i:04d}_{i+1:04d}.hdf5"
-                save_dict_hdf5(outname,res, header=header)
+                res['Header'] = header
+                save_specs_hdf5(outname, res, wcs_data_name='Ta')
                 print(f"Saved to {outname}")
                 del res
             else:
@@ -624,10 +625,11 @@ class CalOnOff(FastRawSpec):
             res.update(extra)
             res['mjd'] = np.hstack(mjds)
             res['freq'] = self.freq_use
-            res['Ta'] = np.vstack(Ts)
+            res['Ta'] = MjdChanPolar_to_PolarMjdChan(np.vstack(Ts))
             res['Tcal'] = tc_inter
             outname= self.out_name_base + f"-specs_T.hdf5"
-            save_dict_hdf5(outname,res, header=header)
+            res['Header'] = header
+            save_specs_hdf5(outname, res, wcs_data_name='Ta')
             print(f"Saved to {outname}")
         if save_p_cal:
             p_cal_s_res = {}
@@ -637,7 +639,8 @@ class CalOnOff(FastRawSpec):
             p_cal_s_res['p_cal_s'] = np.vstack(p_cal_s_list)[ind_uni]
             outname = self.out_name_base +'_p_cal_s.hdf5'
             print(f"p_cal in {outname}")
-            save_dict_hdf5(outname, p_cal_s_res, header=header)
+            p_cal_s_res['Header'] = header
+            save_specs_hdf5(outname, p_cal_s_res)
 
 # Cell
 def plot_sep(inds_on, inds_off, val_on, val_off, axs=None, figname=None, n_max=1500, re_tick=None, vlines_sep=True):

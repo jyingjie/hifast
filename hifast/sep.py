@@ -126,7 +126,8 @@ if __name__ == '__main__':
     #record history
     from .utils.io import rec_his
     from .core.cal import CalOnOff, CalOnOffA
-    header = rec_his(args=args)
+    import json
+    header = rec_his(args=json.dumps(args.__dict__))
     if args.check_cal == 'none':
         Cal_cls = CalOnOff
     elif args.check_cal == 'A':

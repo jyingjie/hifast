@@ -36,8 +36,13 @@ def frame_correct(Ta, freq, mjd, ra, dec, frame='LSRK', interp_kind='linear'):
     frame: str
           rest frame, HELIOCENT or LSRK
     """
-    if Ta.ndim ==2:
+    if Ta.ndim == 2:
         Ta = Ta[:,:,None]
+        ndim_ori = 2
+    elif Ta.ndim == 3:
+        ndim_ori = 3
+    else:
+        raise(ValueError('input ndim 2 or 3'))
         
     # obs vel relate to rest frame
     jd = mjd + 2400000.5
@@ -58,7 +63,7 @@ def frame_correct(Ta, freq, mjd, ra, dec, frame='LSRK', interp_kind='linear'):
         for j in range(Ta.shape[2]):
             Ta_new[i,:,j], _ = doppler_correct(freq, Ta[i,:,j], vobs[i], wvlo, method='interp', interp_kind=interp_kind)
     freq_new = wvlo
-    if Ta_new.shape[2] ==1:
+    if ndim_ori == 2:
         Ta_new = Ta_new[...,0]
     return Ta_new, freq_new
 

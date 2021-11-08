@@ -170,6 +170,7 @@ def get_ra_range(ra):
 if __name__ == '__main__':
     import os
     import argparse
+    from hifast.utils.io import PolarMjdChan_to_MjdChanPolar
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument('fname',nargs='+',
                         help='file name')
@@ -234,9 +235,9 @@ if __name__ == '__main__':
             vel_type= 'VRAD'
             frame='LSRK'
         if key is None:
-            if 'flux' in f.keys():
+            if 'flux' in f['S'].keys():
                 key= 'flux'
-            elif 'Ta' in f.keys():
+            elif 'Ta' in f['S'].keys():
                 key= 'Ta'
             else:
                 raise(ValueError('no flux or temperature information'))
@@ -248,13 +249,14 @@ if __name__ == '__main__':
     fs=[]
     for file in files:
         f = h5py.File(file,'r')
-        ra += [f['ra'],]
-        dec += [f['dec'],]
-        Ta_ = f[key]
+        S = f['S']
+        ra += [S['ra'],]
+        dec += [S['dec'],]
+        Ta_ = PolarMjdChan_to_MjdChanPolar(S[key][:])
         # merge polar
         if Ta_.ndim == 3:
             Ta_ = np.mean(Ta_, axis=2, dtype='float64')
-        vel_ = f[type3]
+        vel_ = S[type3]
         if range3 is not None:
             is_ = (vel_[:] >= range3[0]) & (vel_[:] <= range3[1])
             vel_ = vel_[:][is_]

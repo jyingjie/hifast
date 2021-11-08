@@ -20,7 +20,7 @@ from astropy.time import Time
 from astropy.utils import iers
 #iers.Conf.iers_auto_url.set("https://datacenter.iers.org/data/9/finals2000A.all")
 from .kypara2radec import kypara2radec
-from ..utils.io import rec_his, save_dict_hdf5
+from ..utils.io import rec_his, save_specs_hdf5
 
 # Cell
 def _tight_ra(ra):
@@ -251,7 +251,7 @@ def get_radec(parse_mjd, guess_str=None, ky_files=None, tol=0.3, ky_fixed=False,
             return kydata2radec(ky_data, mjd, nBs='All', ky_fixed=False)
         elif 'hdf5' in fname.split('.')[-1]:
             with h5py.File(fname,'r') as f:
-                    mjds_src = f['mjd'][:]
+                    mjds_src = f['S']['mjd'][:]
         else:
             raise(ValueError('fname needs end with xlsx or hdf5'))
     else:

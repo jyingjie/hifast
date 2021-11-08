@@ -2,7 +2,7 @@
 # coding: utf-8
 
 from .core.tcal_onoff import tcal_onoff
-from .utils.io import save_dict_hdf5
+from .utils.io import save_specs_hdf5
 from glob import glob
 import numpy as np
 import os
@@ -35,7 +35,7 @@ def get_mjds(fname_part, outdir=None, read_all=False, t_step=1):
     else:
         outname= os.path.join(outdir, 
                 f"{os.path.basename(fname_part)[:-1]}-specs_T-mjd-{os.path.basename(os.path.dirname(fname_part))}.hdf5")
-        save_dict_hdf5(outname,{'mjd':mjds})
+        save_specs_hdf5(outname,{'mjd':mjds})
 
 
 # In[478]:

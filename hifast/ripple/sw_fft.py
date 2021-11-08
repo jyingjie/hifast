@@ -175,7 +175,7 @@ def replace_margin_side(data, freq, is_rfi, mw_use, margin_width=20, ext_freq=1.
 
     ext = int(np.around(ext_freq / fdelta))
 
-    from hifas.sw.markRFI import real_rms
+    from hifas.ripple.markRFI import real_rms
     whole_rfi = np.all(is_rfi, axis=1)
     is_rfi_num = np.arange(data.shape[0])[whole_rfi]
 
@@ -314,7 +314,7 @@ class SW_FFT(object):
         if is_excluded_mean is None:
             self.amp_mean_t = np.nanmean(self.amp, axis=0)
         else:
-            self.amp_mean_t = np.nanmean(self.amp[is_excluded_mean], axis=0)
+            self.amp_mean_t = np.nanmean(self.amp[~is_excluded_mean], axis=0)
         self.amp_thr_mean = np.nanmedian(self.amp_mean_t) * amp_thr_mean_factor
         if is_on is None:
             self.amp_thr_solo = np.nanmedian(self.amp_mean_t) * amp_thr_solo_factor
