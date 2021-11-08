@@ -401,7 +401,7 @@ def fit_sw_fft(s1p, freq, nproc, is_on=None, amp_thr_mean_factor=1.05, amp_thr_s
     sw.do_fft()
     sw.gen_amp_thr_s(amp_thr_mean_factor=amp_thr_mean_factor, amp_thr_solo_factor=amp_thr_solo_factor,
                      is_on=is_on, is_excluded_mean=is_excluded_mean)
-    for key in sw_conf.keys():
+    for key in sw_periods:
         sw.find_sw_loc(xlims=sw_conf[key]['xlims'])
         sw.find_sw_chans(nchans=sw_conf[key]['nchans'])
     sw.choose_and_ifft(method=choose_method, inplace_amp=True, sw_base=sw_base)
