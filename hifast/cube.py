@@ -76,7 +76,10 @@ def gen_header(xrange, yrange, x_delta, y_delta, z, proj, vel_type, frame, histo
     # additional
     header["EQUINOX"] = 2000.0                                                  
     header["LINE"]    = 'HI'
-    header["RESTFRQ"]  =   1.420405751E+9 
+    header["RESTFRQ"]  =   1.420405751E+9
+    header["BMAJ"] = 2.9/60
+    header["BMIN"] = 2.9/60
+    header["BPA"] = 0.0
     
     #add history
     if histories is not None:

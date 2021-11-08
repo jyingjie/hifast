@@ -17,8 +17,8 @@ group = parser.add_argument_group(f'*frame correction\n{sep_line}')
 # frame correct
 group.add_argument('--fc', type=bool_fun, choices=[True, False], default='True', not_in_write_out_config_file=True,
                    help='frame correct')
-group.add_argument('--frame', choices=['HELIOCENT', 'LSRK'], default='LSRK',
-                   help='Velocity Rest Frames, HELIOCENT or LSRK')
+group.add_argument('--frame', choices=['HELIOCEN', 'LSRK'], default='LSRK',
+                   help='Velocity Rest Frames, HELIOCEN or LSRK')
 group = parser.add_argument_group(f'*after\n{sep_line}')
 group.add_argument('--replace_rfi', type=bool_fun, choices=[True, False], default='True',
                    help='if True, replace spectra contaminated by rfi as np.nan')

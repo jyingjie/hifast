@@ -34,7 +34,7 @@ def frame_correct(Ta, freq, mjd, ra, dec, frame='LSRK', interp_kind='linear'):
     freq: array; shape: (n,)
     ra, dec: array; shape: (m,)
     frame: str
-          rest frame, HELIOCENT or LSRK
+          rest frame, HELIOCEN or LSRK
     """
     if Ta.ndim == 2:
         Ta = Ta[:,:,None]
@@ -46,7 +46,7 @@ def frame_correct(Ta, freq, mjd, ra, dec, frame='LSRK', interp_kind='linear'):
         
     # obs vel relate to rest frame
     jd = mjd + 2400000.5
-    if frame == 'HELIOCENT':
+    if frame == 'HELIOCEN':
         vobs =  ugdopplerfast(ra, dec, jd, frame=frame) # velocity of observer (telescope) with respect to frame
     elif frame == 'LSRK':
         vobs =  - ugdopplerfast(ra, dec, jd, frame=frame) # velocity of observer (telescope) with respect to frame

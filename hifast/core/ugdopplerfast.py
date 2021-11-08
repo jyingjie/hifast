@@ -40,7 +40,7 @@ altitude      = 1110.0288      # Altitude, m
 
 def ugdopplerfast(rasrc,decsrc,jd,frame="LSRK"): 
     """
-    frame: LSRK or HELIOCENT
+    frame: LSRK or HELIOCEN
     """
     rasrc  = np.array(rasrc)
     decsrc = np.array(decsrc) 
@@ -69,7 +69,7 @@ def ugdopplerfast(rasrc,decsrc,jd,frame="LSRK"):
                                    rasrc[nr],decsrc[nr],jd[nr])
             porbh[nr]   = vh
             porbhjd[nr] = hjd       
-        if frame == "HELIOCENT":
+        if frame == "HELIOCEN":
             return porbh
            #print("Heliocentric velocity [km/s]: ", vh)
         elif frame=='LSRK':
