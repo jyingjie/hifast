@@ -9,10 +9,10 @@ from .utils.io import *
 sep_line = '##'+'#'*70+'##'
 parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}",
                         formatter_class=formatter_class, allow_abbrev=False,
-                        description='Fit and subtract baseline', )
+                        description='Convert file to new format', )
 add_common_argument(parser)
 parser.add_argument('fpath',
-                    help='input spectra temperature or flux file path.')
+                    help='input hdf5 file path.')
 
 # Internal Cell
 if __name__ == '__main__':
