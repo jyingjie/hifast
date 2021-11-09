@@ -19,6 +19,7 @@ class write_config(object):
         if is_:
             msg = '#help: '
             msg += f"{', '.join(a.option_strings)}; "
+            msg += f"default: {a.default}; " if a.default is not None else 'default: ;'
             if a.choices is not None:
                 msg += f"choices: {', '.join(map(str,a.choices))}; "
             msg += '\n# '.join(a.help.split('\n'))

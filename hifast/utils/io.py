@@ -3,7 +3,7 @@
 __all__ = ['formatter_class', 'os', 'sys', 'ArgumentParser', 'argparse', 'formatter_class', 'bool_fun',
            'add_common_argument', 'rec_his', 'MjdChanPolar_to_PolarMjdChan', 'PolarMjdChan_to_MjdChanPolar',
            'save_dict_hdf5', 'gen_carta_group', 'save_specs_hdf5', 'load_hdf5_to_dict', 'load_hdf5_to_dict_old',
-           'get_nB', 'replace_nB', 'BaseIO']
+           'get_nB', 'replace_nB', 'Path_IO', 'BaseIO']
 
 # Cell
 import os
@@ -35,7 +35,7 @@ def add_common_argument(parser):
     # common
     parser.add_argument('--outdir', default='default',
                         help='The directory of the output file, default is same with the input file')
-    parser.add_argument('--force', '-f', action='store_true',
+    parser.add_argument('-f', action='store_true', dest='force',
                         help='if set, overwriting file if output file exists')
     parser.add_argument('-g', is_write_out_config_file_arg=True,
                         help='save config to file path')
@@ -313,33 +313,12 @@ def replace_nB(path, nB):
     return re.sub(r'[0-9][0-1]M-', f"-M{nB:02d}"[::-1], path[::-1], count=1)[::-1]
 
 
-class BaseIO(object):
-    """
-    methods may need be replaced: _get_fpart, _import_m, gen_s2p_out, __call__, _get_out_basename
-    """
-
+class Path_IO(object):
     get_nB = staticmethod(get_nB)
     replace_nB = staticmethod(replace_nB)
-    # set ver as 'new' or 'old', if old, PolarMjdChan_to_MjdChanPolar() when reading, MjdChanPolar_to_PolarMjdChan() when saving
-    ver = 'new'
 
-    def __init__(self, args, dict_in=None, inplace_args=False):
-        """
-        args: class
-              including attributes: fpath, outdir, frange
-        dict_in: if None, load data from args.fpath, if set, omit data in args.fpath
-        """
+    def __init__(self, args, inplace_args=False):
         self.args = args if inplace_args else copy.deepcopy(args)
-        self.dict_in = dict_in
-        self._gen_fpath_out()
-        if self.dict_in is None:
-            self._check_fout()
-        self.nB = self.get_nB(self.args.fpath)
-        self._import_m()
-        self.open_fpath()
-        self.load_specs()
-        self.load_radec()
-        self.load_and_add_Header()
 
     def _check_fout(self,):
         """
@@ -351,7 +330,7 @@ class BaseIO(object):
                 print(f"will overwrite the existing out file {self.fpath_out}")
             else:
                 print(f"File exists {self.fpath_out}")
-                print("exit... Using ' --force ' to overwrite it.")
+                print("exit... Using ' -f ' to overwrite it.")
                 sys.exit(0)
 
     def _gen_fpath_out(self,):
@@ -376,6 +355,32 @@ class BaseIO(object):
         need modify this function
         """
         return '-example'
+
+
+class BaseIO(Path_IO):
+    """
+    methods may need be replaced: _get_fpart, _import_m, gen_s2p_out, __call__, _get_out_basename
+    """
+    # set ver as 'new' or 'old', if old, PolarMjdChan_to_MjdChanPolar() when reading, MjdChanPolar_to_PolarMjdChan() when saving
+    ver = 'new'
+
+    def __init__(self, args, dict_in=None, inplace_args=False):
+        """
+        args: class
+              including attributes: fpath, outdir, frange
+        dict_in: if None, load data from args.fpath, if set, omit data in args.fpath
+        """
+        self.args = args if inplace_args else copy.deepcopy(args)
+        self.dict_in = dict_in
+        self._gen_fpath_out()
+        if self.dict_in is None:
+            self._check_fout()
+        self.nB = self.get_nB(self.args.fpath)
+        self._import_m()
+        self.open_fpath()
+        self.load_specs()
+        self.load_radec()
+        self.load_and_add_Header()
 
     def _import_m(self,):
         """
