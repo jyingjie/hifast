@@ -25,6 +25,7 @@ group.add_argument('--cali_fname', default='none',
 
 # Cell
 class IO(BaseIO):
+    ver = 'old'
     def _get_fpart(self,):
         """
         need modify this function

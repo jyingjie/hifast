@@ -27,6 +27,7 @@ group.add_argument('--merge_polar', type=bool_fun, choices=[True, False], defaul
 
 # Cell
 class IO(BaseIO):
+    ver = 'old'
     def _get_fpart(self,):
         """
         need modify this function

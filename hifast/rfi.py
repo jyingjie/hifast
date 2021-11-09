@@ -52,6 +52,7 @@ group.add_argument('--pr_times_s', type=float, default=1,
 
 # Cell
 class IO(BaseIO):
+    ver = 'old'
     def _get_fpart(self,):
         return '-rfi'
 

@@ -71,6 +71,7 @@ group.add_argument('--length', type=int, nargs=1, default=20, not_in_write_out_c
 
 # Cell
 class IO(BaseIO):
+    ver = 'old'
     def _get_fpart(self,):
         return '-bld'
 

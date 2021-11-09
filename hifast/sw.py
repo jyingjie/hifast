@@ -109,6 +109,7 @@ group.add_argument('-i', '--interact', action='store_true', not_in_write_out_con
 
 # Cell
 class IO(BaseIO):
+    ver = 'old'
     def __init__(self, *args, dict_bef_bld=None, **kwargs):
         self.dict_bef_bld = dict_bef_bld
         super().__init__(*args, **kwargs)

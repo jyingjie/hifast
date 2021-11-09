@@ -217,7 +217,6 @@ def save_specs_hdf5(fname, dict_in, mode='w', spec2float32=True, wcs_data_name=N
     # save group for carta read
     # try:
 
-
     if wcs_data_name is None:
         if 'T' in dict_in.keys():
             wcs_data_name = 'T'
@@ -321,6 +320,8 @@ class BaseIO(object):
 
     get_nB = staticmethod(get_nB)
     replace_nB = staticmethod(replace_nB)
+    # set ver as 'new' or 'old', if old, PolarMjdChan_to_MjdChanPolar() when reading, MjdChanPolar_to_PolarMjdChan() when saving
+    ver = 'new'
 
     def __init__(self, args, dict_in=None, inplace_args=False):
         """
@@ -452,8 +453,9 @@ class BaseIO(object):
             inds = np.where(self.is_use_freq)[0]
             if len(inds) == 0:
                 raise(ValueError('please check --frange'))
-            s2p = s2p[..., inds[0]:inds[-1]+1] #freq axis is at end; inds is continuous
-        self.s2p = PolarMjdChan_to_MjdChanPolar(s2p[:])
+            s2p = s2p[..., inds[0]:inds[-1]+1]  # freq axis is at end; inds is continuous
+        if self.ver == 'old':
+            self.s2p = PolarMjdChan_to_MjdChanPolar(s2p[:])
         self.outfield = outfield
         self.infield = infield
 
@@ -486,7 +488,9 @@ class BaseIO(object):
         dict_out = {}
         dict_out['mjd'] = self.mjd
         dict_out['freq'] = self.freq
-        dict_out[self.outfield] = MjdChanPolar_to_PolarMjdChan(self.s2p_out)
+        if self.ver == 'old':
+            self.s2p_out = MjdChanPolar_to_PolarMjdChan(self.s2p_out)
+        dict_out[self.outfield] = self.s2p_out
         # add field in add_fields and args from self.fs
         if not hasattr(self, 'add_fields'):
             self.add_fields = ['is_on', 'next_to_cal', 'is_delay', 'Tcal', 'is_extrapo', 'vel', 'is_rfi']
