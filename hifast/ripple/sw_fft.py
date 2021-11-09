@@ -312,16 +312,17 @@ class SW_FFT(object):
     def gen_amp_thr_s(self, amp_thr_mean_factor=1.05, amp_thr_solo_factor=1.4,
                       is_on=None, is_excluded_mean=None):
         if is_excluded_mean is None:
-            self.amp_mean_t = np.nanmean(self.amp, axis=0)
-        else:
-            self.amp_mean_t = np.nanmean(self.amp[~is_excluded_mean], axis=0)
+            is_excluded_mean = np.full(len(self.amp), False, dtype=bool)
+        self.amp_mean_t = np.nanmean(self.amp[~is_excluded_mean], axis=0)
         self.amp_thr_mean = np.nanmedian(self.amp_mean_t) * amp_thr_mean_factor
         if is_on is None:
             self.amp_thr_solo = np.nanmedian(self.amp_mean_t) * amp_thr_solo_factor
         else:
             self.amp_thr_solo = np.empty(self.amp.shape[0])
-            self.amp_thr_solo[~is_on] = np.nanmedian(np.mean(self.amp[~is_on], axis=0)) * amp_thr_solo_factor
-            self.amp_thr_solo[is_on] = np.nanmedian(np.mean(self.amp[is_on], axis=0)) * amp_thr_solo_factor
+            self.amp_thr_solo[~is_on] = np.nanmedian(np.nanmean(
+                self.amp[(~is_on) & (~is_excluded_mean)], axis=0)) * amp_thr_solo_factor
+            self.amp_thr_solo[is_on] = np.nanmedian(np.nanmean(
+                self.amp[is_on & (~is_excluded_mean)], axis=0)) * amp_thr_solo_factor
             self.amp_thr_solo = self.amp_thr_solo[:, None]
 
     def find_sw_loc(self, xlims=[[.90, .95], [1.8, 1.9]]):
