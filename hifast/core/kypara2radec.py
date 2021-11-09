@@ -3,7 +3,7 @@
 
 import numpy as np
 import math
-from .. import sofa
+import erfa
 
 #地理
 hm = 1110.03;
@@ -65,10 +65,10 @@ def kypara2radec(mjd, multibeamAngle, nB, globalCenterX,  globalCenterY, globalC
     timeJD= mjd+ 2400000.5
     utc1 = math.floor(timeJD) + 0.5
     utc2 = timeJD - utc1
-
-    return sofa.Atoc13(aob, zob, utc1, utc2, dUT1, elong, phi, hm, phpa, temperature, humidity, wl)
-
-
+     
+    xp = 0.
+    yp = 0.
+    return erfa.atoc13(b"A", aob, zob, utc1, utc2, dUT1, elong, phi, hm, xp, yp, phpa, temperature, humidity, wl)
 
 
 #other functions

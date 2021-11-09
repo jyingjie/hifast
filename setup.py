@@ -21,11 +21,6 @@ import re
 # with open("README.md", "r") as fh:
 #     long_description = fh.read()
 
-sofa_lib = setuptools.Extension("_sofa_c",
-                       glob.glob('./src/*.c'),
-                       depends=["./src/sofa.h", "./src/sofam.h"],
-                       include_dirs=["./src"])
-
 setuptools.setup(
     name="hifast", # Replace with your own username
     version=versioneer.get_version(),
@@ -36,12 +31,10 @@ setuptools.setup(
 #     long_description=long_description,
 #     long_description_content_type="text/markdown",
 #     url="",
-    packages=['hifast','hifast.sofa', 'hifast.utils', 'hifast.core'],
+    packages=['hifast', 'hifast.utils', 'hifast.core'],
     package_data={
         "hifast.core": ["data/*.txt", "data/*.json"],
     },
-    ext_package='hifast/sofa',
-    ext_modules = [sofa_lib],
     scripts = glob.glob('scripts/*.sh'),
     install_requires=['numpy>=1.12','matplotlib','scipy','h5py','pandas>=1.0','openpyxl','astropy','PyAstronomy', 'configargparse', 'tqdm'],
     classifiers=[
