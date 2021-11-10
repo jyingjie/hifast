@@ -7,26 +7,26 @@ trap 'kill $BGPID; exit' INT
 POSITIONAL=()
 while [[ $# -gt 0 ]]
 do
-key="$1"
-
+key=$1
+# https://stackoverflow.com/questions/192249/how-do-i-parse-command-line-arguments-in-bash
 case $key in
     -n)
-    nproc="$2"
+    nproc=$2
     shift # past argument
     shift # past value
     ;;
     -i|--files)
-    files="$2"
+    files=$2
     shift # past argument
     shift # past value
     ;;
     -c|--command)
-    command="$2"
+    command=$2
     shift # past argument
     shift # past value
     ;;
     *)    # unknown option
-    POSITIONAL+=("$1") # save it in an array for later
+    POSITIONAL+=($1) # save it in an array for later
     shift # past argument
     ;;
 esac
