@@ -327,10 +327,10 @@ class Path_IO(object):
         args = self.args
         if os.path.exists(self.fpath_out):
             if args.force:
-                print(f"will overwrite the existing out file {self.fpath_out}")
+                print(f"will overwrite the existing output file {self.fpath_out}")
             else:
                 print(f"File exists {self.fpath_out}")
-                print("exit... Using ' -f ' to overwrite it.")
+                print("exit... Use ' -f ' to overwrite it.")
                 sys.exit(0)
 
     def _gen_fpath_out(self,):

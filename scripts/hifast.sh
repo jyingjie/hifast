@@ -86,7 +86,7 @@ echo "$coms" | while read line; do
   if [[ "$line" == "#"* ]]; then continue ; fi
   run_str="$(echo "$line" | awk -F "|" -v a="$fname" '{print($1,a,$2)}')"
   echo "run: ${run_str}"
-  output="$(${run_str})"
+  output="$(${run_str})" || exit 1
   echo "$output"
   echo ""
   fname="$(echo "$output" | sed -En 's/Saved to |File exists //p')"
