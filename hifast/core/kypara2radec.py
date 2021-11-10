@@ -40,7 +40,7 @@ feedLocalCoord = [  [ 0.0  , 0.0  , 0.0   ],
                     [ -0.405, -0.233826859, 0.0] ]
 
 
-def kypara2radec(mjd, multibeamAngle, nB, globalCenterX,  globalCenterY, globalCenterZ, globalYaw, globalPitch, globalRoll):
+def kypara2radec(utc1, utc2, multibeamAngle, nB, globalCenterX,  globalCenterY, globalCenterZ, globalYaw, globalPitch, globalRoll):
     """
     Return: ra, dec in radians.
     """
@@ -61,11 +61,6 @@ def kypara2radec(mjd, multibeamAngle, nB, globalCenterX,  globalCenterY, globalC
     aob = math.atan2(-posAbsolute[0], -posAbsolute[1])
     zob = math.atan2(math.sqrt(posAbsolute[0]**2 + posAbsolute[1] **2), -posAbsolute[2])
 
-    #6.准备天文参数
-    timeJD= mjd+ 2400000.5
-    utc1 = math.floor(timeJD) + 0.5
-    utc2 = timeJD - utc1
-     
     xp = 0.
     yp = 0.
     return erfa.atoc13(b"A", aob, zob, utc1, utc2, dUT1, elong, phi, hm, xp, yp, phpa, temperature, humidity, wl)
@@ -79,7 +74,7 @@ def CalMultiBeamRotationMatrix(multibeamAngle):
     """    
     ca= math.cos(multibeamAngle) 
     sa= math.sin(multibeamAngle) 
-    rotationMatrixMultiBeam= np.zeros((3,3))
+    rotationMatrixMultiBeam= np.zeros((3,3), dtype='float64')
     
     rotationMatrixMultiBeam[0,0] = ca 
     rotationMatrixMultiBeam[0,1] = -sa 
@@ -105,7 +100,7 @@ def CalPlatformRotationMatrix(globalYaw, globalPitch, globalRoll):
     cr = math.cos(globalRoll) 
     sr = math.sin(globalRoll) 
     
-    rotationMatrixPlatform = np.zeros((3,3))
+    rotationMatrixPlatform = np.zeros((3,3), dtype='float64')
     rotationMatrixPlatform[0,0] = cy * cp 
     rotationMatrixPlatform[0,1] = cy * sp * sr - sy * cr 
     rotationMatrixPlatform[0,2] = sy * sr + cy * sp * cr 

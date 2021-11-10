@@ -21,6 +21,7 @@ from astropy.utils import iers
 #iers.Conf.iers_auto_url.set("https://datacenter.iers.org/data/9/finals2000A.all")
 from .kypara2radec import kypara2radec
 from ..utils.io import rec_his, save_specs_hdf5
+import erfa
 
 # Cell
 def _tight_ra(ra):
@@ -104,10 +105,11 @@ def process_ky(ky_files, mjds_src=None, tol=0, ky_fixed=False):
         if len(ky_data)==0:
             print('empty sheet')
             continue
-        #ky_data = ky_data.to_dict('series')
+        ky_data = ky_data.to_dict('series')
         systime = np.array(ky_data['SysTime'], dtype=str)
-        systime = Time(systime) - utcoffset
+        systime = Time(systime) - utcoffset # covert local time to UTC
         mjd = systime.mjd
+        ky_data['systime_utc'] = systime
         if mjds_src is None:
             # if only deal with ky file
             return ky_data, mjd, ky_file
@@ -163,16 +165,16 @@ def kydata2radec(ky_data, mjd, nBs='All', ky_fixed=False, nproc=1):
     if nBs== 'All':
         nBs = range(1,20)
 
-    multibeamAngle= np.asarray(ky_data['SDP_AngleM'])
+    multibeamAngle= np.asarray(ky_data['SDP_AngleM'], dtype='float64')
 
     #实测中心波束相对中心的全局坐标
-    globalCenterX = np.asarray(ky_data['SDP_PhaPos_X'])
-    globalCenterY = np.asarray(ky_data['SDP_PhaPos_Y'])
-    globalCenterZ = np.asarray(ky_data['SDP_PhaPos_Z'])
+    globalCenterX = np.asarray(ky_data['SDP_PhaPos_X'], dtype='float64')
+    globalCenterY = np.asarray(ky_data['SDP_PhaPos_Y'], dtype='float64')
+    globalCenterZ = np.asarray(ky_data['SDP_PhaPos_Z'], dtype='float64')
     #实测下平台的全局姿态角
-    globalYaw = np.asarray(ky_data['SDP_SwtDPose_Y'])
-    globalPitch = np.asarray(ky_data['SDP_SwtDPose_P'])
-    globalRoll = np.asarray(ky_data['SDP_SwtDPose_R'])
+    globalYaw = np.asarray(ky_data['SDP_SwtDPose_Y'], dtype='float64')
+    globalPitch = np.asarray(ky_data['SDP_SwtDPose_P'], dtype='float64')
+    globalRoll = np.asarray(ky_data['SDP_SwtDPose_R'], dtype='float64')
 
     if ky_fixed:
         warnings.warn("By using the ky_fixed parameter, the feed is assumed to be stationary during observation.")
@@ -193,15 +195,17 @@ def kydata2radec(ky_data, mjd, nBs='All', ky_fixed=False, nproc=1):
     radec= {}
     radec['mjd']= mjd
     radec['angle'] = multibeamAngle
+    ymdhms = ky_data['systime_utc'].ymdhms
+    utc1, utc2 = erfa.dtf2d(b"UTC", ymdhms['year'], ymdhms['month'], ymdhms['day'], ymdhms['hour'], ymdhms['minute'], ymdhms['second'])
     for nB in nBs:
         if nproc > 1:
             import multiprocessing
             with multiprocessing.Pool(processes=nproc) as pool:
-                res = pool.starmap(kypara2radec, zip(mjd, multibeamAngle, np.full(len(mjd), nB), globalCenterX,
+                res = pool.starmap(kypara2radec, zip(utc1, utc2, multibeamAngle, np.full(len(mjd), nB), globalCenterX,
                                                      globalCenterY, globalCenterZ, globalYaw, globalPitch, globalRoll))
         else:
-            kypara2radec_ufun= np.frompyfunc(kypara2radec,9,1)
-            res = kypara2radec_ufun(mjd, multibeamAngle, nB, globalCenterX,  globalCenterY, globalCenterZ, globalYaw, globalPitch, globalRoll)
+            kypara2radec_ufun= np.frompyfunc(kypara2radec,10,1)
+            res = kypara2radec_ufun(utc1, utc2, multibeamAngle, nB, globalCenterX,  globalCenterY, globalCenterZ, globalYaw, globalPitch, globalRoll)
 
         res= np.vstack(res)
         res= res*180/np.pi # convert radians to degree
