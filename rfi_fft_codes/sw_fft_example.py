@@ -17,10 +17,12 @@ from tqdm import tqdm
 from matplotlib import pyplot as plt
 
 # Cell
-def replace_spec(tn, spec, freq, low_use, rfi_width_lim, ext_sec, ext, RMS, MAX=None, test=False):
+def replace_spec(tn, spec, freq, low_use, rfi_width_lim, ext_sec, ext, STD, MAX=None,
+                 test=False, smooth = True, rms_sigma = 6):
     if MAX is None:
         MAX = np.nanmax(spec)
     from markRFI import rms, get_startend
+    from hifast.utils.misc import smooth1d
     if np.sum(low_use) == 0:
         return spec
 #     from hifast.utils.misc import smooth1d
@@ -45,13 +47,14 @@ def replace_spec(tn, spec, freq, low_use, rfi_width_lim, ext_sec, ext, RMS, MAX=
         e0 = min(e0, N-1)
 
         spec1[s0:e0] = spec[s0:e0]
-#         sm = smooth1d(spec1,method='gaussian',sigma=rms_sigma)
-
         peak = np.max(spec[s:e])
         peak_loc = np.where(spec1 == peak)[0][0]
-        spec1l = deepcopy(spec1)
-        spec1r = deepcopy(spec1)
-#         spec1l = deepcopy(sm); spec1r = deepcopy(sm)
+        if smooth:
+            sm = smooth1d(spec1,method='gaussian',sigma=rms_sigma)
+            spec1l = deepcopy(sm); spec1r = deepcopy(sm)
+        else:
+            spec1l = deepcopy(spec1)
+            spec1r = deepcopy(spec1)
         spec1l[peak_loc:] = MAX * 20
         l1 = np.argmin(spec1l)
 
@@ -90,7 +93,7 @@ def replace_spec(tn, spec, freq, low_use, rfi_width_lim, ext_sec, ext, RMS, MAX=
             log.info(f"tn = {tn} has a ValueError, will replace with noise")
             import traceback
             traceback.print_exc()
-            newspec[s:e] = np.random.normal(scale=RMS, size=int(e-s))
+            newspec[s:e] = np.random.normal(scale=STD, size=int(e-s)) + np.nanmedian(spec)
     if test:
         return newspec, usespec, rep_area
     else:
@@ -131,19 +134,21 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_lower_thr=None, rms_si
             spec = deepcopy(data[tn, :])
 #             spec[time_rfi[tn]&(spec<0)] = 0
 
-            if np.sum(mw_use) > 0:
-                spec[mw_use] = MAX * 20
+            include = mw_use #| time_rfi[tn]
+            if np.sum(include) > 0:
+                spec[include] = MAX * 20   
 
             RMS = real_rms(spec, freq, sigma=rms_sigma, rms_vrange=rms_frange)
+            STD = real_std(spec,freq,sigma=rms_sigma,vrange=rms_frange)
 
             thr = RMS*times_lower_thr
             low_use = (np.abs(spec) > thr) | time_rfi[tn]  # | mw_use
 
             newspec = replace_spec(tn, spec, freq, low_use, rfi_width_lim, ext_sec,
-                                   ext, RMS, MAX)
+                                   ext, STD, MAX,smooth = True, rms_sigma = 6)
 
             strange = np.where(np.abs(newspec) > times_lower_thr * RMS)[0]
-            newspec[strange] = np.random.normal(scale=RMS, size=len(strange))
+            newspec[strange] = np.random.normal(scale=STD, size=len(strange)) + np.nanmedian(spec)
 
             data_rep[tn, :] = newspec
 
@@ -175,7 +180,7 @@ def replace_margin_side(data, freq, is_rfi, mw_use, margin_width=20, ext_freq=1.
 
     ext = int(np.around(ext_freq / fdelta))
 
-    from hifas.ripple.markRFI import real_rms
+    from hifast.ripple.markRFI import real_rms
     whole_rfi = np.all(is_rfi, axis=1)
     is_rfi_num = np.arange(data.shape[0])[whole_rfi]
 
@@ -183,9 +188,10 @@ def replace_margin_side(data, freq, is_rfi, mw_use, margin_width=20, ext_freq=1.
         if ti not in is_rfi_num:
             spec_ = data_[ti]
             low_use = (spec_ == np.inf)
-            RMS = real_rms(spec_, freq_, sigma=6, rms_vrange=[1390, 1400])
+            newspec[strange] = np.random.normal(scale=STD, size=len(strange)) + np.nanmedian(spec)
 
-            newspec = replace_spec(ti, spec_, freq_, low_use, rfi_width_lim=0, ext_sec=1, ext=ext, RMS=RMS, MAX=MAX)
+            newspec = replace_spec(ti, spec_, freq_, low_use, rfi_width_lim=0, ext_sec=1, 
+                                   ext=ext, STD = STD, MAX=MAX, smooth = False)
             newspec[-1] = 0
             data_[ti] = newspec
 
