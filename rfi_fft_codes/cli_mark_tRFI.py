@@ -285,9 +285,9 @@ if __name__ == '__main__':
         
         if shortf_rfi:
             print("########################")
-            tn = np.argmin(np.abs(np.nansum(Tt[not_rfi_num,:],axis = 1)))
-            spec = deepcopy(T[tn,:])
-            RMS = real_rms(spec,freq,rms_sigma,rms_frange)
+#             tn = np.argmin(np.abs(np.nansum(Tt[not_rfi_num,:],axis = 1)))
+#             spec = deepcopy(T[tn,:])
+#             RMS = real_rms(spec,freq,rms_sigma,rms_frange)
             
             shortf_args = {}
             shortf_args['file'] = args.sf_file
@@ -298,7 +298,7 @@ if __name__ == '__main__':
             shortf_args['T_thr_times'] = args.sf_T_thr_times
             shortf_args['ext_add'] = args.sf_ext
             print("short freq args:",shortf_args)
-            s_rfi = mask_time_rfi(Tt,freq, rtype = 'short-freq',plot = plot,pdf = pdf,RMS = RMS,
+            s_rfi = mask_time_rfi(Tt,freq, rtype = 'short-freq',plot = plot,pdf = pdf,rms_frange = rms_frange,
                                   frange_step =frange_step, **shortf_args)
             
             t_rfi = t_rfi | s_rfi

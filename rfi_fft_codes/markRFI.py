@@ -426,7 +426,7 @@ def mask_RFI(freq,is_rfi,theory,mask_all_theory = False,freq_from_theory = None,
     
     return bigrfi,bigrfi3
 
-def find_edge_2sides(spec,vel,peak_position,step,rms_thresh,Print=False,small_rfi_times=2):
+def find_edge_2sides(spec,vel,peak_position,step,rms_thresh,Print=False,small_rfi_times=2,ext_times = 0):
     """
     find edge from center to two sides
     small_rfi_times: small rfi below, eg.2*RMS will not be masked
@@ -444,7 +444,8 @@ def find_edge_2sides(spec,vel,peak_position,step,rms_thresh,Print=False,small_rf
         if start < min(vel):
             break
         part_rms = rms(spec,vel,rms_vrange=[start-step/2,start+step/2])           
-    
+        if Print:print(part_rms)
+            
     end = deepcopy(peak_position)
     part_rms = rms(spec,vel,rms_vrange=[end-step/2,start+end/2])
     while part_rms > rms_thresh:
@@ -452,8 +453,9 @@ def find_edge_2sides(spec,vel,peak_position,step,rms_thresh,Print=False,small_rf
         if end > max(vel):
             break
         part_rms = rms(spec,vel,rms_vrange=[end-step/2,end+step/2]) 
-      
-    edge = np.array([start,end]) #+ np.array([-1,1]) * ext_times * step
+        if Print:print(part_rms)
+            
+    edge = np.array([start,end]) + np.array([-1,1]) * ext_times * step
     edge[edge < min(vel)] = min(vel)
     edge[edge > max(vel)] = max(vel)
     if Print:
@@ -721,7 +723,7 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
             
     return  is_timerfi
 
-def mask_sf(data,freq,T_thr_times = None,frange = None,RMS = None,**kwargs):
+def mask_sf(data,freq,T_thr_times = None,frange = None,rms_frange = None,ext_times=1,**kwargs):
     """
     T_thr_times: above T_thr_times * RMS will be masked.
     Other parameters are the same as previous.
@@ -736,15 +738,23 @@ def mask_sf(data,freq,T_thr_times = None,frange = None,RMS = None,**kwargs):
         return ret
     log.info(f"Looking for short-freq time RFI in {frange} ...")
     
-    use1 = np.zeros_like(data,dtype = 'bool')
-    use2 = np.zeros_like(data,dtype = 'bool')
-    use1[is_timerfi,:]  = True
-    use2[:,f_use]  = True
-    use = use1 & use2
-
-    tmp = deepcopy(data[use])
-    T_thr = RMS * T_thr_times
-    ret[use] = (tmp > T_thr)
+    start,end = get_startend(is_timerfi,ext_sec = 2)
+    from hifast.utils.misc import smooth1d
+    for s,e in zip(start,end):
+        mspec = np.mean(data[s:e,:],axis = 0)
+        sm = smooth1d(mspec[f_use],method='gaussian',sigma=10)
+        MAX = max(sm)
+        fmax = freq[f_use][np.argmax(sm)]
+        f50 = freq[f_use][sm > MAX / 2] 
+        w50 = f50[-1] - f50[0]
+        rms_thresh = rms(mspec,freq,rms_frange)
+        
+        mask_frange = find_edge_2sides(mspec[f_use],freq[f_use],peak_position=fmax-w50/2,step=w50,
+                 rms_thresh=rms_thresh,Print=False,ext_times=ext_times,small_rfi_times=0)
+        print(f"mask frange:",mask_frange)
+        
+        mask_use =  (freq>mask_frange[0])&(freq<mask_frange[1])
+        ret[s:e,mask_use] = True
     
     ext_add = kwargs['ext_add']
     if ext_add is not None:
@@ -755,7 +765,7 @@ def mask_sf(data,freq,T_thr_times = None,frange = None,RMS = None,**kwargs):
     return ret
 
 def mask_time_rfi(data,freq,T_thr_times = None,rtype = 'short-freq',frange = None,file = None,
-                  RMS = None,frange_step = 40,lf_mask_whole=True,**kwargs):
+                  rms_frange = None,frange_step = 40,lf_mask_whole=True,**kwargs):
     """
     rtype: 'short-freq','long-freq'
     frange: freq range
@@ -778,10 +788,10 @@ def mask_time_rfi(data,freq,T_thr_times = None,rtype = 'short-freq',frange = Non
                 franges = np.vstack((frq1,frq2)).T
 
             for nf in tqdm(range(franges.shape[0])):
-                ret = ret | mask_sf(data,freq,T_thr_times,frange = franges[nf],RMS = RMS,**kwargs)
+                ret |= mask_sf(data,freq,T_thr_times,frange = franges[nf],rms_frange = rms_frange,**kwargs)
         
         elif len(frange) == 2:
-            ret = mask_sf(data,freq,T_thr_times,frange,RMS = RMS,**kwargs)
+            ret = mask_sf(data,freq,T_thr_times,frange,rms_frange = rms_frange,**kwargs)
         else:
             raise ValueError("frange should like [fmin,fmax] or a string (RFI npy filepath) or both None.")
 

@@ -32,15 +32,21 @@ to do list:
 * --sf
 * --sf_frange: 一个典型的1～2MHz宽时域RFI，经常出现在1380～1382MHz。
 * --sf_file: 或者可以指定一个二维数组的npy文件路径，在里面循环找。
+    ```
+    time_rfi_file = '/data/inspur_disk01/userdir/ucas_students/xuc/FAST/G15/newG15/time_rfi_list.npy'
+    python cli_markRFI.py $subname --outdir ./data \
+            --sf --sf_file $time_rfi_file \
+            --sf_times 3 --sf_thr .5 --sf_rfi_last 10 --sf_T_thr_times 0 \
+            --plot --ylim -1 5 --vmin_max -.05 .05 -f  || exit 1 
+    ```
 * --sf_frange_step(推荐):如果sf_frange和sf_file不指定，将以这个step(MHz)在频率上循环，对每个区间找一次时域RFI
-```
-sepname='xxxxxxx_path'
-python cli_mark_tRFI.py $subname --outdir ./data \
-        --mw_frange 1420.2 1420.45 --lf_sepname 'input_subname' \
-        --lf --lf_frange 1385 1460 --lf_times 2 --lf_thr 0 --lf_rfi_last 50 --lf_ext 50 \
-        --sf --sf_frange_step 30 --sf_times 3 --sf_thr 1 --sf_rfi_last 10 --sf_T_thr_times 2.5 \
-        --plot --vmin_max -.05 .05 -f  --outdir $outdir || exit 1 
-```
+    ```
+    python /data/inspur_disk01/userdir/xuc/FAST/test_fast/test_pipe/cli_mark_tRFI.py $fname \
+            --mw_frange 1420.2 1420.45 --lf_sepname 'input_subname' \
+            --lf --lf_frange 1385 1460 --lf_times 2 --lf_thr 0 --lf_rfi_last 50 --lf_ext 50 \
+            --sf --sf_frange_step 15 --sf_times 3 --sf_thr .5 --sf_rfi_last 10 --sf_T_thr_times 0 \
+            --plot --vmin_max -.05 .05 -f  --outdir $outdir || exit 1 
+    ```
 
 * --sf_times(测试): 大于各谱线之中，中值的*倍，初步认为异常
 * --sf_thr(测试): 边缘处与附近值的差是中值的倍数，找出时间方向的边缘处陡峭的
@@ -215,11 +221,11 @@ python cli_markRFI.py $subname --outdir ./data \
 * --nspec: 平均谱线条数，默认200条。过少容易损失信号，过多容易驻波变化了。
 * --func: 自己写的'iter'或卷积的'smooth'。默认'iter'，但是多了会比较慢。
 
-```
-python cli_baseline_mean.py $fname --outdir $outdir \
-        --sub_method mean --nspec 200 --frange 1330 1360 \
-        --plot --ylim -1 .5 --vmin_max -.05 .05 -f --keep_polar --fill_rfi nan || exit 1 
-```
+    ```
+    python cli_baseline_mean.py $fname --outdir $outdir \
+            --sub_method mean --nspec 200 --frange 1330 1360 \
+            --plot --ylim -1 .5 --vmin_max -.05 .05 -f --keep_polar --fill_rfi nan || exit 1 
+    ```
 
 输出文件名含mean_bld/med_bld
 
