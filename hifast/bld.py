@@ -111,11 +111,43 @@ class IO(BaseIO):
             print('no baseline method assigned, skip. Make sure the input spectra have been baselined.')
         self.s2p_out = s2p
 
+# Internal Cell
+def check_backend():
+    import matplotlib as mpl
+    if 'ipympl' not in mpl.get_backend():
+        print('Please run interaction in Jupyert and \'%matplotlib ipympl\' in the notebook cell ')
+        sys.exit()
+def interact(args):
+    check_backend()
+    import h5py
+    from hifast import _bld_i
+    f = h5py.File(args.fpath,'r')
+    fs = f['S']
+    if 'T' in fs.keys():
+        T = fs['T']
+    elif 'Ta' in fs.keys():
+        T = fs['Ta']
+    elif 'flux' in fs.keys():
+        T = fs['flux']
+    _bld_i.T2p = T
+    _bld_i.freq = fs['freq'][:]
+    _bld_i.frange = args.frange
+    _bld_i.nproc = args.nproc
+    _bld_i.length = args.length
+    _bld_i.figsize = args.figsize
+    _bld_i.ylim = args.ylim[0] if len(args.ylim) ==1 else args.ylim
+    _bld_i.main()
+    #sys.exit()
+
 # Cell
 if __name__ == '__main__':
     args_ = parser.parse_args()
+
     # print(parser.format_help())
     # print("----------")
     # print(parser.format_values())  # useful for logging where different settings came from
-    io = IO(args_)
-    io()
+    if args_.interact:
+        interact(args_)
+    else:
+        io = IO(args_)
+        io()
