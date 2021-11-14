@@ -114,7 +114,7 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_lower_thr=None, rms_si
 
     ext = int(np.around(ext_freq / fdelta))
 
-    from markRFI import real_rms, rms
+    from markRFI import real_rms, rms, real_std
     if time_rfi is not None:
         whole_rfi = np.all(time_rfi, axis=1)
         is_rfi_num = np.arange(data.shape[0])[whole_rfi]
