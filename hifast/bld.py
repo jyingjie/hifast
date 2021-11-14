@@ -66,7 +66,7 @@ group.add_argument('--ylim', nargs='+', default=['auto'], not_in_write_out_confi
                    help='ylim')
 group.add_argument('--figsize', type=float, nargs=2, default=(10, 7), not_in_write_out_config_file=True,
                    help='figsize')
-group.add_argument('--length', type=int, nargs=1, default=20, not_in_write_out_config_file=True,
+group.add_argument('--length', type=int, default=20, not_in_write_out_config_file=True,
                    help='spetra numbers used to test')
 
 # Cell
@@ -120,7 +120,7 @@ def check_backend():
 def interact(args):
     check_backend()
     import h5py
-    from hifast import _bld_i
+    from .interaction import bld_i as interact
     f = h5py.File(args.fpath,'r')
     fs = f['S']
     if 'T' in fs.keys():
@@ -129,14 +129,14 @@ def interact(args):
         T = fs['Ta']
     elif 'flux' in fs.keys():
         T = fs['flux']
-    _bld_i.T2p = T
-    _bld_i.freq = fs['freq'][:]
-    _bld_i.frange = args.frange
-    _bld_i.nproc = args.nproc
-    _bld_i.length = args.length
-    _bld_i.figsize = args.figsize
-    _bld_i.ylim = args.ylim[0] if len(args.ylim) ==1 else args.ylim
-    _bld_i.main()
+    interact.T2p = T
+    interact.freq = fs['freq'][:]
+    interact.frange = args.frange
+    interact.nproc = args.nproc
+    interact.length = args.length
+    interact.figsize = args.figsize
+    interact.ylim = args.ylim[0] if len(args.ylim) ==1 else args.ylim
+    interact.main()
     #sys.exit()
 
 # Cell

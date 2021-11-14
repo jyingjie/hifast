@@ -51,9 +51,11 @@ group = parser.add_argument_group('sinusoidal standing wave (sw) fitting')
 group.add_argument('--exclude_m', type=int, default=0,
                    help='')
 group.add_argument('--sin_f', type=float, nargs='+', default=0.929,
-                   help='sin freq')
+                   help='Initial guess for sw freq')
+group.add_argument('--bound_f', type=float, nargs=2, default=[.90, .95],
+                   help='Lower and upper bounds for sw freq')
 group.add_argument('--deg', type=int, default=1,
-                   help='baseline fit parameters')
+                   help='Degree of the added polynomial')
 # fft
 group = parser.add_argument_group(f'*parameters for --method fft\n{sep_line}:' +
                                   '\n'+'replace big RFI or sources firstly')
@@ -106,10 +108,17 @@ group.add_argument('--choose_method', default='all', choices=['all', 'interpolat
 group = parser.add_argument_group(f'*Interaction\n{sep_line}')
 group.add_argument('-i', '--interact', action='store_true', not_in_write_out_config_file=True,
                    help='interaction')
+group.add_argument('--ylim', nargs='+', default=['auto'], not_in_write_out_config_file=True,
+                   help='ylim')
+group.add_argument('--figsize', type=float, nargs=2, default=(10, 7), not_in_write_out_config_file=True,
+                   help='figsize')
+group.add_argument('--length', type=int, default=40, not_in_write_out_config_file=True,
+                   help='spetra numbers used to test')
 
 # Cell
 class IO(BaseIO):
     ver = 'old'
+
     def __init__(self, *args, dict_bef_bld=None, **kwargs):
         self.dict_bef_bld = dict_bef_bld
         super().__init__(*args, **kwargs)
@@ -124,12 +133,11 @@ class IO(BaseIO):
         need modify this function
         """
         super()._import_m()
-        global h5py, OrderedDict, sub_baseline, extend_Trues, np
+        global h5py, np, OrderedDict, sub_baseline, get_exclude_fun
         import h5py
         import numpy as np
         from collections import OrderedDict
-        from .core.baseline import sub_baseline
-        from .utils.misc import extend_Trues
+        from .core.baseline import sub_baseline, get_exclude_fun
 
     @staticmethod
     def find_fname_his(Header, fname):
@@ -206,7 +214,7 @@ class IO(BaseIO):
         is_use_freq = (freq >= self.freq.min()) & (freq <= self.freq.max())
         if not np.all(is_use_freq):
             inds = np.where(is_use_freq)[0]
-            s2p_ori = s2p_ori[..., inds[0]:inds[-1]+1] # freq axis at end
+            s2p_ori = s2p_ori[..., inds[0]:inds[-1]+1]  # freq axis at end
         s2p_ori = PolarMjdChan_to_MjdChanPolar(s2p_ori)
         return s2p_ori
 
@@ -221,14 +229,12 @@ class IO(BaseIO):
         fit_kwargs['nproc'] = args.nproc
         fit_kwargs['rew'] = False
         fit_kwargs['niter'] = 1
-        if args.exclude_m == 0:
-            def exclude_fun(x):
-                return extend_Trues(abs(x) > 1.*np.diff(np.percentile(x, [16, 84], axis=1), axis=0)[0][:, None, :], axis=1, ext_frac=1/3, ext_add=3)
-        elif args.exclude_m == 1:
-            def exclude_fun(x):
-                return extend_Trues(abs(x) > 2.5*np.min(np.diff(np.percentile(x, [10, 50, 90], axis=1), axis=0), axis=0)[:, None, :], axis=1, ext_frac=1/3, ext_add=3)
-        fit_kwargs['exclude_fun'] = exclude_fun
-        return sub_baseline(freq, s2p, subtract=subtract, **fit_kwargs)
+        if args.method == 'sin_poly':
+            # sin_poly: optimize.minimize
+            bounds = [(0., 1.), args.bound_f, (0, 2*np.pi), (-1, 1)] + [(-np.inf, np.inf), ]*args.deg
+        opt_para = {'bounds': bounds, }
+        fit_kwargs['exclude_fun'] = get_exclude_fun(args.exclude_m)
+        return sub_baseline(freq, s2p, subtract=subtract, opt_para=opt_para, **fit_kwargs)
 
     @staticmethod
     def do_smooth(T, s_method_t, s_sigma_t, s_method_freq, s_sigma_freq):
@@ -306,11 +312,44 @@ class IO(BaseIO):
                 s2p_out[..., i] -= self.fft_fit_sw(s2p_out[..., i], is_rfi, is_on)
             self.s2p_out = s2p_out
 
+# Internal Cell
+def check_backend():
+    import matplotlib as mpl
+    if 'ipympl' not in mpl.get_backend():
+        print('Please run interaction in Jupyert and \'%matplotlib ipympl\' in the notebook cell ')
+        sys.exit()
+
+
+def interact(args):
+    check_backend()
+    import h5py
+    from .interaction import sw_i as interact
+    f = h5py.File(args.fpath, 'r')
+    fs = f['S']
+    if 'T' in fs.keys():
+        T = fs['T']
+    elif 'Ta' in fs.keys():
+        T = fs['Ta']
+    elif 'flux' in fs.keys():
+        T = fs['flux']
+    interact.T2p = T
+    interact.freq = fs['freq'][:]
+    interact.frange = args.frange
+    interact.nproc = args.nproc
+    interact.length = args.length
+    interact.figsize = args.figsize
+    interact.ylim = args.ylim[0] if len(args.ylim) == 1 else args.ylim
+    interact.main()
+    # sys.exit()
+
 # Cell
 if __name__ == '__main__':
     args_ = parser.parse_args()
     # print(parser.format_help())
     # print("----------")
     # print(parser.format_values())  # useful for logging where different settings came from
-    io = IO(args_)
-    io()
+    if args_.interact:
+        interact(args_)
+    else:
+        io = IO(args_)
+        io()
