@@ -3,7 +3,6 @@ channels:
   - conda-forge
 dependencies:
   - python=3.9
-  - gcc
   - "libblas=*=*mkl"
   - numpy=1.21.0
   - matplotlib=3.4.2
