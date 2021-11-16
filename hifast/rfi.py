@@ -61,10 +61,11 @@ class IO(BaseIO):
         need modify this function
         """
         super()._import_m()
-        global h5py, OrderedDict, sub_baseline
+        global h5py, OrderedDict, np
 
         import h5py
         from collections import OrderedDict
+        import numpy as np
 
     def get_tr(self,):
         args = self.args

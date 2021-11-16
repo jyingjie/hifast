@@ -45,7 +45,7 @@ def get_radec(file_spec, mjd, nB_radec=1):
     f = h5py.File(file_radec, 'r')
     # check if mjd match
     mjd_match = False if len(mjd) != len(
-        f['mjd'][:]) else (mjd == f['mjd'][:]).all()
+        f['S']['mjd'][:]) else (mjd == f['S']['mjd'][:]).all()
     if not mjd_match:
         print('the mjd of spec file is not same with that in ', file_radec)
         sys.stdout.flush()
@@ -73,15 +73,15 @@ def get_radec(file_spec, mjd, nB_radec=1):
         sys.stdout.flush()
     # check again
     mjd_match = False if len(mjd) != len(
-        f['mjd'][:]) else (mjd == f['mjd'][:]).all()
+        f['S']['mjd'][:]) else (mjd == f['S']['mjd'][:]).all()
     if not mjd_match:
         raise(ValueError(
             f'the mjd of spec file is not same with that in {file_radec_2} Abort...'))
     # load
-    ra = f['ra'+'%d' % nB][:]
-    dec = f['dec'+'%d' % nB][:]
-    if 'is_extrapo' in f.keys():
-        is_extrapo = f['is_extrapo'][:]
+    ra = f['S']['ra'+'%d' % nB][:]
+    dec = f['S']['dec'+'%d' % nB][:]
+    if 'is_extrapo' in f['S'].keys():
+        is_extrapo = f['S']['is_extrapo'][:]
     else:
         is_extrapo = None
     f.close()
