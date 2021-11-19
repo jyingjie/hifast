@@ -47,7 +47,7 @@ class IO(BaseIO):
                 self.Header['vel_type'] = 'VRAD'
             from .core.corr_vel import freq2vel, frame_correct
             if 'is_rfi' in self.fs.keys():
-                # if not replace_rfi, frame correct it, otherwise del it from self.dict_out at last
+                # if not replace_rfi, frame correct it
                 is_rfi = self.fs['is_rfi'][:]
                 if not args.replace_rfi:
                     is_rfi, _ = frame_correct(is_rfi, self.freq, self.mjd,
@@ -56,7 +56,7 @@ class IO(BaseIO):
                 else:
                     print('replacing RFI...')
                     s2p[is_rfi] = None
-                    is_rfi = None
+                self.dict_out['is_rfi'] = is_rfi
             if args.merge_polar and s2p.ndim == 3:
                 print('average two polarization...')
                 s2p = np.mean(s2p, axis=2, keepdims=True)
@@ -65,8 +65,7 @@ class IO(BaseIO):
             vel = freq2vel(freq)
             self.s2p_out = s2p
             self.gen_dict_out(freq=freq, vel=vel)  # replace freq, add vel
-            if is_rfi is not None:
-                self.dict_out['is_rfi'] = is_rfi
+
         else:
             if args.replace_rfi and 'is_rfi' in self.fs.keys():
                 print('replacing RFI')
@@ -76,6 +75,7 @@ class IO(BaseIO):
                 s2p = np.mean(s2p, axis=2, keepdims=True)
             self.s2p_out = s2p
             self.gen_dict_out()
+        # del is_rfi if replace_rfi is True
         if args.replace_rfi and 'is_rfi' in self.dict_out.keys():
             self.dict_out.pop('is_rfi')
         if save:
