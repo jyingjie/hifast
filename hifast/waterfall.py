@@ -8,6 +8,7 @@ import numpy as np
 import scipy.interpolate as interp
 import h5py
 
+
 def _tight_ra(ra):
     ra_s= np.sort(ra)
     diff_s= np.diff(ra_s)
@@ -85,39 +86,40 @@ def plot(fname, ax, polar=0, ytick1='index', ytick2=None, **kwargs):
     ytick2: str; index, ra, dec, mjd or None
     """
     f = h5py.File(fname,'r')
-    if 'T' in f.keys():
-        vals = f['T']
-    elif 'Ta' in f.keys():
-        vals = f['Ta']
-    elif 'flux' in f.keys():
-        vals = f['flux']
+    S = f['S']
+    if 'T' in S.keys():
+        vals = S['T']
+    elif 'Ta' in S.keys():
+        vals = S['Ta']
+    elif 'flux' in S.keys():
+        vals = S['flux']
     else:
-        raise()
-    if 'vel' in f.keys():
-        x = f['vel'][()]
-    elif 'freq' in f.keys():
-        x = f['freq'][()]
+        raise(ValueError('can not find spec'))
+    if 'vel' in S.keys():
+        x = S['vel'][()]
+    elif 'freq' in S.keys():
+        x = S['freq'][()]
     else:
         raise()
     if vals.ndim == 3:
-        vals = vals[..., polar]
+        vals = vals[polar]
     if ytick1 in ['ra', 'dec', 'mjd', 'time']:
         key = 'mjd' if ytick1=='time' else ytick1
         try:
-            y = f[key][()]
+            y = S[key][()]
         except Exception as err:
             print(err)
     elif ytick1 == 'index':
-        y = np.arange(vals.shape[0])
+        y = np.arange(vals.shape[1])
     y2 = None
     if ytick2 in ['ra', 'dec', 'mjd', 'time']:
         key = 'mjd' if ytick2=='time' else ytick2
         try:
-            y2 = f[key][()]
+            y2 = S[key][()]
         except Exception as err:
             print(err)
     elif ytick2 == 'index':
-        y2 = np.arange(vals.shape[0])
+        y2 = np.arange(vals.shape[1])
 
     im, _ = plot_im(vals, x, y=y, y2=y2, ax=ax, **kwargs)
     if ytick1=='time':
@@ -145,6 +147,8 @@ if __name__ == '__main__':
                        help='')
     parser.add_argument('--vmax', type=str, default='per95',
                        help='')
+    parser.add_argument('--interpolation', type=str, default='nearest',
+                       help="'none', 'antialiased', 'nearest', 'bilinear', 'bicubic', 'spline16', 'spline36',")
     parser.add_argument('--ytick1', choices=['index', 'ra', 'dec', 'mjd', 'time'], default='index',
                        help='')
     parser.add_argument('--ytick2', choices=['index', 'ra', 'dec', 'mjd'],
@@ -166,9 +170,9 @@ if __name__ == '__main__':
     single = args.single
     if len(fnames)==1:
         single = True
+    rasterized = True if args.interpolation == 'none' else False
     imshow_kwargs = {}
-    imshow_kwargs['vmax'] = args.vmax
-    imshow_kwargs['vmin'] = args.vmin
+    imshow_kwargs['interpolation'] = args.interpolation
 
     from tqdm import tqdm
     if not single:
@@ -183,7 +187,7 @@ if __name__ == '__main__':
             axs = axs.flatten()
             for i, (fname, ax) in enumerate(zip(_files['fname'], axs[:19])):
                 im = plot(fname, ax, polar=0, ytick1=args.ytick1, ytick2=args.ytick2, vmin=args.vmin, vmax=args.vmax,
-                          x_plot_range=xrange, vlines=vlines, colorbar=False)
+                          x_plot_range=xrange, vlines=vlines, colorbar=False, **imshow_kwargs)
             fig.colorbar(im, ax= axs[-1])
             ax = axs[-1]
             ax.plot([], [], label=key)
@@ -193,7 +197,7 @@ if __name__ == '__main__':
             if args.show:
                 fig.show()
                 input()
-            fig.savefig(f'{outdir}/{key}.19.pdf')
+            fig.savefig(f'{outdir}/{key}.19.pdf', rasterized=rasterized)
             fig.clear()
     else:
         for fname in tqdm(fnames):
@@ -202,7 +206,7 @@ if __name__ == '__main__':
             ncols=1
             fig, ax = plt.subplots(nrows, ncols, figsize=(15,12), sharex=True, sharey=True)
             im = plot(fname, ax, polar=0, ytick1=args.ytick1, ytick2=args.ytick2, vmin=args.vmin, vmax=args.vmax,
-                          x_plot_range=xrange, vlines=vlines, colorbar=False)
+                          x_plot_range=xrange, vlines=vlines, colorbar=False, **imshow_kwargs)
             fig.colorbar(im, ax= ax)
             ax.set_title(fbasename)
 
@@ -210,5 +214,5 @@ if __name__ == '__main__':
             if args.show:
                 fig.show()
                 input()
-            fig.savefig(f'{outdir}/{fbasename}.pdf')
+            fig.savefig(f'{outdir}/{fbasename}.pdf', rasterized=rasterized)
             fig.clear()

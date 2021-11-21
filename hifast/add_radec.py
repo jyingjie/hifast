@@ -42,6 +42,8 @@ def get_radec(file_spec, mjd, nB_radec=1):
     file_radec = file_spec.rsplit('specs_T', 1)[0] + 'specs_T-radec.hdf5'
     #file_radec = re.findall(r'.*-specs_T', file_radec)+'-radec.hdf5'
     file_radec = replace_nB(file_radec, nB_radec)
+    if not os.path.exists(file_radec):
+        raise(OSError("can not find the RA DEC file, please generate it by using 'python -m hifast.radec'"))
     f = h5py.File(file_radec, 'r')
     # check if mjd match
     mjd_match = False if len(mjd) != len(
