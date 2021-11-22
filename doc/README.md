@@ -142,12 +142,13 @@ python -m hifast.radec XXX_arcdrift_11_2020_XX_XX_22_54_09_000.xlsx
 
 * 输入 ```hifast.sep```生成的hdf5文件，***仅需beam M01的即可***，其它beam的RA DEC会存在这同一个文件里。
   <br/>或者输入一个.xlsx结尾的馈源舱文件。
-* 程序会先依次检测是否存在 *```your_HOME_dir/KY/```*, */data/inspur_disk06/fast_data/KY/*, */data31/KY/* (FAST服务器馈源文件所在目录)文件夹。 然后在最先检测到存在的文件夹里自动寻找对应的KY文件。
+* 程序会先依次检测是否存在 *```your_HOME_dir/KY/```*, */data/inspur_disk06/fast_data/KY/*, */data31/KY/* (FAST服务器馈源文件所在目录)文件夹。 然后在最先检测到存在的文件夹里自动寻找对应的馈源舱文件。然后计算馈源舱文件文件里记录的RA DEC，由于谱线记录的时间采用点和馈源舱文件的一般不一致，因此会插值最后得到谱线的RA DEC。
 * 其他参数：
-  * ```--kyfiles```：如果程序不能成功找到对应KY文件，加此参数来手动指定KY文件。参数后加KY文件的绝对路径。
+  * ```--ky_files```：如果程序不能成功找到对应馈源舱文件，加此参数来手动指定馈源舱文件。参数后加馈源舱文件的路径。
+  * ```--tol```: 正常情况下，馈源舱文件内记录的时间覆盖谱线记录的时间范围。加```--tol 5```可在馈源舱文件少记录```5```秒的情况下进行外插计算RA DEC。不过这部分谱线最终需扔掉。
   * ```--outdir``` ：指定输出文件存放的目录。如果输入hdf5文件默认与输入文件一致，如果输入.xlsx文件则默认为程序运行路径。
-  * ```--ky_fixed```: 早期的一些Drift观测，馈源舱文件只记录开始的几分钟内的馈源舱位置，加此参数只利用这开始的几分钟来计算整个观测的      RADEC。由于Drift过程中馈源舱并不能完全稳定不动，这样计算出的RA DE会损失精度。(如果你不确定这个参数的作用请不要添加)
-  * ```--plot```：加此参数来画radec分布图，保存为pdf图片。
+  * ```--ky_fixed```: 早期的一些Drift观测，馈源舱文件只记录开始的几分钟内的馈源舱位置，加此参数只利用这开始的几分钟来计算整个谱线的RA-DEC。由于Drift过程中馈源舱并不能完全稳定不动，这样计算出的RA DEC可能会不准确。(一般不建议使用)
+  * ```--plot```：加此参数来画RA DEC分布图，保存为pdf图片。
 * 存放radec的输出文件名是在输入文件名上加radec。可以h5py来读取，例如：
   ```
   import h5py
@@ -168,9 +169,9 @@ python -m hifast.flux data/XXX_arcdrift-M01_F-specs_T.hdf5
 
 ```
 
-* 输入 ```hifast.sep```生成的hdf5文件。程序会整合RADEC，在输入的文件的所在目录下去读取对应的radec的文件。即```hifast.radec```输出的文件名中有'M01'的radec文件。
+* 输入未流量定标的hdf5文件。程序会整合RADEC，在输入的文件的所在目录下去读取对应的radec的文件。即```hifast.radec```输出的文件名中有'M01'的radec文件。
 * 其他参数：
-  * 
+  * ```--cali_fname```：后接定标源文件路径，如果不加此参数，程序将使用https://arxiv.org/abs/2002.01786 中给出的Gain与天顶角的函数关系来流量定标。
 
 ## 扣除基线
 
@@ -188,12 +189,10 @@ python -m hifast.bld data/XXX_arcdrift-M01_F-specs_T-flux.hdf5 --method arPLS --
   * ```--frange```：
     <br/> 只用这个频率范围内谱线。后接两个数，空格隔开，下限在前。
     <br/> 范围越大，拟合用时越长，并且不是线性增长。
-  * ```--method```: 拟合方法： 'arPLS', 'srPLS', 'Chebyshev', 'poly' 或 'sin_poly'。
+  * ```--method```: 拟合方法： 'arPLS', 'srPLS', 'Chebyshev', 'poly'。
   * ```--lam , --deg , --offset```：
-    <br/> 去基线时的参数，具体见此目录下 [baseline_para.ipynb](./baseline_para.ipynb)。
-  * ```--flux```：是否先转换为流量（Jy/beam）后再去基线，目前是考虑天顶角带来的增益后用固定系数转换。
+    <br/> 去基线时的参数，--lam调整平滑度，越大越接近低阶多项式(poly)拟合。
   * 输出文件名会包含```bld```的hdf5文件。可以用h5py来读取。
-  * 文件中包括 'ra' (deg), 'dec' (deg), 'mjd' (Modified Julian Day), 'freq' 和 'Ta'（或flux）。
 
 ## 拟合驻波
 
