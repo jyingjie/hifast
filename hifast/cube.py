@@ -46,10 +46,10 @@ def _adjust_header(header, ra_range, dec_range):
             #print('v2',end=':')
     return header
 
-def gen_header(xrange, yrange, x_delta, y_delta, z, proj, vel_type, frame, histories=None):
+def gen_header(ra_range, dec_range, x_delta, y_delta, z, proj, vel_type, frame, histories=None):
     
-    x= np.arange(xrange[0],xrange[1]+x_delta,x_delta)[::-1] # reverse ra
-    y= np.arange(yrange[0],yrange[1]+y_delta,y_delta)
+    x= np.arange(ra_range[0],ra_range[1]+x_delta,x_delta)[::-1] # reverse ra
+    y= np.arange(dec_range[0],dec_range[1]+y_delta,y_delta)
     # Create a new WCS object.
     w = WCS(naxis=3)
     # center pixel

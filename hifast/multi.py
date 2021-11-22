@@ -39,6 +39,7 @@ class IO(BaseIO):
         import numpy as np
         args = self.args
         s2p = self.s2p[:]
+        is_rfi = None
         if args.fc:
             if 'frame' in self.Header.keys():
                 raise(ValueError(f'rest frame already corrected...'))
@@ -56,7 +57,7 @@ class IO(BaseIO):
                 else:
                     print('replacing RFI...')
                     s2p[is_rfi] = None
-                self.dict_out['is_rfi'] = is_rfi
+
             if args.merge_polar and s2p.ndim == 3:
                 print('average two polarization...')
                 s2p = np.mean(s2p, axis=2, keepdims=True)
@@ -66,18 +67,20 @@ class IO(BaseIO):
             self.s2p_out = s2p
             self.gen_dict_out(freq=freq, vel=vel)  # replace freq, add vel
 
+
         else:
             if args.replace_rfi and 'is_rfi' in self.fs.keys():
                 print('replacing RFI')
-                s2p[self.fs['is_rfi'][:]] = None
+                is_rfi = self.fs['is_rfi'][:]
+                s2p[is_rfi] = None
             if args.merge_polar and s2p.ndim == 3:
                 print('average two polarization')
                 s2p = np.mean(s2p, axis=2, keepdims=True)
             self.s2p_out = s2p
             self.gen_dict_out()
         # del is_rfi if replace_rfi is True
-        if args.replace_rfi and 'is_rfi' in self.dict_out.keys():
-            self.dict_out.pop('is_rfi')
+        if not args.replace_rfi and is_rfi is not None:
+            self.dict_out['is_rfi'] = is_rfi
         if save:
             self.save()
 
