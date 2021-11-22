@@ -272,7 +272,7 @@ python -m hifast.sw data/XXX_arcdrift-M01_F-specs_T-flux-bld.hdf5 --method fft -
     * ```mean```: 对谱线求平均.
     * ```median```: 对谱线求median值.
     * ```reweight```: Barnes el. al. 2001, MNRAS 322, 486 https://ui.adsabs.harvard.edu/abs/2001MNRAS.322..486B/abstract .
-    * ```gaussian```: 待添加。
+    * ```gaussian```: truncated Gaussian.
   * ```--proj```: 投影方式: SIN, AIT, TAN. 
   * ```--ra_range```: ra的范围，后接两个数，空格隔开，下限在前，单位为度。默认值为输入文件里ra的最小值和最大值。
   * ```--dec_range```: 类似```--ra_range```。
