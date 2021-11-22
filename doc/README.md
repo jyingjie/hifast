@@ -84,7 +84,7 @@
      
      也可以用[CARTA 2.0](https://carta.readthedocs.io/en/latest/index.html)打开。
 
-## 1. 分离光谱并利用噪音管计算得出温度
+## 分离光谱并利用噪音管计算得出温度
  ```hifast.sep``` : 输入一个beam的谱线数据，得到 噪音管Cal on 和 off谱线的温度。
 
 * 示例
@@ -257,7 +257,7 @@ python -m hifast.sw data/XXX_arcdrift-M01_F-specs_T-flux-bld.hdf5 --method fft -
 
 * 输出文件名根据输入参数改变，可能包含 fc
 
-## 5. 生成fits cubes 文件
+## 生成fits cubes 文件
 
   ```
   python -m hifast.cube **/data/*-fc*.hdf5 --outname ./test_cubes.fits --bwidth 60 -p SIN
