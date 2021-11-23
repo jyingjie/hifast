@@ -153,46 +153,55 @@ def get_baseline(x, ys, axis=None, *,
             return bls
 
 
-def get_baseline_mp(n, x, ys, *, exclude=None,  **kwargs):
-    """
-    testing...
-    only support axis=1,
-    not support return_f=True
-    """
-    if 'axis' in kwargs.keys():
-        if kwargs['axis'] != 1:
-            raise(ValueError('get_baseline_mp only support axis=1 for now'))
-    else:
-        kwargs['axis'] = 1
-    n = min(n, len(ys))
-    from functools import partial
-    from multiprocessing import Process, Queue
 
+
+# Cell
+class get_baseline_mp(object):
+    def __init__(self, n):
+        # n process
+        self.n = n
+    @staticmethod
     def get_baseline_q(q, *args, **kwargs):
         res = get_baseline(*args, **kwargs)
         q.put(res)
-    ps = []
-    qs = []
-    if exclude is not None:
-        exclude_list = np.array_split(exclude, n)
-    else:
-        exclude_list = [None, ] * n
-    ys_list = np.array_split(ys, n)
-    for ys, exclude in zip(ys_list, exclude_list):
-        q = Queue()
-        p = Process(target=get_baseline_q, args=(q, x, ys),
-                    kwargs={'exclude': exclude, **kwargs})
-        if 'verbose' in kwargs.keys():
-            kwargs['verbose'] = False
+    def __call__(self, x, ys, *, exclude=None,  **kwargs):
+        """
+        testing...
+        only support axis=1,
+        not support return_f=True
+        """
+        from functools import partial
+        from multiprocessing import Process, Queue
 
-        ps += [p]
-        qs += [q]
-    for p in ps:
-        p.start()
-    res = np.vstack([q.get()for q in qs])
-    for p in ps:
-        p.join()  # need after q.get()
-    return np.stack(res)
+        if 'axis' in kwargs.keys():
+            if kwargs['axis'] != 1:
+                raise(ValueError('get_baseline_mp only support axis=1 for now'))
+        else:
+            kwargs['axis'] = 1
+        n = min(self.n, len(ys))
+
+        ps = []
+        qs = []
+        if exclude is not None:
+            exclude_list = np.array_split(exclude, n)
+        else:
+            exclude_list = [None, ] * n
+        ys_list = np.array_split(ys, n)
+        for ys, exclude in zip(ys_list, exclude_list):
+            q = Queue()
+            p = Process(target=self.get_baseline_q, args=(q, x, ys),
+                        kwargs={'exclude': exclude, **kwargs})
+            if 'verbose' in kwargs.keys():
+                kwargs['verbose'] = False
+
+            ps += [p]
+            qs += [q]
+        for p in ps:
+            p.start()
+        res = np.vstack([q.get()for q in qs])
+        for p in ps:
+            p.join()  # need after q.get()
+        return np.stack(res)
 
 # Cell
 class BL_arPLS(object):
@@ -601,11 +610,11 @@ def sub_baseline(freq, yss, *, subtract=True, nproc=1, exclude_fun=None, inplace
 
     if s_method_freq == 'PLS':
         # use arPLS, lam from s_sigma ( s_sigma_freq)
-        yss = get_baseline_mp(nproc, freq, yss, axis=1, method='arPLS', bl_para={
+        yss = get_baseline_mp(nproc)(freq, yss, axis=1, method='arPLS', bl_para={
             'lam': para['s_sigma'], "offset": 2, 'deg': 2}, verbose=verbose)
         s_method_freq = None
     # get baseline
-    bls = get_baseline_mp(nproc, freq, yss, axis=1, exclude=exclude, s_method=s_method_freq, s_sigma=s_sigma_freq, average_every=average_every_freq,
+    bls = get_baseline_mp(nproc)(freq, yss, axis=1, exclude=exclude, s_method=s_method_freq, s_sigma=s_sigma_freq, average_every=average_every_freq,
                           method=method, bl_para=bl_para, verbose=verbose)
 
     if njoin is not None and njoin > 1:
