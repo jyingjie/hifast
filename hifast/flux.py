@@ -18,8 +18,9 @@ parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
 parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
                     help="if set, don't check or add ra dec")
 group = parser.add_argument_group(f'*Flux\n{sep_line}')
-# group.add_argument('--flux', type=bool_fun, choices=[True], default='True', not_in_write_out_config_file=True,
-#                    help='It must be True.')
+## --flux affect the outfield name
+group.add_argument('--flux', type=bool_fun, choices=[True], default='True', not_in_write_out_config_file=True,
+                   help='It must be True.')
 group.add_argument('--cali_fname', default='none',
                    help='calibration source file name')
 
