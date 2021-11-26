@@ -254,18 +254,17 @@ class IO(BaseIO):
 
         # smooth
         s1p = self.do_smooth(s1p, args.s_method_t, args.s_sigma_t, args.s_method_freq, args.s_sigma_freq)
-        # replace rfi
+        # replace rfi and mw
         # replace args
-        if is_rfi is not None:
-            rep_args = {}
-            if args.rfi_method in ['near_ripple']:
-                keys = ['rms_sigma', 'rms_frange', 'times_lower_thr', 'rfi_width_lim',
-                        'ext_sec', 'ext_freq', 'mw_frange', ]
-            else:
-                raise(ValueError('not supported rfi_method'))
-            for key in keys:
-                rep_args[key] = getattr(args, key)
-            s1p = sw_fft.replace_rfi(s1p, self.freq, time_rfi=is_rfi, method=args.rfi_method, **rep_args)
+        rep_args = {}
+        if args.rfi_method in ['near_ripple']:
+            keys = ['rms_sigma', 'rms_frange', 'times_lower_thr', 'rfi_width_lim',
+                    'ext_sec', 'ext_freq', 'mw_frange', ]
+        else:
+            raise(ValueError('not supported rfi_method'))
+        for key in keys:
+            rep_args[key] = getattr(args, key)
+        s1p = sw_fft.replace_rfi(s1p, self.freq, time_rfi=is_rfi, method=args.rfi_method, **rep_args)
 
         # fit args
         fft_args = {}
