@@ -13,6 +13,8 @@ parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:
 add_common_argument(parser)
 parser.add_argument('fpath',
                     help='input spectra file path.')
+parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
+                    help='Limit frequence range')
 group = parser.add_argument_group(f'*frame correction\n{sep_line}')
 # frame correct
 group.add_argument('--fc', type=bool_fun, choices=[True, False], default='True', not_in_write_out_config_file=True,
@@ -39,46 +41,47 @@ class IO(BaseIO):
         import numpy as np
         args = self.args
         s2p = self.s2p[:]
-        is_rfi = None
+        # try load is_rfi
+        if 'is_rfi' in self.fs.keys():
+                # if not replace_rfi, frame correct it
+
+                if self.is_use_freq is not None:
+                    inds = np.where(self.is_use_freq)[0]
+                    is_rfi = self.fs['is_rfi'][:, inds]
+                else:
+                    is_rfi = self.fs['is_rfi'][:]
+                if args.replace_rfi:
+                    print('replacing RFI')
+                    s2p[is_rfi] = np.nan
+        else:
+            is_rfi = None
+
+        if args.merge_polar and s2p.ndim == 3:
+            print('average two polarization...')
+            s2p = np.mean(s2p, axis=2, keepdims=True)
+        # frame
         if args.fc:
+            from .core.corr_vel import freq2vel, frame_correct
             if 'frame' in self.Header.keys():
-                raise(ValueError(f'rest frame already corrected...'))
+                raise(ValueError(f'rest frame already corrected... please set --fc as False'))
+                sys.exit()
             else:
                 self.Header['frame'] = args.frame
                 self.Header['vel_type'] = 'VRAD'
-            from .core.corr_vel import freq2vel, frame_correct
-            if 'is_rfi' in self.fs.keys():
-                # if not replace_rfi, frame correct it
-                is_rfi = self.fs['is_rfi'][:]
-                if not args.replace_rfi:
-                    is_rfi, _ = frame_correct(is_rfi, self.freq, self.mjd,
-                                              self.ra, self.dec, frame=args.frame, interp_kind='nearest')
-                    is_rfi = np.array(is_rfi, dtype=bool)
-                else:
-                    print('replacing RFI...')
-                    s2p[is_rfi] = None
-
-            if args.merge_polar and s2p.ndim == 3:
-                print('average two polarization...')
-                s2p = np.mean(s2p, axis=2, keepdims=True)
+            # correct is_rfi
+            if is_rfi is not None and not args.replace_rfi:
+                is_rfi, _ = frame_correct(is_rfi, self.freq, self.mjd,
+                                          self.ra, self.dec, frame=args.frame, interp_kind='nearest')
+                is_rfi = np.array(is_rfi, dtype=bool)
             print('frame correcting...')
             s2p, freq = frame_correct(s2p, self.freq, self.mjd, self.ra, self.dec, frame=args.frame)
             vel = freq2vel(freq)
             self.s2p_out = s2p
             self.gen_dict_out(freq=freq, vel=vel)  # replace freq, add vel
-
-
         else:
-            if args.replace_rfi and 'is_rfi' in self.fs.keys():
-                print('replacing RFI')
-                is_rfi = self.fs['is_rfi'][:]
-                s2p[is_rfi] = None
-            if args.merge_polar and s2p.ndim == 3:
-                print('average two polarization')
-                s2p = np.mean(s2p, axis=2, keepdims=True)
             self.s2p_out = s2p
             self.gen_dict_out()
-        # del is_rfi if replace_rfi is True
+        # save is_rfi only if replace_rfi is False
         if not args.replace_rfi and is_rfi is not None:
             self.dict_out['is_rfi'] = is_rfi
         if save:

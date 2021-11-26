@@ -467,10 +467,10 @@ class BaseIO(Path_IO):
     def load_and_add_Header(self,):
         Header = OrderedDict()
         if self.dict_in is None:
-            fs = self.fs
-            if 'Header' in fs.keys():
+            fin = self.fin
+            if 'Header' in fin.keys():
                 try:
-                    Header.update(OrderedDict(fs['Header'].attrs.items()))
+                    Header.update(OrderedDict(fin['Header'].attrs.items()))
                 except:
                     print('input file have no Header')
         else:
