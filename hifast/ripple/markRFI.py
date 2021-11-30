@@ -162,7 +162,8 @@ def get_startend(is_rfi,rfi_width_lim = None,ext_sec= 0):
         is_rfi[0] = False
     if is_rfi[-1] == True:
         is_rfi[-1] = False
-        
+    if not np.any(is_rfi):
+        return [], []
     starend = np.hstack((np.diff(is_rfi+0),0))
     start_ = np.where(starend==1)[0]
     end_ = np.where(starend==-1)[0]
@@ -182,7 +183,7 @@ def get_startend(is_rfi,rfi_width_lim = None,ext_sec= 0):
             starend_use = ((end_-start_)>rfi_width_lim[0])&((end_-start_)<rfi_width_lim[1])
 
         if starend_use.any() == False:
-            log.warning("No True meets width condition.")
+            #log.warning("No True meets width condition.")
             return [],[]
 
         start = start_[starend_use] - ext_sec
