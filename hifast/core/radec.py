@@ -240,9 +240,9 @@ def get_radec(parse_mjd, guess_str=None, ky_files=None, tol=0.3, ky_fixed=False,
                str: *.hdf5 or *.xlsx
                array: shape is (m,); need input guess_str or ky_files
     guess_str: str; used to guess feed file name, for example, "M31_Drift_v3_6_arcdrift-M19_W"
-               if None, use parse_mjd instead.
-    ky_files: list of str; specify feed files; if None, will guess from guess_str or parse_mjd.
-    tot: float; unit is second
+               if None, use parse_mjd instead and parse_mjd must be str.
+    ky_files: list of str; specify feed files; if None, will guess from guess_str or parse_mjd (str).
+    tol: float; unit is second
     ky_fixed: bool; if True, assuming the feed is stationary during observation.
     use_cache: bool; use cached radec of feed
     nproc: int; parallel cpu number

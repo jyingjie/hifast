@@ -279,7 +279,7 @@ class IO(BaseIO):
             except:
                 pass
             if self.nB in [6, ]:
-                fft_args['sw_periods'].insert('2mhz', -1)
+                fft_args['sw_periods'].insert(-1, '2mhz')
             else:
                 print('beam number !=6, remove 2mhz in sw_periods if it exists')
         fft_args['is_on'] = is_on

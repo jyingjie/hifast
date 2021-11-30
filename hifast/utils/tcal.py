@@ -1,5 +1,6 @@
 ## cal
-    
+import numpy as np
+
 def read_tcal_sav(nB, s_type='w', tcal_dir=None, mode='high', date='20190115'):
     """
     nB: int

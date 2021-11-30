@@ -11,7 +11,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('fname',
                         help='file name; hdf5 file with "mjd" filed or KY file(.xlsx)')
-    parser.add_argument('-f', '--force', action='store_true',
+    parser.add_argument('-f', dest='force', action='store_true',
                         help='overwriting file if out file exists')
     parser.add_argument('--ky_files', nargs='*',
                         help='KY files, if not given, guessing from fname')
@@ -41,7 +41,11 @@ if __name__ == '__main__':
     nproc = args.nproc
     
     outpart = '-radec'
-    if outdir is None: outdir = os.path.dirname(fname)
+    if outdir is None:
+        if fname[-5:] == '.xlsx':
+            outdir = './'
+        else:
+            outdir = os.path.dirname(fname)
     fileout = os.path.join(outdir, '.'.join(os.path.basename(fname).split('.')[:-1]) + f'{outpart}.hdf5')
     if os.path.exists(fileout):
         if args.force:
