@@ -778,7 +778,7 @@ def mask_time_rfi(data,freq,T_thr_times = None,rtype = 'short-freq',frange = Non
                 frq2 = np.hstack((np.arange(freq[0]+frange_step,freq[-1],frange_step//2),freq[-1]))
                 franges = np.vstack((frq1,frq2)).T
 
-            for nf in tqdm(range(franges.shape[0])):
+            for nf in range(franges.shape[0]):
                 ret = ret | mask_sf(data,freq,T_thr_times,frange = franges[nf],RMS = RMS,**kwargs)
         
         elif len(frange) == 2:

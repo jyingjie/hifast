@@ -126,7 +126,7 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_lower_thr=None, rms_si
     data_rep = np.full(data.shape, np.nan)
     from ..utils.misc import extend_Trues
     MAX = np.nanmax(data)*20
-    for tn in tqdm(range(data.shape[0])):
+    for tn in range(data.shape[0]):
         if tn in not_rfi_num:
             spec = deepcopy(data[tn, :])
 #             spec[time_rfi[tn]&(spec<0)] = 0
@@ -179,7 +179,7 @@ def replace_margin_side(data, freq, is_rfi, mw_use, margin_width=20, ext_freq=1.
     whole_rfi = np.all(is_rfi, axis=1)
     is_rfi_num = np.arange(data.shape[0])[whole_rfi]
 
-    for ti in tqdm(range(N)):
+    for ti in range(N):
         if ti not in is_rfi_num:
             spec_ = data_[ti]
             low_use = (spec_ == np.inf)
@@ -368,7 +368,7 @@ class SW_FFT(object):
         if method == 'interpolate':
             # interpolate
             from scipy.interpolate import interp1d
-            for ti in tqdm(range(amp.shape[0])):
+            for ti in range(amp.shape[0]):
                 x_mask = self.x[~is_use_sw_chan_amp[ti]]
                 amp_solo_mask = amp[ti][~is_use_sw_chan_amp[ti]]
                 amp_solo_interp = interp1d(x_mask, amp_solo_mask, kind='linear')  # ,fill_value="extrapolate")
@@ -430,10 +430,10 @@ def mean_fit_ripple(data, nspec, func='iter'):
 
         sw = np.zeros_like(data)
         if len(data.shape) == 2:
-            for i in tqdm(range(tlen)):
+            for i in range(tlen):
                 sw[i, :] = bn.nanmean(data[t1[i]:t2[i], :], axis=0)
         elif len(data.shape) == 3:
-            for i in tqdm(range(tlen)):
+            for i in range(tlen):
                 sw[i, :, 0] = bn.nanmean(data[t1[i]:t2[i], :, 0], axis=0)
                 sw[i, :, 1] = bn.nanmean(data[t1[i]:t2[i], :, 1], axis=0)
 
@@ -467,10 +467,10 @@ def med_fit_ripple(data, nspec, func='iter'):
 
         sw = np.zeros_like(data)
         if len(data.shape) == 2:
-            for i in tqdm(range(tlen)):
+            for i in range(tlen):
                 sw[i, :] = bn.nanmedian(data[t1[i]:t2[i], :], axis=0)
         elif len(data.shape) == 3:
-            for i in tqdm(range(tlen)):
+            for i in range(tlen):
                 sw[i, :, 0] = bn.nanmedian(data[t1[i]:t2[i], :, 0], axis=0)
                 sw[i, :, 1] = bn.nanmedian(data[t1[i]:t2[i], :, 1], axis=0)
     elif func == 'smooth':

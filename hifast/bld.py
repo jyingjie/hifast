@@ -18,6 +18,8 @@ parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
                     help='Limit frequence range')
 parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
                     help="don't check or add ra dec")
+parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True',
+                    help='')
 
 # group = parser.add_argument_group(f'*Flux\n{sep_line}')
 # group.add_argument('--flux', type=bool_fun, choices=[True, False], default='False',
@@ -72,6 +74,7 @@ group.add_argument('--length', type=int, default=20, not_in_write_out_config_fil
 # Cell
 class IO(BaseIO):
     ver = 'old'
+
     def _get_fpart(self,):
         return '-bld'
 
@@ -94,6 +97,7 @@ class IO(BaseIO):
                 'lam', 'deg', 'offset', 'ratio', 'niter']
         for key in keys:
             fit_kwargs[key] = getattr(args, key)
+        fit_kwargs['verbose'] = args.show_prog
         if args.trans:
             return sub_baseline(mjd, s2p.transpose((1, 0, 2)), subtract=True, **fit_kwargs).transpose((1, 0, 2))
         else:
@@ -117,11 +121,13 @@ def check_backend():
     if 'ipympl' not in mpl.get_backend():
         print('Please run interaction in Jupyert and \'%matplotlib ipympl\' in the notebook cell ')
         sys.exit()
+
+
 def interact(args):
     check_backend()
     import h5py
     from .interaction import bld_i as interact
-    f = h5py.File(args.fpath,'r')
+    f = h5py.File(args.fpath, 'r')
     fs = f['S']
     if 'T' in fs.keys():
         T = fs['T']
@@ -135,9 +141,9 @@ def interact(args):
     interact.nproc = args.nproc
     interact.length = args.length
     interact.figsize = args.figsize
-    interact.ylim = args.ylim[0] if len(args.ylim) ==1 else args.ylim
+    interact.ylim = args.ylim[0] if len(args.ylim) == 1 else args.ylim
     interact.main()
-    #sys.exit()
+    # sys.exit()
 
 # Cell
 if __name__ == '__main__':
