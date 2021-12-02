@@ -6,12 +6,16 @@ import re
 from glob import glob
 
 if __name__ == '__main__':
-    import argparse
+    from .utils.io import *
 
-    parser = argparse.ArgumentParser(allow_abbrev=False)
+    sep_line = '##'+'#'*70+'##'
+    parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}",
+                        formatter_class=formatter_class, allow_abbrev=False,
+                        description='separate Cal on and Cal off; noise-diode Calibration', )
+
     parser.add_argument('fname',
                         help='file name; one of the chunk files')
-    parser.add_argument('-f', '--force', action='store_true',
+    parser.add_argument('-f', dest='force', action='store_true',
                         help='overwriting file if out file exists')
     parser.add_argument('-d', '--n_delay', type=int, required=True,
                        help='time of delay divided by sampling time')
@@ -32,10 +36,14 @@ if __name__ == '__main__':
     parser.add_argument('--outdir', required=True,
                        help='the directory to store output files.')
     
-    parser.add_argument('--smooth', default='mean', choices=['mean','poly','gaussian'],
-                        help="smooth method: 'mean','poly',gaussian',.. default:mean")
+    parser.add_argument('--smooth', choices=['mean','poly','gaussian'], required=True,
+                        help="smooth method: 'mean','poly',gaussian',.. default:gaussian")
     parser.add_argument('--s_sigma', type=float, default=5,
                         help='sigma for gaussian smooth, default 5MHz')
+    
+    parser.add_argument('--ext_frange', type=bool_fun, choices=[True, False], default='True', 
+                        help="if True and smooth method is gaussian, then extend 1*s_sigma in the beginning and end of frange")
+    
     parser.add_argument('--s_deg', type=int, default=1,
                         help='Degree of the fitting polynomial, 0 equals mean; 1 is linear fit. default 1')
     parser.add_argument('--dfactor',
@@ -44,7 +52,7 @@ if __name__ == '__main__':
                         help='median filter kernel size for power of spec; odd number; default None')
     parser.add_argument('--noise_mode', default='high', choices=['high','low'],
                         help='noise_mode, high or low')
-    parser.add_argument('--noise_date', default='20190115',
+    parser.add_argument('--noise_date', default='auto',
                         help='noise obs date, default auto')
     parser.add_argument('--med_filter_size_cal', type=int, default=5,
                         help='median filter kernel size for power of cal; odd number; default 5')
@@ -54,10 +62,13 @@ if __name__ == '__main__':
                         help='save power of cal to file')
     parser.add_argument('--not_cali', action='store_true',
                         help='save power of cal to file')
-    parser.add_argument('--check_cal', choices=['none', 'A', 'B'], default='none',
+    parser.add_argument('--check_cal', choices=['none', 'A'], default='none',
                         help='save power of cal to file')
     
     args = parser.parse_args()
+#     print('#'*35+'Args'+'#'*35)
+#     print(parser.format_values())  # useful for logging where different settings came from
+#     print('#'*35+'####'+'#'*35)
     
     #check file exits
     if not os.path.exists(args.fname):
@@ -70,8 +81,7 @@ if __name__ == '__main__':
     sep_save =args.sep_save
     outdir = args.outdir
     if outdir is not None:
-        os.makedirs(outdir, exist_ok=True)
-        
+        os.makedirs(outdir, exist_ok=True)    
     ## check out file 
     def gen_out_name_base(fname_part, outdir):
         fname_add = os.path.basename(os.path.dirname(os.path.abspath(fname_part)))
@@ -89,7 +99,10 @@ if __name__ == '__main__':
             print(fileout_sep)
             print('exit... Using -f to overwrite it.')
             sys.exit()
-            
+    #check frange
+    if frange is not None and args.smooth =="gaussian" and args.ext_frange:
+        frange = [frange[0] - args.s_sigma, frange[1] + args.s_sigma]
+        
     start_all, stop_all= args.start, args.stop
     if start_all is None:
         start_all = 1

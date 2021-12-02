@@ -350,5 +350,8 @@ if __name__ == '__main__':
     if args_.interact:
         interact(args_)
     else:
+        print('#'*35+'Args'+'#'*35)
+        print(parser.format_values())  # useful for logging where different settings came from
+        print('#'*35+'####'+'#'*35)
         io = IO(args_)
         io()

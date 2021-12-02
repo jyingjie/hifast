@@ -8,7 +8,7 @@ from .utils.io import *
 
 # Internal Cell
 sep_line = '##'+'#'*70+'##'
-parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}", formatter_class = formatter_class, allow_abbrev=False,
+parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}", formatter_class=formatter_class, allow_abbrev=False,
                         description='Convert the spectra temperature to flux', )
 add_common_argument(parser)
 parser.add_argument('fpath',
@@ -18,7 +18,7 @@ parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
 parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
                     help="if set, don't check or add ra dec")
 group = parser.add_argument_group(f'*Flux\n{sep_line}')
-## --flux affect the outfield name
+# --flux affect the outfield name
 group.add_argument('--flux', type=bool_fun, choices=[True], default='True', not_in_write_out_config_file=True,
                    help='It must be True.')
 group.add_argument('--cali_fname', default='none',
@@ -27,6 +27,7 @@ group.add_argument('--cali_fname', default='none',
 # Cell
 class IO(BaseIO):
     ver = 'old'
+
     def _get_fpart(self,):
         """
         need modify this function
@@ -46,6 +47,8 @@ if __name__ == '__main__':
     args_ = parser.parse_args()
     # print(parser.format_help())
     # print("----------")
-    # print(parser.format_values())  # useful for logging where different settings came from
+    print('#'*35+'Args'+'#'*35)
+    print(parser.format_values())  # useful for logging where different settings came from
+    print('#'*35+'####'+'#'*35)
     io = IO(args_)
     io()

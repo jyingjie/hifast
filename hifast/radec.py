@@ -7,8 +7,12 @@ import sys
 from glob import glob
 
 if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
+    from .utils.io import *
+
+    sep_line = '##'+'#'*70+'##'
+    parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}",
+                        formatter_class=formatter_class, allow_abbrev=False,
+                        description='Calculate RA DEC', )
     parser.add_argument('fname',
                         help='file name; hdf5 file with "mjd" filed or KY file(.xlsx)')
     parser.add_argument('-f', dest='force', action='store_true',
@@ -30,6 +34,9 @@ if __name__ == '__main__':
     
 
     args = parser.parse_args()
+#     print('#'*35+'Args'+'#'*35)
+#     print(parser.format_values())  # useful for logging where different settings came from
+#     print('#'*35+'####'+'#'*35)
 
     fname = args.fname
     ky_files = args.ky_files
