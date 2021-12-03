@@ -50,8 +50,8 @@ class Test(object):
 
     def sub(self, x, start=0, length=20, polar=0, bound_f=None, exclude_m=0, **kwargs):
         self.select(start, length, polar)
-        bounds = [(0.,1.), bound_f, (0, 2*np.pi), (-1,1)] + [(-np.inf, np.inf),]*kwargs['deg'] # optimize.minimize
-        opt_para = {'bounds':bounds,}
+        bounds = [(0., 1.), bound_f, (0, 2*np.pi), (-1, 1)] + [(-np.inf, np.inf), ]*kwargs['deg']  # optimize.minimize
+        opt_para = {'bounds': bounds, }
         self.bld = sub_baseline(self.freq, self.T2p_t, opt_para=opt_para, method='sin_poly', rew=False, niter=1,
                                 verbose=False, exclude_fun=get_exclude_fun(exclude_m), **kwargs)
         return np.full(x.shape, np.nan)
@@ -87,7 +87,7 @@ def main():
 
     sliders = {}
     sliders.update(_BoundedIntText(
-        start=(0, 0, tes.T2p.shape[1]-1-length, 1), polar=(0, 0, 1, 1)))
+        start=(0, 0, tes.T2p.shape[1]-length, 1), polar=(0, 0, 1, 1)))
     sliders.update(_IntSlider(njoin=(0, 1, length, 1)))
     sliders.update(_Dropdown(s_method_freq=('none', 'gaussian', 'boxcar'),
                              s_method_t=('none', 'gaussian', 'boxcar'),
@@ -98,7 +98,6 @@ def main():
                               exclude_m=(0, 0, 1, 1)))
     sliders.update(_FloatRangeSlider(bound_f=([.90, .95], 0.8, 1.15, 0.02), readout_format='.3f',))
     #sliders.update(_BoundedFloatText(bound_f=(0.95, 0.85, 0.99, 0.002)))
-
 
     plt.ioff()
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=figsize)
@@ -126,7 +125,9 @@ def main():
                          **sliders,
                          color='r', linewidth=2, xlim=xlim, ylim=ylim, ax=ax1, play_buttons=True, display_controls=False)
 
-    controls2 = iplt.plot(tes.freq, tes.get_ori, i=range(length),
+    widget_i = _IntSlider(i=(0, 0, length-1, 1))['i'] if length == 1 else range(length)
+
+    controls2 = iplt.plot(tes.freq, tes.get_ori, i=widget_i,
                           controls=controls, xlim=xlim, ylim=ylim, ax=ax1, display_controls=False, play_buttons=True)
     controls3 = iplt.plot(tes.freq, tes.get_bl,
                           controls=controls2, xlim=xlim, ylim=ylim, ax=ax1)
@@ -162,3 +163,4 @@ def main():
     display(BOX)
     plt.show()
     display(BOX)
+    return tes

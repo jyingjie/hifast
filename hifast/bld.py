@@ -29,7 +29,7 @@ parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default
 
 # baseline fitting
 group = parser.add_argument_group(f'*BaseLine (set --method as none to skip this) \n{sep_line}')
-group.add_argument('--method', default='arPLS', choices=['none', 'arPLS', 'srPLS', 'Chebyshev', 'poly', 'original', ],
+group.add_argument('--method', default='arPLS', choices=['none', 'arPLS', 'srPLS', 'asPLS', 'masPLS', 'Chebyshev', 'poly', 'original', ],
                    help='method used to fit baseline, if set as none, skip this')
 group.add_argument('--nproc', '-n', type=int, default=1,
                    help='number of process used in fitting baseline')

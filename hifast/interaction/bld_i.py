@@ -74,9 +74,9 @@ def main():
 
     sliders = {}
     sliders.update(_BoundedIntText(
-        start=(0, 0, tes.T2p.shape[1]-1-length, 1), polar=(0, 0, 1, 1)))
+        start=(0, 0, tes.T2p.shape[1]-length, 1), polar=(0, 0, 1, 1)))
     sliders.update(_IntSlider(njoin=(0, 1, length, 1)))
-    sliders.update(_Dropdown(method=('arPLS', 'asPLS', 'masPLS', 'poly', 'Chebyshev'),
+    sliders.update(_Dropdown(method=('arPLS', 'srPLS', 'asPLS', 'masPLS', 'poly', 'Chebyshev'),
                              s_method_freq=('gaussian', 'boxcar', 'none'),
                              s_method_t=('none', 'gaussian', 'boxcar'),
                              ))
@@ -113,7 +113,9 @@ def main():
                          **sliders,
                          color='r', linewidth=2, xlim=xlim, ylim=ylim, ax=ax1, play_buttons=True, display_controls=False)
 
-    controls2 = iplt.plot(tes.freq, tes.get_ori, i=range(length),
+    widget_i = _IntSlider(i=(0, 0, length-1, 1))['i'] if length ==1 else range(length)
+
+    controls2 = iplt.plot(tes.freq, tes.get_ori, i=widget_i,
                           controls=controls, xlim=xlim, ylim=ylim, ax=ax1, display_controls=False, play_buttons=True)
     controls3 = iplt.plot(tes.freq, tes.get_bl,
                           controls=controls2, xlim=xlim, ylim=ylim, ax=ax1)
@@ -149,3 +151,5 @@ def main():
     display(BOX)
     plt.show()
     display(BOX)
+
+    return tes

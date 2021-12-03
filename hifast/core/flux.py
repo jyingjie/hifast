@@ -57,10 +57,10 @@ def cali_src(T, nB, freq, cali_fname=None, ra=None, dec=None, mjd=None):
     flux calibration using fixed factor or Calibator 
     -----------------------
     T: array_like
-       Temperature of the spectra. Shape is (m,n) or (m,n,2), where n is freq sample number.
+       Temperature of the spectra. Shape is (m,n) or (m,n,2) i.e. (Mjd, channel) or (Mjd, channel, Polarization)
     nB: int
        Beam numbe
-    freq: array_like (m,)
+    freq: array_like (n,)
     cali_fname: str
        quasar calibration file name; hdf5 file
        If None, use the gain depended on Zenith angle and need ra, dec and mjd.
