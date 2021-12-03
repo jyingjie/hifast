@@ -60,15 +60,23 @@ def cali_src(T, nB, freq, cali_fname=None, ra=None, dec=None, mjd=None):
        Temperature of the spectra. Shape is (m,n) or (m,n,2) i.e. (Mjd, channel) or (Mjd, channel, Polarization)
     nB: int
        Beam numbe
-    freq: array_like (n,)
+    freq: array_like, shape (n,)
     cali_fname: str
        quasar calibration file name; hdf5 file
-       If None, use the gain depended on Zenith angle and need ra, dec and mjd.
-    ra, dec: array_like; (m,)
-    mjd: array_like; (m,)
+       If None, use the gain depended on Zenith angle (arxiv:2002.01786) and need input ra, dec and mjd.
+    ra, dec, mjd: None or array_like, shape (m,)
     """
     
     if cali_fname is None or cali_fname=='none':
+        #check
+        if np.isscalar(mjd):
+            mjd = np.array([mjd])
+        if np.isscalar(ra):
+            ra = np.array([ra])
+        if np.isscalar(dec):
+            dec = np.array([dec])
+        assert ra.shape[0] == dec.shape[0] == mjd.shape[0] == T.shape[0]   
+        
         K_Jy = Get_gain(ra, dec, mjd, nB, freq)[0] * 25.6   #K/Jy
         K_Jy= K_Jy[:,:,None]
     else:

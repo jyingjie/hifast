@@ -149,3 +149,35 @@ def doppler_correct_inter(wvl, flux, v, wvlo=None, edgeHandling=None, fillValue=
     return nflux, wlprime
 
 
+def radial_vel_wrt(mjd, ra, dec, frame='LSRK'):
+    """Radial velocity with respect to frame"""
+    jd = mjd + 2400000.5
+    if frame == 'HELIOCEN':
+        vobs =  ugdopplerfast(ra, dec, jd, frame=frame) # velocity of observer (telescope) with respect to frame
+    elif frame == 'LSRK':
+        vobs =  - ugdopplerfast(ra, dec, jd, frame=frame) # velocity of observer (telescope) with respect to frame
+    return vobs
+
+def frame_correct_freq(freq, mjd, ra, dec, frame):
+    """
+    convert the freq observed by FAST to specified frame (LSRK or HELIOCEN)
+    freq : array like (m,)
+    mjd, ra, dec: scalar or array (n,)
+    
+    return: shape (m,) if mjd, ra, dec are scalar; shape (n, m) if array
+    """
+    isscalar = False
+    if np.isscalar(mjd):
+        mjd = np.array([mjd])
+        isscalar = True
+    if np.isscalar(ra):
+        ra = np.array([ra])
+        isscalar = True
+    if np.isscalar(dec):
+        dec = np.array([dec])
+        isscalar = True
+        
+    vobs = radial_vel_wrt(mjd, ra, dec, frame)
+    if not isscalar:
+        vobs = vobs[:, None]
+    return freq_correct(freq, vobs)
