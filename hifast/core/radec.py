@@ -271,7 +271,11 @@ def get_radec(parse_mjd, guess_str=None, ky_files=None, tol=0.3, ky_fixed=False,
     os.makedirs(cache_dir, exist_ok=True)
     cache_file = cache_dir + 'known_kyfile.json'
     obs_data = (Time(mjds_src[0], format='mjd')+8*u.hour).to_datetime().strftime('%Y_%m_%d')
-    cache_key = re.match('^.*M[0-1][0-9]_[W,N,F]', os.path.basename(guess_str)).group(0)[:-6] + '-' + obs_data
+    try:
+        cache_key = re.match('^.*M[0-1][0-9]_[W,N,F]', os.path.basename(guess_str)).group(0)[:-6] + '-' + obs_data
+    except:
+        cache_key = None
+        use_cache = False
 
     # find feed file corresponding to guess_str
     ky_file = None
@@ -306,16 +310,17 @@ def get_radec(parse_mjd, guess_str=None, ky_files=None, tol=0.3, ky_fixed=False,
     else:
         ky_data, mjds_ky, ky_file = res
     # cache ky_file
-    import tempfile
-    file_tmp = tempfile.mktemp(prefix=os.path.basename(cache_file)+'.tmp.', dir=os.path.dirname(cache_file))
-    with open(cache_file, "r") as f:
-        cache = json.load(f)
-    cache.update({cache_key:ky_file})
-    with open(file_tmp,'w') as f:
-        json.dump(cache, f, indent=4)
-        f.flush()
-        os.fsync(f.fileno())
-    os.rename(file_tmp, cache_file)
+    if cache_key is not None:
+        import tempfile
+        file_tmp = tempfile.mktemp(prefix=os.path.basename(cache_file)+'.tmp.', dir=os.path.dirname(cache_file))
+        with open(cache_file, "r") as f:
+            cache = json.load(f)
+        cache.update({cache_key:ky_file})
+        with open(file_tmp,'w') as f:
+            json.dump(cache, f, indent=4)
+            f.flush()
+            os.fsync(f.fileno())
+        os.rename(file_tmp, cache_file)
     # obtain radec of ky
     cache_fname_radec = os.path.join(cache_dir,'.'.join(os.path.basename(ky_file).split('.')[:-1])+'_cache.npz')
     cache_fname_radec_b = os.path.join(cache_dir,'.'.join(os.path.basename(ky_file).split('.')[:-1])+'_cache.npy')

@@ -266,7 +266,7 @@ def load_hdf5_to_dict(fpath):
             print('input file have no Header')
     dict_out['Header'] = Header
     # load
-    for key in fs.keys():
+    for key in fs['S'].keys():
         if key != 'Header':
             dict_out[key] = fs['S'][key][:]
     fs.close()
