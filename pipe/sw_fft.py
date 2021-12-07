@@ -182,7 +182,7 @@ def replace_margin_side(data, freq, is_rfi, mw_use, margin_width=20, ext_freq=1.
 
     ext = int(np.around(ext_freq / fdelta))
 
-    from hifas.ripple.markRFI import real_rms
+    from .ripple.markRFI import real_rms
     whole_rfi = np.all(is_rfi, axis=1)
     is_rfi_num = np.arange(data.shape[0])[whole_rfi]
 
