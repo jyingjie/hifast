@@ -28,6 +28,10 @@ if __name__ == '__main__':
     else:
         raise(ValueError('can not find spec'))
 
+    if 'frame' in dict_in['Header'].keys():
+        if dict_in[wcs_data_name].ndim == 2:
+            dict_in[wcs_data_name] = dict_in[wcs_data_name][..., None]
+
     dict_in[wcs_data_name] = MjdChanPolar_to_PolarMjdChan(dict_in[wcs_data_name])
 
     save_specs_hdf5(os.path.join(args.outdir, os.path.basename(args.fpath)), dict_in)
