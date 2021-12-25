@@ -19,7 +19,7 @@ from astropy import units as u
 from astropy.time import Time
 from astropy.utils import iers
 #iers.Conf.iers_auto_url.set("https://datacenter.iers.org/data/9/finals2000A.all")
-from .kypara2radec import kypara2radec
+from . import kypara2radec
 from ..utils.io import rec_his, save_specs_hdf5
 import erfa
 
@@ -155,7 +155,7 @@ def process_ky(ky_files, mjds_src=None, tol=0, ky_fixed=False):
         return ky_data, mjd, ky_file
 
 # Cell
-def kydata2radec(ky_data, mjd, nBs='All', ky_fixed=False, nproc=1):
+def kydata2radec(ky_data, mjd, nBs='All', ky_fixed=False, nproc=1, backend='astropy'):
     """
     calculating ra dec of ky from ky data
     ky_data: data in feed file (.xlsx)
@@ -190,27 +190,34 @@ def kydata2radec(ky_data, mjd, nBs='All', ky_fixed=False, nproc=1):
         globalPitch =   full_fun(globalPitch)
         globalRoll =    full_fun(globalRoll)
 
-
-
     radec= {}
     radec['mjd']= mjd
     radec['angle'] = multibeamAngle
-    ymdhms = ky_data['systime_utc'].ymdhms
-    utc1, utc2 = erfa.dtf2d(b"UTC", ymdhms['year'], ymdhms['month'], ymdhms['day'], ymdhms['hour'], ymdhms['minute'], ymdhms['second'])
-    for nB in nBs:
-        if nproc > 1:
-            import multiprocessing
-            with multiprocessing.Pool(processes=nproc) as pool:
-                res = pool.starmap(kypara2radec, zip(utc1, utc2, multibeamAngle, np.full(len(mjd), nB), globalCenterX,
-                                                     globalCenterY, globalCenterZ, globalYaw, globalPitch, globalRoll))
-        else:
-            kypara2radec_ufun= np.frompyfunc(kypara2radec,10,1)
-            res = kypara2radec_ufun(utc1, utc2, multibeamAngle, nB, globalCenterX,  globalCenterY, globalCenterZ, globalYaw, globalPitch, globalRoll)
-
-        res= np.vstack(res)
-        res= res*180/np.pi # convert radians to degree
-        radec['ra'+str(nB)]= res[:,0]
-        radec['dec'+str(nB)]= res[:,1]
+    #ymdhms = ky_data['systime_utc'].ymdhms
+    #utc1, utc2 = erfa.dtf2d(b"UTC", ymdhms['year'], ymdhms['month'], ymdhms['day'], ymdhms['hour'], ymdhms['minute'], ymdhms['second'])
+    obstime = ky_data['systime_utc']
+    if nproc > 1:
+        import multiprocessing
+        global fun_mp
+        def fun_mp(para):
+            nB, verbose = para
+            print(f'beam {nB}')
+            return kypara2radec.kypara2radec(ky_data['systime_utc'], multibeamAngle, nB,
+                                              globalCenterX,  globalCenterY, globalCenterZ, globalYaw, globalPitch, globalRoll,
+                                               backend=backend, verbose=verbose)
+        with multiprocessing.Pool(processes=nproc) as pool:
+            res = pool.map(fun_mp, zip(nBs, [True,] + [False, ]*(len(nBs)-1)))
+        for i, nB in enumerate(nBs):
+            radec['ra'+str(nB)]= res[i][0]
+            radec['dec'+str(nB)]= res[i][1]
+    else:
+        for nB in nBs:
+            verbose = True if nB == 1 else False
+            ra_, dec_ = kypara2radec.kypara2radec(ky_data['systime_utc'], multibeamAngle, nB,
+                                          globalCenterX,  globalCenterY, globalCenterZ, globalYaw, globalPitch, globalRoll, backend=backend, verbose=verbose)
+            radec['ra'+str(nB)]= ra_
+            radec['dec'+str(nB)]= dec_
+            print(f'beam {nB}')
     return radec
 
 # Cell
@@ -234,7 +241,8 @@ def radec_interp(radec_ky, mjds_src):
     return radec_src
 
 # Cell
-def get_radec(parse_mjd, guess_str=None, ky_files=None, tol=0.3, ky_fixed=False, use_cache=True, nproc=1):
+def get_radec(parse_mjd, guess_str=None, ky_files=None, tol=0.3, ky_fixed=False, use_cache=True, nproc=1,
+              backend='astropy', env_para=None, dUT1=None):
     """
     parse_mjd: str or array
                str: *.hdf5 or *.xlsx
@@ -246,13 +254,33 @@ def get_radec(parse_mjd, guess_str=None, ky_files=None, tol=0.3, ky_fixed=False,
     ky_fixed: bool; if True, assuming the feed is stationary during observation.
     use_cache: bool; use cached radec of feed
     nproc: int; parallel cpu number
+    backend: str; erfa or astropy
+    env_para: dict; e.g.
+            env_para = {}
+            env_para['phpa'] = 925.
+            env_para['temperature'] = 15
+            env_para['humidity'] = 0.8
+    dUT1: UT1 - UTC
     """
+
+    ident = {}
+    if env_para is not None:
+        kypara2radec.set_obs_env_para(env_para['phpa'], env_para['temperature'], env_para['humidity'])
+        ident.update(env_para)
+    if dUT1 is not None:
+        kypara2radec.dUT1 = dUT1
+        if backend == 'erfa':
+            ident['dUT1'] = dUT1
+    import json
+    from hashlib import md5
+    ident_str = md5(json.dumps(ident).encode('utf-8')).hexdigest()
+
     # if input feed file, return ra dec in it
     if isinstance(parse_mjd, str):
         fname = parse_mjd
         if 'xls' in fname.split('.')[-1]:
             ky_data, mjd, ky_file = process_ky([fname,])
-            return kydata2radec(ky_data, mjd, nBs='All', ky_fixed=False)
+            return kydata2radec(ky_data, mjd, nBs='All', ky_fixed=False, backend=backend)
         elif 'hdf5' in fname.split('.')[-1]:
             with h5py.File(fname,'r') as f:
                     mjds_src = f['S']['mjd'][:]
@@ -322,8 +350,8 @@ def get_radec(parse_mjd, guess_str=None, ky_files=None, tol=0.3, ky_fixed=False,
             os.fsync(f.fileno())
         os.rename(file_tmp, cache_file)
     # obtain radec of ky
-    cache_fname_radec = os.path.join(cache_dir,'.'.join(os.path.basename(ky_file).split('.')[:-1])+'_cache.npz')
-    cache_fname_radec_b = os.path.join(cache_dir,'.'.join(os.path.basename(ky_file).split('.')[:-1])+'_cache.npy')
+    cache_fname_radec = os.path.join(cache_dir,'.'.join(os.path.basename(ky_file).split('.')[:-1]) + f'_{backend}_cache_{ident_str}.npz')
+    cache_fname_radec_b = os.path.join(cache_dir,'.'.join(os.path.basename(ky_file).split('.')[:-1]) + f'_{backend}_cache_{ident_str}.npy')
     radec_ky = None
     if use_cache and not ky_fixed:
         try:
@@ -340,9 +368,9 @@ def get_radec(parse_mjd, guess_str=None, ky_files=None, tol=0.3, ky_fixed=False,
             # ky_file is obtained from cache_file
             ky_data, mjds_ky, ky_file= process_ky([ky_file,], mjds_src, tol, ky_fixed=ky_fixed)
         if ky_fixed:
-            return kydata2radec(ky_data, mjds_src, ky_fixed=ky_fixed, nproc=nproc)
+            return kydata2radec(ky_data, mjds_src, ky_fixed=ky_fixed, nproc=nproc, backend=backend)
         else:
-            radec_ky= kydata2radec(ky_data, mjds_ky, ky_fixed=ky_fixed, nproc=nproc)
+            radec_ky= kydata2radec(ky_data, mjds_ky, ky_fixed=ky_fixed, nproc=nproc, backend=backend)
             print('saving radec of KY to cached file')
             np.savez(cache_fname_radec, **radec_ky)
     return radec_interp(radec_ky, mjds_src)

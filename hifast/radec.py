@@ -14,11 +14,13 @@ if __name__ == '__main__':
                         formatter_class=formatter_class, allow_abbrev=False,
                         description='Calculate RA DEC', )
     parser.add_argument('fname',
-                        help='file name; hdf5 file with "mjd" filed or KY file(.xlsx)')
+                        help='file name; hdf5 file with "S/mjd" filed or KY file(.xlsx)')
     parser.add_argument('-f', dest='force', action='store_true',
                         help='overwriting file if out file exists')
     parser.add_argument('--ky_files', nargs='*',
                         help='KY files, if not given, guessing from fname')
+    parser.add_argument('--backend', choices=['erfa', 'astropy'], default='astropy',
+                       help='using erfa or astropy. The astropy consider dUT1, xp, yp')
     parser.add_argument('--tol', type=float, default=1,
                        help='max allowed extrapolate time; unit: second')
     parser.add_argument('--ky_fixed', action='store_true',
@@ -31,6 +33,18 @@ if __name__ == '__main__':
                        help='plot the ra dec in pdf image')
     parser.add_argument('--outdir',
                        help='output file directory; Default is same with input file if input hdf5 file, "./" if input .xlsx file.')
+    
+    group = parser.add_argument_group(f'environment parameters')
+    group.add_argument('--phpa', type=float, default=925.,
+                   help='atmospheric pressure in hPa')
+    group.add_argument('--temperature', type=float, default=15.,
+                   help='The ground-level temperature in deg C.')
+    group.add_argument('--humidity', type=float, default=0.8,
+                   help='The relative humidity as a dimensionless quantity between 0 to 1')
+    parser.add_argument('--dUT1', default=0.1,
+                   help='UT1-UTC')
+    
+    
     
 
     args = parser.parse_args()
@@ -61,8 +75,18 @@ if __name__ == '__main__':
             print(f"File exists {fileout}")
             print('exit... Using -f to overwrite it.')
             sys.exit()
+            
     from .core.radec import plot_radec, get_radec
-    radec = get_radec(fname, ky_files=ky_files, tol=tol, ky_fixed=ky_fixed, use_cache=use_cache, nproc=nproc)
+    env_para = {}
+    env_para['phpa'] = args.phpa
+    env_para['temperature'] = args.temperature
+    env_para['humidity'] = args.humidity
+    try:
+        dUT1 = float(args.dUT1)
+    except:
+        dUT1 = args.dUT1
+    radec = get_radec(fname, ky_files=ky_files, tol=tol, ky_fixed=ky_fixed, use_cache=use_cache, nproc=nproc, 
+                      backend=args.backend, env_para=env_para, dUT1=dUT1)
     #saving
     ##record history
     from .utils.io import *
