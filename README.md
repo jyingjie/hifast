@@ -1,3 +1,2 @@
-Please only use scripts in the folder "rfi_fft_codes", because we are still developing these.
+Please see the files in "doc" directory.
 
-About hifast version, you should install the branch "dev" .
