@@ -21,6 +21,7 @@ def rms(data,vel,rms_vrange=None):
     rms_vrange: [a,b], calculate rms from a to b 
     """
     if rms_vrange is not None:
+        rms_vrange.sort()
         is_use = (vel > rms_vrange[0])&(vel < rms_vrange[1])
         if len(data.shape) == 1:
             data = data[is_use]
@@ -29,6 +30,22 @@ def rms(data,vel,rms_vrange=None):
         
     ans = np.sqrt(np.nanmean((data)**2,axis = -1))   
     return ans
+
+def get_rms_frange(spec,freq,rms_step=None,):
+    RMSl = []
+    rms_vrangel = []
+    for v in np.arange(freq[0],freq[-1],rms_step):
+        RMS_ = rms(spec,freq,rms_vrange=[v,v+rms_step])
+        if RMS_>0:
+            RMSl += [RMS_,]
+            rms_vrangel += [[v,v+rms_step],]
+    RMSl = np.array(RMSl); rms_vrangel = np.array(rms_vrangel)    
+    RMS = np.nanmedian(RMSl)
+    loc = np.argmin(np.abs(RMSl-RMS))
+    rms_vrange = rms_vrangel[loc]
+    log.warning(f"Redirected to rms_range = {rms_vrange}. We recommend you to set a certain range.")
+
+    return rms_vrange
 
 def real_rms(data,vel,sigma,rms_vrange=None):
     """
@@ -148,7 +165,7 @@ def fit_line(rfi,freq,half_factor,**kwargs):
 
     return half_v_left, half_v_righ
 
-def get_startend(is_rfi,rfi_width_lim = None,ext_sec= 0):
+def get_startend(is_rfi,rfi_width_lim = None, ext_sec= 0, exclude = True):
     """
     get continued start and end in a bool array
     is_rfi: 1D bool array
@@ -157,21 +174,22 @@ def get_startend(is_rfi,rfi_width_lim = None,ext_sec= 0):
     """
     if is_rfi.any() == False:
         raise ValueError("Input array has no Trues.")
-    ori_rfi = deepcopy(is_rfi)
-    if is_rfi[0] == True:
-        is_rfi[0] = False
-    if is_rfi[-1] == True:
-        is_rfi[-1] = False
-    if not np.any(is_rfi):
+        
+    N = len(is_rfi) 
+    if not exclude: N -= 1
+        
+    is_rfi_ = deepcopy(is_rfi)
+
+    if not np.any(is_rfi_):
         return [], []
-    starend = np.hstack((np.diff(is_rfi+0),0))
+    starend = np.diff(is_rfi_+0,prepend=0,append=0)
     start_ = np.where(starend==1)[0]
     end_ = np.where(starend==-1)[0]
     
     if end_[0] < start_[0]:
-        end_ = np.delete(end_,0)
+        start_ = np.insert(start_,0,0)
     if end_[-1] < start_[-1]:
-        start_ = np.delete(start_,-1)
+        end_ = np.insert(end_,-1,N)
     
     if rfi_width_lim is None:
         start = start_ - ext_sec
@@ -189,18 +207,10 @@ def get_startend(is_rfi,rfi_width_lim = None,ext_sec= 0):
         start = start_[starend_use] - ext_sec
         end = end_[starend_use] + ext_sec
 
-    if min(start) < 0:
-        start[start<0] = 0 
-    N = len(is_rfi) - 1 
-    if max(end) > N:
-        end[end>N] = N
-        
-    if ori_rfi[-1] ==True:
-        end[-1] = N
+    if min(start) < 0:  start[start<0] = 0 
+    if max(end) > N: end[end>N] = N
     
     return start,end
-
-
 
 def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,check = True,
                 rfi_groups = 'two_groups',**kwargs):
@@ -410,7 +420,7 @@ def mask_RFI(freq,is_rfi,theory,mask_all_theory = False,freq_from_theory = None,
     rfi_width_lim = kwargs['rfi_width_lim']
     ext_sec = kwargs['ext_sec']
     
-    start,end = get_startend(is_rfi,rfi_width_lim=rfi_width_lim/2,ext_sec= ext_sec)
+    start,end = get_startend(is_rfi,rfi_width_lim=rfi_width_lim/2,ext_sec= ext_sec, exclude=False)
     bigrfi = np.full(is_rfi.shape[0],False)
     for s,e in zip(start,end):
         fs,fe = freq[s],freq[e]
@@ -475,12 +485,11 @@ def mask_RFI_2sides(spec,freq,is_rfi,theory0,mark_rfi_width,small_rfi_times,RMS,
     flim_l = theory0 - mark_rfi_width/2
     flim_r = theory0 + mark_rfi_width/2
     fdelta = freq[1] - freq[0]
-    
+    '''
     rfi_width_lim = kwargs['rfi_width_lim']
     ext_sec = kwargs['ext_sec']
     
-    start,end = get_startend(is_rfi,rfi_width_lim=rfi_width_lim/2,ext_sec= ext_sec)
-    '''
+    start,end = get_startend(is_rfi,rfi_width_lim=rfi_width_lim/2,ext_sec= ext_sec,exclude=False)
     bigrfi = np.full(is_rfi.shape[0],False)
     for s,e in zip(start,end):
         fs,fe = freq[s],freq[e]
@@ -690,7 +699,7 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
 #         #print(f"{V}.Not found.")
 #         return  is_timerfi
     
-    pat_diff = np.abs(np.diff(pat_mean,append = 0))
+    pat_diff = np.abs(np.diff(pat_mean, prepend=0, append=0))
     if len(start) > 0:
         print(f"rfis start at tn = {start}, end in tn = {end}")
         for s,e in zip(start,end):
@@ -717,7 +726,7 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
         ax.plot(t,pat_mean)
         ax.axhline(pat_med*times,c = 'k',linestyle = '--',label='thr')
         ax.plot(t,is_timerfi*np.max(pat_mean),label='is_timeRFI')
-        ax.plot(t,pat_diff-np.max(pat_mean),label='abs(diff)')
+        ax.plot(t,pat_diff[:-1]-np.max(pat_mean),label='abs(diff)')
         ax.grid()
         ax.plot(t[start],pat_mean[start],'r.',label = 'start')
         ax.plot(t[end],pat_mean[end],'g.',label = 'end')
@@ -746,7 +755,7 @@ def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,**kwargs):
         return ret
     log.info(f"Looking for short-freq time RFI in {frange} ...")
     
-    start,end = get_startend(is_timerfi,ext_sec = 2)
+    start,end = get_startend(is_timerfi,ext_sec = 1)
     from hifast.utils.misc import smooth1d
     for s,e in zip(start,end):
         mspec = np.mean(data[s:e,:],axis = 0)
@@ -799,7 +808,7 @@ def mask_time_rfi(data,freq,rtype = 'short-freq',frange = None,file = 'none',
             for nf in tqdm(range(franges.shape[0])):
                 ret |= mask_sf(data,freq,frange = franges[nf],rms_frange = rms_frange,**kwargs)
         
-        elif len(frange) == 2:
+        elif len(frange) == 2 and (frange[1] - frange[0]) > 0:
             ret = mask_sf(data,freq,frange,rms_frange = rms_frange,**kwargs)
         else:
             raise ValueError("frange should like [fmin,fmax] or a string (RFI npy filepath) or a certain frange_step.")

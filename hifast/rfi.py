@@ -65,7 +65,7 @@ group.add_argument('--pr_times_s', type=float, default=1,
 
 ###################### Time domain uncontinuous RFI #########################
 parser.add_argument('--rms_frange', type=float, nargs=2,
-                   help='freq range to compute rms')
+                   help='freq range to compute rms, NEED TO DEFINE when sf, pdr')
 parser.add_argument('--mw_frange', type=float, nargs=2,
                    help='milky way freq range')  
 ## long freq time rfi
@@ -107,7 +107,7 @@ group.add_argument('--sf_ext_add',type = int,default=0,
 parser.add_argument('--rms_sigma', type=float, default =6,
                    help='gauss filter sigma to compute real rms')
 ## smooth
-group = parser.add_argument_group('preprocessing before finding')
+group = parser.add_argument_group('preprocessing before finding pdr')
 group.add_argument('--s_method_t', default='none', choices=['none', 'gaussian', 'boxcar', 'median'],
                    help='')
 group.add_argument('--s_sigma_t', type=int, default=5,
@@ -183,7 +183,8 @@ class IO(BaseIO):
                 'tr_s_sigma_freq',
                 'tr_s_sigma_t',
                 'tr_times',
-                'tr_times_s']
+                'tr_times_s',
+                'ext_add', 'ext_frac']
         for key in keys:
             fit_kwargs[key[3:]] = getattr(args, key)
 
@@ -195,7 +196,8 @@ class IO(BaseIO):
         fit_kwargs = {}
         keys = ['pr_s_sigma',
                 'pr_times',
-                'pr_times_s', ]
+                'pr_times_s', 
+                'ext_add', 'ext_frac']
         for key in keys:
             fit_kwargs[key[3:]] = getattr(args, key)
         return mask_rfi_p(self.s2p_mask, **fit_kwargs)
@@ -212,7 +214,7 @@ class IO(BaseIO):
             narr_args[key[3:]] = getattr(args, key)
         narr_args['frange'] = None
         narr_args['rfi_width_lim'] = [0,2]
-        narr_args['ext_add'] = 1
+#         narr_args['ext_add'] = 0
 
         return mask_freq_rfi(T, self.freq, rtype = 'long-time',plot = False,
                               **narr_args)
@@ -271,8 +273,14 @@ class IO(BaseIO):
     
     def get_pdr(self):
         args = self.args
-        T = self.s2p_mean
-
+        T = deepcopy(self.s2p_mean)
+        sm_kwargs = {}
+        keys = ['s_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',]
+        for key in keys:
+            sm_kwargs[key] = getattr(args, key)
+        from .util import do_smooth
+            T = do_smooth(T, **sm_kwargs)
+        
         find_args = {}
         keys = ['rfi_width_lim', 'ext_sec', 'freq_thr', 'freq_step', 'rfi_groups',
                 'mask_RFI_method', 'freq_from_theory', 'mask_thr', 'ext_edge',
@@ -314,6 +322,14 @@ class IO(BaseIO):
         else:
             protect_use = (freq>mw_frange[0])&(freq<mw_frange[1])
         return protect_use
+    
+    def check_rms_range(self):
+        args = self.args
+        rms_frange = args.rms_frange
+        if (rms_frange is None) or (rms_frange[1] - rms_frange[0] <= 0):
+            from .ripple.markRFI import get_rms_frange
+            spec = np.nanmean(np.nanmean(self.s2p, axis = 0),axis = -1)
+            self.args.rms_frange = get_rms_frange(spec,self.freq,rms_step=10,)
 
     def gen_s2p_out(self,):
         args = self.args
@@ -327,6 +343,7 @@ class IO(BaseIO):
         self.protect_use = self.protect_mw()
         
         is_rfi = np.full(self.s2p.shape[:2], False, dtype=bool)
+        self.check_rms_range()
         
         if args.lf or args.sf:
             is_rfi |= self.get_time_rfi()

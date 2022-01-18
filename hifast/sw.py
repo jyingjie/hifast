@@ -4,6 +4,7 @@ __all__ = ['parser', 'IO']
 
 # Cell
 from hifast.utils.io import *
+from copy import deepcopy
 #nbdev_comment _all_ = ['parser']
 
 # Internal Cell
@@ -20,6 +21,16 @@ parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_f
                     help="if set, don't check or add ra dec")
 parser.add_argument('--nproc', '-n', type=int, default=1,
                     help='number of process used in fitting baseline')
+# smooth
+group = parser.add_argument_group('preprocessing before fitting or FFT')
+group.add_argument('--s_method_t', default='none', choices=['none', 'gaussian', 'boxcar', 'median'],
+                   help='smooth method along time axis')
+group.add_argument('--s_sigma_t', type=int, default=5,
+                   help='smooth sigma along time axis, size = (2*sigma+1) for boxcar and median')
+group.add_argument('--s_method_freq', default='none', choices=['none', 'median', 'gaussian', 'boxcar'],
+                   help='smooth method along freq axis')
+group.add_argument('--s_sigma_freq', type=float, default=5,
+                   help='smooth sigma along freq axis, size = (2*sigma+1) for boxcar and median')
 
 # method
 group = parser.add_argument_group(f'*select method used to fit standing wave\n{sep_line}')
@@ -29,19 +40,10 @@ group.add_argument('--nobld', type=bool_fun, choices=[True, False], default='Fal
                    help="if True, use the spectra before bld to subtract standing wave and output file name will add 'nobld'")
 group.add_argument('--fpattern_nobld',
                    help='if not specify, guess from the History recored in the fpath')
+group.add_argument('--average_every_freq', type=int, default=0,
+                   help='average in every n channels along freq axis')
 # group.add_argument('--only_sub', type=bool_fun, choices=[True, False], default='True',
 #                    help='if True, only subtract standing wave, not baseline')
-group = parser.add_argument_group('preprocessing before fitting')
-group.add_argument('--s_method_t', default='none', choices=['none', 'gaussian', 'boxcar', 'median'],
-                   help='')
-group.add_argument('--s_sigma_t', type=int, default=5,
-                   help='')
-group.add_argument('--s_method_freq', default='none', choices=['none', 'median', 'gaussian', 'boxcar'],
-                   help='')
-group.add_argument('--s_sigma_freq', type=float, default=5,
-                   help='')
-group.add_argument('--average_every_freq', type=int, default=0,
-                   help='')
 # least square
 group = parser.add_argument_group(f'*parameters for --method sin_poly\n{sep_line}:' +
                                   '\n'+'addition options for preprocessing before fitting')
@@ -59,30 +61,35 @@ group.add_argument('--deg', type=int, default=1,
 # fft
 group = parser.add_argument_group(f'*parameters for --method fft\n{sep_line}:' +
                                   '\n'+'replace big RFI or sources firstly')
+group.add_argument('--iter_twice', type=bool_fun, choices=[True, False], default='True',
+                   help='iterate twice? first remove the ripples and then back to find replace area again.')
 # replace big RFI or sources firstly
-group.add_argument('--rfi_method', default='near_ripple', choices=['near_ripple'],
-                   help='method to replace big RFI')
-group.add_argument('--mw_frange', type=float, nargs=2, default=[1419, 1422],
-                   help='milky way freq range, or None')
+group.add_argument('--rfi_method', default='near_ripple', choices=['near_ripple', 'lower', 'set_zeros', 'set_noise'],
+                   help='method to replace big RFI, recommend the first one')
+group.add_argument('--mw_frange', type=float, nargs=2, default=[0, 0],
+                   help='milky way freq range. If do not use, keep it as default.')
 group.add_argument('--rms_sigma', type=float, default=6,
                    help='gauss filter sigma to compute real rms')
-group.add_argument('--rms_frange', type=float, nargs=2,
-                   help='freq range to compute rms')
-group.add_argument('--times_lower_thr', type=float, default=4,
-                   help='above * times of rms will be lowered')
+group.add_argument('--rms_frange', type=float, nargs=2, default=[0, 0],
+                   help='freq range to compute rms, NEED TO DEFINE when fft')
+group.add_argument('--times_thr', type=float, default=4,
+                   help='sparks above ~ times of rms will be set noise (unsmooth)')
+group.add_argument('--times_s_thr', type=float, default=3,
+                   help='above ~ times of rms will be replaced (smoothed once)')
+group.add_argument('--times_s_thr2', type=float, default=1.5,
+                   help='above ~ times of rms will be replaced (smoothed twice)')
 group.add_argument('--ext_freq', type=float, default=1.3,
                    help='extend freq range to replace (mhz)')
-group.add_argument('--rfi_width_lim', type=float, default=15,
+group.add_argument('--rfi_width_lim', type=float, default=30,
                    help='rfi should contain more channels than limit')
 group.add_argument('--ext_sec', type=int, default=20,
                    help='extend channel number of start and end of each section')
 
 group = parser.add_argument_group(f'phase space')
-
 # remove which component in fft? (only 4 types now)
 group.add_argument('--sw_base', type=bool_fun, choices=[True, False], default='True',
                    help='if True, remove constant components')
-group.add_argument('--sw_periods', nargs='+', choices=['1mhz', '2mhz', '0_04mhz'], default=['1mhz', '2mhz', '0_04mhz'],
+group.add_argument('--sw_periods', nargs='+', choices=['1mhz', '2mhz', '0_04mhz', 'none'], default=['1mhz', '2mhz', '0_04mhz'],
                    help='remove ripple (1mhz: 1.08mhz, 2mhz:1.92mhz, 0_04mhz: 0.039 mhz)')
 group.add_argument('--check_2mhz', type=bool_fun, choices=[True, False], default='True',
                    help='if True, remove 2mhz from sw_periods except for Beam 6')
@@ -205,13 +212,13 @@ class IO(BaseIO):
         if self.dict_in is None:
             self._gen_s2p_ori_fpath()
             print(f'load the spectra before baseline subtracted from: \n{self.s2p_ori_fpath}')
-            f = h5py.File(self.s2p_ori_fpath, 'r')
+            f = h5py.File(self.s2p_ori_fpath, 'r')['S']
         else:
             if self.dict_bef_bld is None:
                 raise(ValueError('need input dict_bef_bld'))
             f = self.dict_bef_bld
         freq = f['freq'][:]
-        s2p_ori = f[self.outfield]
+        s2p_ori = f[self.outfield][:]
         is_use_freq = (freq >= self.freq.min()) & (freq <= self.freq.max())
         if not np.all(is_use_freq):
             inds = np.where(is_use_freq)[0]
@@ -236,38 +243,34 @@ class IO(BaseIO):
         opt_para = {'bounds': bounds, }
         fit_kwargs['exclude_fun'] = get_exclude_fun(args.exclude_m)
         return sub_baseline(freq, s2p, subtract=subtract, opt_para=opt_para, **fit_kwargs)
+    
+    def check_rms_range(self):
+        args = self.args
+        rms_frange = args.rms_frange
+        if (rms_frange is None) or (rms_frange[1] - rms_frange[0] <= 0):
+            from .ripple.markRFI import get_rms_frange
+            spec = np.nanmean(np.nanmean(self.s2p, axis = 0),axis = -1)
+            self.args.rms_frange = get_rms_frange(spec,self.freq,rms_step=10,)
 
-    @staticmethod
-    def do_smooth(T, s_method_t, s_sigma_t, s_method_freq, s_sigma_freq):
-        from hifast.utils.misc import smooth1d
-        if s_method_t in ['gaussian', 'boxcar', 'median']:
-            print('Smooth ing ...')
-            T = smooth1d(T, axis=0, sigma=s_sigma_t, method=s_method_t)
-
-        if s_method_freq in ['gaussian', 'boxcar', 'median']:
-            print('Smooth ing ...')
-            T = smooth1d(T, axis=1, sigma=s_sigma_freq, method=s_method_freq)
-        return T
-
-    def fft_fit_sw(self, s1p, is_rfi=None, is_on=None,):
+    def fft_fit_sw(self, s1p, is_rfi=None, is_on=None, s1m = None, s2m = None,):
         from hifast.ripple import sw_fft
         args = self.args
 
-        # smooth
-        s1p = self.do_smooth(s1p, args.s_method_t, args.s_sigma_t, args.s_method_freq, args.s_sigma_freq)
         # replace rfi and mw
         # replace args
         rep_args = {}
+        self.check_rms_range()
         if args.rfi_method in ['near_ripple']:
-            keys = ['rms_sigma', 'rms_frange', 'times_lower_thr', 'rfi_width_lim',
-                    'ext_sec', 'ext_freq', 'mw_frange', ]
+            keys = ['rms_sigma', 'rms_frange', 'times_s_thr','times_s_thr2',
+                    'times_thr', 'rfi_width_lim', 'ext_sec', 'ext_freq', 'mw_frange', ]
         else:
             raise(ValueError('not supported rfi_method'))
         for key in keys:
             rep_args[key] = getattr(args, key)
-        s1p = sw_fft.replace_rfi(s1p, self.freq, time_rfi=is_rfi, method=args.rfi_method, **rep_args)
+        s1p = sw_fft.replace_rfi(s1p, self.freq, time_rfi=is_rfi, method=args.rfi_method,
+                                 data_sm1 = s1m, data_sm2 = s2m, **rep_args)
 
-        # fit args
+        # fft args
         fft_args = {}
         keys = ['amp_thr_mean_factor', 'amp_thr_solo_factor', 'chan_wide', 'chan_narr',  'choose_method',
                 'choose_method', 'sw_periods', 'sw_base']
@@ -322,7 +325,6 @@ class IO(BaseIO):
         # fit baseline:
         print(f'standing wave fitting and substract by {args.method}')
         if args.method in ['sin_poly', ]:
-            
             if args.nobld:
                 self.s2p_out = self._load_s2p_ori()[:] - self.fit_sw(s2p, self.freq, args, subtract=False)
             else:
@@ -334,13 +336,36 @@ class IO(BaseIO):
             if is_rfi is not None and self.is_use_freq is not None:
                 is_rfi = is_rfi[:, self.is_use_freq]
             is_on = dict_['is_on'][:]
-            s2p_out = s2p
+            
+            s2p_out = deepcopy(s2p)
             
             if args.method == 'fft':
-                s2p_in = self._load_s2p_ori()[:] if args.nobld else s2p
-                for i in range(s2p_out.shape[2]):
-                    s2p_out[..., i] = s2p_in - self.fft_fit_sw(s2p_out[..., i], is_rfi, is_on)
-                    
+                sm_kwargs = {}
+                keys = ['s_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',]
+                for key in keys:
+                    sm_kwargs[key] = getattr(args, key)
+                sm_kwargs['is_rfi'] = is_rfi 
+                if args.iter_twice:
+                    s2p_in = s2p
+                else:
+                    s2p_in = self._load_s2p_ori()[:] if args.nobld else s2p
+                
+                # smooth
+                from .ripple.util import do_smooth
+                s1m = do_smooth(s2p, **sm_kwargs)
+                for i in range(s2p.shape[2]):
+                    s2p_out[..., i] = s2p_in[..., i] - self.fft_fit_sw(s2p[..., i], is_rfi, is_on,
+                                                               s1m[..., i], s2m = None)
+                
+                if args.iter_twice:
+                    print("Second iter ...")
+                    # smooth
+                    s2p_in = self._load_s2p_ori()[:] if args.nobld else s2p
+                    s2m = do_smooth(s2p_out, **sm_kwargs)
+                    for i in range(s2p.shape[2]):
+                        s2p_out[..., i] = s2p_in[..., i] - self.fft_fit_sw(s2p[..., i], is_rfi, is_on,
+                                                                   s1m[..., i], s2m[..., i])
+
             elif (args.method == 'median') or (args.method == 'mean'):
                 for i in range(s2p_out.shape[2]):
                     s2p_out[..., i] -= self.med_fit_sw(s2p_out[..., i], is_on)

@@ -64,6 +64,22 @@ def date2mjd(date):
     t = Time(date, format='iso', scale='utc') - 8*u.hour
     
     return t.mjd
+
+def do_smooth(s1p, s_method_t, s_sigma_t, s_method_freq, s_sigma_freq, is_rfi = None):
+    T = deepcopy(s1p)
+    if is_rfi is None: is_rfi = np.full(T.shape, False, dtype=bool)
+    is_excluded = np.all(is_rfi,axis = 1)
+    T[is_rfi] = 0
+
+    from hifast.utils.misc import smooth1d
+    if s_method_t in ['gaussian', 'boxcar', 'median']:
+        print('Smooth ing ...')
+        T[~is_excluded] = smooth1d(T[~is_excluded], axis=0, sigma=s_sigma_t, method=s_method_t)
+
+    if s_method_freq in ['gaussian', 'boxcar', 'median']:
+        print('Smooth ing ...')
+        T[~is_excluded] = smooth1d(T[~is_excluded], axis=1, sigma=s_sigma_freq, method=s_method_freq)
+    return T
     
 class Args(object):
     def __init__(self, fpath, frange = None, outdir = None,):

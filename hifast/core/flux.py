@@ -84,6 +84,8 @@ def cali_src(T, nB, freq, cali_fname=None, ra=None, dec=None, mjd=None):
     
     if T.ndim == 2:
         return T/np.mean(K_Jy,axis=2)
+    elif T.ndim == 3 and T.shape[-1]==1:
+        return T/np.mean(K_Jy,axis=2)[:,:,None]
     elif T.ndim == 3 and T.shape[-1]==2:
         return T/K_Jy
     else:

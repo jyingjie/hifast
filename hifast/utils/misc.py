@@ -311,6 +311,11 @@ def smooth1d(arr, method, sigma, axis=-1):
     axis : int, optional
         The axis of `input` along which to smooth. Default is -1.
     '''
+#     from copy import deepcopy
+#     arr = deepcopy(array)
+#     if np.isnan(array).any():
+#         arr[np.isnan(array)] = 0
+        
     if 0 in arr.shape:
         warnings.warn("input array is empty")
         return arr
