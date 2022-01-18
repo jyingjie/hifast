@@ -414,7 +414,7 @@ class BaseIO(Path_IO):
         elif not getattr(args, 'no_radec', False):
             from ..add_radec import get_radec
             nB_radec = getattr(args, 'nB_radec', 1)
-            self.ra, self.dec, self.is_extrapo = get_radec(args.fpath, self.mjd, nB_radec)
+            self.ra, self.dec, self.is_extrapo, self.mjd = get_radec(args.fpath, self.mjd, nB_radec)
         else:
             pass
 

@@ -46,8 +46,11 @@ def get_radec(file_spec, mjd, nB_radec=1):
         raise(OSError("can not find the RA DEC file, please generate it by using 'python -m hifast.radec'"))
     f = h5py.File(file_radec, 'r')
     # check if mjd match
-    mjd_match = False if len(mjd) != len(
-        f['S']['mjd'][:]) else (mjd == f['S']['mjd'][:]).all()
+    mjd_match = False if len(mjd) != len(f['S']['mjd'][:]) else True 
+    mjdr = f['S']['mjd'][:]
+    if not (mjd == mjdr).all(): 
+        print(f"this first mjd {mjd[0]} is not same with radec file {mjdr[0]}, correct to radec file")
+        mjd = mjdr
     if not mjd_match:
         print('the mjd of spec file is not same with that in ', file_radec)
         sys.stdout.flush()
@@ -75,7 +78,7 @@ def get_radec(file_spec, mjd, nB_radec=1):
         sys.stdout.flush()
     # check again
     mjd_match = False if len(mjd) != len(
-        f['S']['mjd'][:]) else (mjd == f['S']['mjd'][:]).all()
+        f['S']['mjd'][:]) else True #(mjd == f['S']['mjd'][:]).all()
     if not mjd_match:
         raise(ValueError(
             f'the mjd of spec file is not same with that in {file_radec_2} Abort...'))
@@ -87,7 +90,7 @@ def get_radec(file_spec, mjd, nB_radec=1):
     else:
         is_extrapo = None
     f.close()
-    return ra, dec, is_extrapo
+    return ra, dec, is_extrapo, mjd
 
 # Cell
 if __name__ == '__main__':
