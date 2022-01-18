@@ -13,6 +13,5 @@ python -m hifast.cube /data/inspur_disk01/userdir/xuc/FAST/G15/new_22/drift6/mul
                           --bwidth 60 \
                           -p SIN \
                           --method 'reweight' \
-                          --r_cut 60 || exit 1
-
+                          --r_cut 90 || exit 1
 

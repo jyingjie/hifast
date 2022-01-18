@@ -506,6 +506,9 @@ class BaseIO(Path_IO):
         # process vel if set frange
         if 'vel' in dict_out.keys() and self.is_use_freq is not None:
             dict_out['vel'] = dict_out['vel'][self.is_use_freq]
+        if 'is_rfi' in dict_out.keys() and self.is_use_freq is not None:
+            if dict_out['is_rfi'][:].shape[1] == len(self.is_use_freq):
+                dict_out['is_rfi'] = dict_out['is_rfi'][:,self.is_use_freq]
         # add ra dec
         for key in ['ra', 'dec', 'is_extrapo']:
             if hasattr(self, key):
