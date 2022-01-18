@@ -185,8 +185,10 @@ class IO(BaseIO):
                 'tr_times',
                 'tr_times_s',
                 'ext_add', 'ext_frac']
-        for key in keys:
+        for key in keys[:-2]:
             fit_kwargs[key[3:]] = getattr(args, key)
+        for key in keys[-2:]:
+            fit_kwargs[key] = getattr(args, key)
 
         return mask_rfi_t(self.freq, self.s2p, method='smooth', **fit_kwargs)
 
@@ -198,8 +200,10 @@ class IO(BaseIO):
                 'pr_times',
                 'pr_times_s', 
                 'ext_add', 'ext_frac']
-        for key in keys:
+        for key in keys[:-2]:
             fit_kwargs[key[3:]] = getattr(args, key)
+        for key in keys[-2:]:
+            fit_kwargs[key] = getattr(args, key)
         return mask_rfi_p(self.s2p_mask, **fit_kwargs)
     
     def get_nr(self):
@@ -279,7 +283,7 @@ class IO(BaseIO):
         for key in keys:
             sm_kwargs[key] = getattr(args, key)
         from .util import do_smooth
-            T = do_smooth(T, **sm_kwargs)
+        T = do_smooth(T, **sm_kwargs)
         
         find_args = {}
         keys = ['rfi_width_lim', 'ext_sec', 'freq_thr', 'freq_step', 'rfi_groups',
