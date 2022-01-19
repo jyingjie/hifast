@@ -208,7 +208,7 @@ class IO(BaseIO):
     
     def get_nr(self):
         args = self.args
-        T = self.s2p_mean
+        T = np.nanmean(self.s2p_mask, axis = 2)
         from .ripple.markRFI import mask_freq_rfi
 
         narr_args = {}
