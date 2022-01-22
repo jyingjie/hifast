@@ -90,8 +90,11 @@ class Args(object):
 class Read_hdf5(BaseIO):
     ver = 'old'
     
+    def load_and_add_Header(self,):
+        pass
+    
     def get_data(self, polar = 'none'):
-        data = self.s2p
+        data = deepcopy(self.s2p)
         if data.shape[0] == 2 or data.shape[0] == 1:
             data = PolarMjdChan_to_MjdChanPolar(data)
         if len(data.shape) == 3:
@@ -130,7 +133,7 @@ class Read_hdf5(BaseIO):
             data = self.get_data(polar)
         
         if len(data.shape) != 2:
-            raise ValueError("Check your input data. Are they 2D? ")
+            raise ValueError(f"Check your input data shape {data.shape}. Are they 2D? ")
         if data.shape[1] != len(freq):
             data = data.T
 
