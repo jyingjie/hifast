@@ -107,7 +107,7 @@ def process_ky(ky_files, mjds_src=None, tol=0, ky_fixed=False):
             continue
         ky_data = ky_data.to_dict('series')
         systime = np.array(ky_data['SysTime'], dtype=str)
-        systime = Time(systime) - utcoffset # covert local time to UTC
+        systime = Time(systime, format='iso', scale='utc') - utcoffset # covert local time to UTC
         mjd = systime.mjd
         ky_data['systime_utc'] = systime
         if mjds_src is None:
@@ -195,14 +195,18 @@ def kydata2radec(ky_data, mjd, nBs='All', ky_fixed=False, nproc=1, backend='astr
     radec['angle'] = multibeamAngle
     #ymdhms = ky_data['systime_utc'].ymdhms
     #utc1, utc2 = erfa.dtf2d(b"UTC", ymdhms['year'], ymdhms['month'], ymdhms['day'], ymdhms['hour'], ymdhms['minute'], ymdhms['second'])
-    obstime = ky_data['systime_utc']
+    if ky_fixed:
+        obstime = Time(mjd, format='mjd', scale='utc')
+    else:
+        obstime = ky_data['systime_utc']
+
     if nproc > 1:
         import multiprocessing
         global fun_mp
         def fun_mp(para):
             nB, verbose = para
             print(f'beam {nB}')
-            return kypara2radec.kypara2radec(ky_data['systime_utc'], multibeamAngle, nB,
+            return kypara2radec.kypara2radec(obstime, multibeamAngle, nB,
                                               globalCenterX,  globalCenterY, globalCenterZ, globalYaw, globalPitch, globalRoll,
                                                backend=backend, verbose=verbose)
         with multiprocessing.Pool(processes=nproc) as pool:
@@ -213,7 +217,7 @@ def kydata2radec(ky_data, mjd, nBs='All', ky_fixed=False, nproc=1, backend='astr
     else:
         for ii, nB in enumerate(nBs):
             verbose = True if ii == 0 else False
-            ra_, dec_ = kypara2radec.kypara2radec(ky_data['systime_utc'], multibeamAngle, nB,
+            ra_, dec_ = kypara2radec.kypara2radec(obstime, multibeamAngle, nB,
                                           globalCenterX,  globalCenterY, globalCenterZ, globalYaw, globalPitch, globalRoll, backend=backend, verbose=verbose)
             radec['ra'+str(nB)]= ra_
             radec['dec'+str(nB)]= dec_
