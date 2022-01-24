@@ -195,7 +195,7 @@ if __name__ == '__main__':
                        help='fits wcs projection')
     parser.add_argument('--r_cut', type=float, default=90,
                        help='spectra inside r_cut from the grid point will be considered; unit: arc second')
-    parser.add_argument('-m','--method', default='mean', choices=['reweight', 'mean', 'median', 'gaussian'],
+    parser.add_argument('-m','--method', default='mean', choices=['reweight', 'mean', 'median', 'gaussian', 'bessel_gaussian', 'sinc_gaussian'],
                        help='method to process the spec in r_cut')
     parser.add_argument('-t','--threshold', type=float,
                        help='vals less than threshold will be masked as nan')
@@ -210,7 +210,7 @@ if __name__ == '__main__':
     type3 = args.type3
     proj= args.proj
     r_cut= args.r_cut
-    r_cut=r_cut/60 # convert to arc minute
+    r_cut=r_cut/3600 # convert to deg
     method= args.method
     threshold = args.threshold
     range3 = args.range3
