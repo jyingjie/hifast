@@ -67,7 +67,7 @@ def date2mjd(date):
 
 def do_smooth(s1p, s_method_t, s_sigma_t, s_method_freq, s_sigma_freq, is_rfi = None):
     T = deepcopy(s1p)
-    if is_rfi is None: is_rfi = np.full(T.shape, False, dtype=bool)
+    if is_rfi is None: is_rfi = np.full(T.shape[:2], False, dtype=bool)
     is_excluded = np.all(is_rfi,axis = 1)
     T[is_rfi] = 0
 
