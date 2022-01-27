@@ -84,6 +84,7 @@ def main():
     sliders.update(_FloatLog10Slider(lam=(1e8, 5, 13, 0.2), readout_format='.2e'))
     sliders.update(_IntSlider(deg=(2, 1, 10, 1),
                               niter=(100, 1, 200, 1)))
+    sliders.update(_FloatSlider(offset=(2, 0.1, 4, 0.1),))
 
 
 
@@ -137,7 +138,7 @@ def main():
     hbs = [
         widgets.HBox([widgets.Label(value=f"1. Select spectra from $start$(max:{controls.controls['start'].max}) to $start+{length}$ to fit:"),
                       w['start'], w['polar']]),
-        widgets.HBox([widgets.Label(value=f"2. Fitting:"), w['njoin'], ]),
+        widgets.HBox([widgets.Label(value=f"2. Fitting:"), w['njoin'], w['offset']]),
         widgets.HBox([w['s_method_t'], w['s_sigma_t'],
                      w['s_method_freq'], w['s_sigma_freq']]),
         widgets.HBox([w['method'], w['lam'], w['deg'], w['niter']]),

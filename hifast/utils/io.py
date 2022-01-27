@@ -414,7 +414,7 @@ class BaseIO(Path_IO):
         elif not getattr(args, 'no_radec', False):
             from ..add_radec import get_radec
             nB_radec = getattr(args, 'nB_radec', 1)
-            self.ra, self.dec, self.is_extrapo, self.mjd = get_radec(args.fpath, self.mjd, nB_radec)
+            self.ra, self.dec, self.is_extrapo = get_radec(args.fpath, self.mjd, nB_radec)
         else:
             pass
 
@@ -506,9 +506,6 @@ class BaseIO(Path_IO):
         # process vel if set frange
         if 'vel' in dict_out.keys() and self.is_use_freq is not None:
             dict_out['vel'] = dict_out['vel'][self.is_use_freq]
-        if 'is_rfi' in dict_out.keys() and self.is_use_freq is not None:
-            if dict_out['is_rfi'][:].shape[1] == len(self.is_use_freq):
-                dict_out['is_rfi'] = dict_out['is_rfi'][:,self.is_use_freq]
         # add ra dec
         for key in ['ra', 'dec', 'is_extrapo']:
             if hasattr(self, key):
