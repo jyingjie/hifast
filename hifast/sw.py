@@ -372,8 +372,6 @@ class IO(BaseIO):
 
             self.s2p_out = s2p_out
 
-
-
 # Internal Cell
 def check_backend():
     import matplotlib as mpl
