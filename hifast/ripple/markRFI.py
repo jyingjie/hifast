@@ -174,22 +174,17 @@ def fit_line(rfi,freq,half_factor,**kwargs):
 # Cell
 def get_startend(is_rfi,rfi_width_lim = None, ext_sec= 0, exclude = True):
     """
-    get continued start and end in a bool array
+    get the start and end index of the continued True value in a bool array
     is_rfi: 1D bool array
     rfi_width_lim: int, width should above an int channel number
     ext_sec: int, extend edges channel number
     """
-    if is_rfi.any() == False:
-        raise ValueError("Input array has no Trues.")
+    if not np.any(is_rfi): return [], []
 
     N = len(is_rfi)
     if not exclude: N -= 1
 
-    is_rfi_ = deepcopy(is_rfi)
-
-    if not np.any(is_rfi_):
-        return [], []
-    starend = np.diff(is_rfi_+0,prepend=0,append=0)
+    starend = np.diff(is_rfi.astype('int8'), prepend=np.int8(0), append=np.int8(0))
     start_ = np.where(starend==1)[0]
     end_ = np.where(starend==-1)[0]
 
@@ -202,12 +197,13 @@ def get_startend(is_rfi,rfi_width_lim = None, ext_sec= 0, exclude = True):
         start = start_ - ext_sec
         end = end_ + ext_sec
     else:
-        if isinstance(rfi_width_lim,int)|isinstance(rfi_width_lim,float)|isinstance(rfi_width_lim,np.int64):
+        if np.isscalar(rfi_width_lim):
             starend_use = (end_-start_)>rfi_width_lim
         elif len(rfi_width_lim) == 2:
             starend_use = ((end_-start_)>rfi_width_lim[0])&((end_-start_)<rfi_width_lim[1])
-
-        if starend_use.any() == False:
+        else:
+            raise(ValueError('rfi_width_lim should be a scalar or list with two elements'))
+        if not starend_use.any():
             #log.warning("No True meets width condition.")
             return [],[]
 
@@ -218,6 +214,8 @@ def get_startend(is_rfi,rfi_width_lim = None, ext_sec= 0, exclude = True):
     if max(end) > N: end[end>N] = N
 
     return start,end
+
+# Cell
 
 def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,check = True,
                 rfi_groups = 'two_groups',**kwargs):
@@ -791,6 +789,7 @@ def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,**kwargs):
     print("Found :D")
     return ret
 
+# Cell
 def mask_time_rfi(data,freq,rtype = 'short-freq',frange = None,file = 'none',
                   rms_frange = None,frange_step = None,lf_mask_whole=True,
                   plot_norfi = False, **kwargs):
@@ -848,6 +847,7 @@ def mask_time_rfi(data,freq,rtype = 'short-freq',frange = None,file = 'none',
     print("Finish")
     return ret
 
+# Cell
 def mask_freq_rfi(data,freq,rtype = 'long-time',RMS = None,**kwargs):
 
     ret = np.zeros_like(data,dtype = 'bool')
