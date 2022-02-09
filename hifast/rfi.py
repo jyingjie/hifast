@@ -154,7 +154,7 @@ group.add_argument('--mask_all_theory', action= 'store_true',
                    help='mask_all_theory')
 ### time coherent
 group.add_argument('--time_coherent_per', type=float, default = 1,
-                   help='rfi in one freq appears more than emmm, maybe 70%, mask them all on time axis.')
+                   help='rfi in one freq appears more than emmm, maybe 70%%, mask them all on time axis.')
 
 # Cell
 class IO(BaseIO):
