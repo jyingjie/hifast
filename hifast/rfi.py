@@ -20,7 +20,7 @@ parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_f
 
 #################### Time domain continuous RFI ######################
 group = parser.add_argument_group(f'*Time domain continuous RFI\n{sep_line}')
-group.add_argument('--tr', '--time_rfi', type=bool_fun, choices=[True, False], default='True',
+group.add_argument('--tr', '--time_rfi', type=bool_fun, choices=[True, False], default='False',
                    help='')
 group.add_argument('--tr_s_method_t', default='gaussian',
                    help='smoothing method along time axis')
@@ -54,7 +54,7 @@ group.add_argument('--nr_thr', type=float, default=30,
 
 ####################### Polarized RFI #######################################
 group = parser.add_argument_group(f'*Polarized RFI\n{sep_line}')
-group.add_argument('--pr', '--polar_rfi', type=bool_fun, choices=[True, False], default='True',
+group.add_argument('--pr', '--polar_rfi', type=bool_fun, choices=[True, False], default='False',
                    help='')
 group.add_argument('--pr_s_sigma', type=float, default=5,
                    help='gaussian smooth size for spectra smoothing along time axis')
@@ -70,7 +70,7 @@ parser.add_argument('--mw_frange', type=float, nargs=2,
                    help='milky way freq range')
 ## long freq time rfi
 group = parser.add_argument_group(f'*Long freq \n{sep_line}')
-group.add_argument('--lf', '--long_freq', type=bool_fun, choices=[True, False], default='True',
+group.add_argument('--lf', '--long_freq', type=bool_fun, choices=[True, False], default='False',
                    help='find time rfi')
 # group.add_argument('--lf_beams',
 #                    help='beam numbers which has long-freq time rfi')
@@ -86,7 +86,7 @@ group.add_argument('--lf_ext_add',type = int,default=50,
                    help='extend edge')
 ## short freq time rfi
 group = parser.add_argument_group(f'*Short freq \n{sep_line}')
-group.add_argument('--sf', '--short_freq', type=bool_fun, choices=[True, False], default='True',
+group.add_argument('--sf', '--short_freq', type=bool_fun, choices=[True, False], default='False',
                    help='find time rfi')
 group.add_argument('--sf_frange', type=float, nargs=2,
                    help='freq range exists short-freq time rfi')

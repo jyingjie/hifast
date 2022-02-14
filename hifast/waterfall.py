@@ -133,6 +133,7 @@ def plot(fname, ax, polar=0, ytick1='index', ytick2=None, **kwargs):
 if __name__ == '__main__':
     import argparse
     import os
+    import re
 
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument('fnames', nargs='+',

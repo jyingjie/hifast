@@ -790,7 +790,7 @@ def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,**kwargs):
     return ret
 
 # Cell
-def mask_time_rfi(data,freq,rtype = 'short-freq',frange = None,file = 'none',
+def mask_time_rfi(data,freq,rtype = 'short-freq',frange = None, file=None,
                   rms_frange = None,frange_step = None,lf_mask_whole=True,
                   plot_norfi = False, **kwargs):
     """
@@ -804,8 +804,10 @@ def mask_time_rfi(data,freq,rtype = 'short-freq',frange = None,file = 'none',
     ret = np.zeros_like(data,dtype = 'bool')
 
     if rtype == 'short-freq':
-        if os.path.exists(file) or frange_step is not None:
-            if os.path.exists(file):
+        if file is not None or frange_step is not None:
+            if file is not None:
+                if not os.path.exists(file):
+                    raise ValueError(f"can not find the input file path: {file}")
                 franges = np.load(file)
                 if franges.shape[1] != 2:
                     raise ValueError("time RFI freq shape must like (n,2)")
