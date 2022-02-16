@@ -282,7 +282,7 @@ class IO(BaseIO):
         keys = ['s_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',]
         for key in keys:
             sm_kwargs[key] = getattr(args, key)
-        from .util import do_smooth
+        from .ripple.util import do_smooth
         T = do_smooth(T, **sm_kwargs)
 
         find_args = {}
@@ -306,13 +306,13 @@ class IO(BaseIO):
                 is_rfi_mw = (spec > RMS * rfi_thr)
                 is_rfi = (spec > RMS * rfi_thr) & (~self.protect_use)
                 try:
-                    pd_rfi[tn,:],_ = find_RFI(spec,freq,is_rfi,RMS = RMS,
-                                    rfi_fit_use = rfi_groups ,plot = False,**find_args)
+                    pd_rfi[tn,:],_ = find_RFI(spec,self.freq,is_rfi,RMS = RMS,
+                                     plot = False,**find_args)
                 except ValueError:
                     pd_rfi[tn,:] = True
                     print(f"tn={tn} has a ValueError !")
-                    import traceback
-                    traceback.print_exc()
+                    #import traceback
+                    #traceback.print_exc()
         print("Finish finding period RFI...")
 
         return pd_rfi
@@ -351,6 +351,11 @@ class IO(BaseIO):
 
         if args.lf or args.sf:
             is_rfi |= self.get_time_rfi()
+
+        whole_rfi = np.all(is_rfi,axis = 1)
+        self.not_rfi_num = np.arange(is_rfi.shape[0])[~whole_rfi]
+        self.is_rfi_num = np.arange(is_rfi.shape[0])[whole_rfi]
+
         if args.tr:
             print('finding tr')
             is_rfi |= self.get_tr()
@@ -371,11 +376,6 @@ class IO(BaseIO):
         if args.pr:
             print('finding pr')
             is_rfi |= self.get_pr()
-
-
-        whole_rfi = np.all(is_rfi,axis = 1)
-        self.not_rfi_num = np.arange(is_rfi.shape[0])[~whole_rfi]
-        self.is_rfi_num = np.arange(is_rfi.shape[0])[whole_rfi]
 
         if 'is_rfi' in self.fs.keys():
             is_rfi |= self.fs['is_rfi'][:]

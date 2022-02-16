@@ -84,6 +84,8 @@ group.add_argument('--rfi_width_lim', type=float, default=30,
                    help='rfi should contain more channels than limit')
 group.add_argument('--ext_sec', type=int, default=20,
                    help='extend channel number of start and end of each section')
+group.add_argument('--restrict_bound', type=bool_fun, choices=[True, False], default='False',
+                   help='restrict replace area bound')
 
 group = parser.add_argument_group(f'phase space')
 # remove which component in fft? (only 4 types now)
@@ -252,7 +254,7 @@ class IO(BaseIO):
             spec = np.nanmean(np.nanmean(self.s2p, axis = 0),axis = -1)
             self.args.rms_frange = get_rms_frange(spec,self.freq,rms_step=10,)
 
-    def fft_fit_sw(self, s1p, is_rfi=None, is_on=None, s1m = None, s2m = None,):
+    def fft_fit_sw(self, s1p, is_rfi=None, is_on=None, s1m = None, s2m = None, s3m = None,):
         from .ripple import sw_fft
         args = self.args
 
@@ -268,7 +270,7 @@ class IO(BaseIO):
         for key in keys:
             rep_args[key] = getattr(args, key)
         s1p = sw_fft.replace_rfi(s1p, self.freq, time_rfi=is_rfi, method=args.rfi_method,
-                                 data_sm1 = s1m, data_sm2 = s2m, **rep_args)
+                                 data_sm1 = s1m, data_sm2 = s2m, data_sm3 = s3m, **rep_args)
 
         # fft args
         fft_args = {}
@@ -340,37 +342,53 @@ class IO(BaseIO):
             s2p_out = deepcopy(s2p)
 
             if args.method == 'fft':
+                if args.iter_twice:
+                    s2p_in = s2p
+                else:
+                    s2p_in = self._load_s2p_ori()[:] if args.nobld else s2p
+                # smooth
                 sm_kwargs = {}
                 keys = ['s_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',]
                 for key in keys:
                     sm_kwargs[key] = getattr(args, key)
                 sm_kwargs['is_rfi'] = is_rfi
-                if args.iter_twice:
-                    s2p_in = s2p
-                else:
-                    s2p_in = self._load_s2p_ori()[:] if args.nobld else s2p
 
-                # smooth
                 from .ripple.util import do_smooth
                 s1m = do_smooth(s2p, **sm_kwargs)
+
+                if sm_kwargs['s_method_t'] != 'none' and args.restrict_bound:
+                    sm_kwargs3 = {}
+                    sm_kwargs3['s_method_freq'] = 'gaussian'
+                    sm_kwargs3['s_sigma_freq'] = args.rms_sigma
+                    s3m = do_smooth(s2p, **sm_kwargs3)
+                else:
+                    s3m = np.array([None, None])[None,None,:]
+
                 for i in range(s2p.shape[2]):
                     s2p_out[..., i] = s2p_in[..., i] - self.fft_fit_sw(s2p[..., i], is_rfi, is_on,
-                                                               s1m[..., i], s2m = None)
+                                                               s1m = s1m[..., i], s2m = None, s3m = s3m[..., i])
 
                 if args.iter_twice:
                     print("Second iter ...")
                     # smooth
                     s2p_in = self._load_s2p_ori()[:] if args.nobld else s2p
                     s2m = do_smooth(s2p_out, **sm_kwargs)
+                    if sm_kwargs['s_method_t'] != 'none' and args.restrict_bound:
+                        s3m = do_smooth(s2p_out, **sm_kwargs3)
+                    else:
+                        s3m = np.array([None, None])[None,None,:]
+
                     for i in range(s2p.shape[2]):
                         s2p_out[..., i] = s2p_in[..., i] - self.fft_fit_sw(s2p[..., i], is_rfi, is_on,
-                                                                   s1m[..., i], s2m[..., i])
+                                                                   s1m[..., i], s2m[..., i], s3m = s3m[..., i])
 
             elif (args.method == 'median') or (args.method == 'mean'):
                 for i in range(s2p_out.shape[2]):
                     s2p_out[..., i] -= self.med_fit_sw(s2p_out[..., i], is_on)
 
             self.s2p_out = s2p_out
+
+
 
 # Internal Cell
 def check_backend():

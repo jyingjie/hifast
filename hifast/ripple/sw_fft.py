@@ -17,16 +17,24 @@ from tqdm import tqdm
 from matplotlib import pyplot as plt
 
 # Cell
-def replace_spec(tn, spec, freq, low_use, rfi_width_lim, ext_sec, ext, STD, MAX=None,
+def replace_spec(tn, spec, freq, exceed_use, restrict_use, rfi_width_lim, ext_sec, ext, STD, MAX=None,
                  test=False, sm = None):
+    """
+    replace mw, rfi or others by near ripple section in one spectrum
+    exceed_use: spec > thr | rfi
+    restrict_use: restrict replace area in exceed_use
+    ext: extend freq range to replace (channel number)
+    rfi_width_lim: rfi should contain more channels than limit
+    ext_sec: extend channel number of start and end of each section
+    """
     if MAX is None:
         MAX = np.nanmax(spec)
     from .markRFI import rms, get_startend
     from ..utils.misc import smooth1d
-    if np.sum(low_use) == 0:
+    if np.sum(exceed_use) == 0:
         return spec
 
-    start, end = get_startend(low_use, rfi_width_lim, ext_sec)
+    start, end = get_startend(exceed_use, rfi_width_lim, ext_sec)
     if len(start) == 0:
         print(f"tn={tn} raised a warning")
         return spec
@@ -91,6 +99,8 @@ def replace_spec(tn, spec, freq, low_use, rfi_width_lim, ext_sec, ext, STD, MAX=
             # import traceback
             # traceback.print_exc()
             newspec[s:e] = np.random.normal(scale=STD, size=int(e-s)) + np.nanmedian(spec)
+    # restrict bound
+    if not restrict_use.all(): newspec[~restrict_use] = spec[~restrict_use]
     if test:
         return newspec, rep_from, rep_to
     else:
@@ -99,14 +109,15 @@ def replace_spec(tn, spec, freq, low_use, rfi_width_lim, ext_sec, ext, STD, MAX=
 # Cell
 def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=None, times_s_thr2=None,
                  rms_sigma=None,  ext_freq=None, rms_frange=None, rfi_width_lim=None,
-                 ext_sec=None, data_sm1 = None, data_sm2 = None):
+                 ext_sec=None, data_sm1 = None, data_sm2 = None, data_sm3 = None,):
     """
     replace mw, rfi or others by near ripple section
 
     times_thr: above ~ times of rms will be set noise (unsmooth)
-    times_s_thr: above ~ times of rms will be replaces (smooth)
+    times_s_thr: above ~ times of rms will be replaced (smoothed once)
+    times_s_thr2: above ~ times of rms will be replaced (smooth twice)
     ext_freq: extend freq range to replace (mhz)
-    rfi_width_lim:rfi should contain more channels than limit
+    rfi_width_lim: rfi should contain more channels than limit
     ext_sec: extend channel number of start and end of each section
     """
     fdelta = freq[1]-freq[0]
@@ -130,6 +141,10 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=
     if data_sm2 is None:
         data_sm2 = data_sm1
         times_s_thr2 = times_s_thr
+    if data_sm3 is None:
+        RESTRICT = False
+    else:
+        RESTRICT = False if data_sm3.shape != data.shape else True
 
     from ..utils.misc import smooth1d
     MAX = np.nanmax(data)*20
@@ -144,11 +159,18 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=
             # sm2 used to define replace area
             RMS = rms(sm2, freq, rms_vrange=rms_frange)
             thr_s = RMS*times_s_thr2
-            low_use = (np.abs(sm2) > thr_s) | time_rfi[tn]
+            exceed_use = (sm2 > thr_s) | time_rfi[tn]
+
+            if RESTRICT:
+                sm3 = data_sm3[tn]
+                # sm3 used to restrict replace area in one spectra
+                restrict_use = (sm3 > thr_s) | time_rfi[tn]
+            else:
+                restrict_use = np.full(freq.shape, True)
 
             # sm1 used to find ripples valleys
             sm1 = data_sm1[tn]
-            newspec = replace_spec(tn, spec, freq, low_use, rfi_width_lim, ext_sec,
+            newspec = replace_spec(tn, spec, freq, exceed_use, restrict_use, rfi_width_lim, ext_sec,
                                    ext, RMS, MAX, sm = sm1,)
 
             RMS = real_rms(spec, freq, sigma=rms_sigma, rms_vrange=rms_frange)
@@ -192,10 +214,11 @@ def replace_margin_side(data, freq, is_rfi, mw_use, margin_width=20, ext_freq=1.
     for ti in tqdm(range(N)):
         if ti not in is_rfi_num:
             spec_ = data_[ti]
-            low_use = (spec_ == np.inf)
+            exceed_use = (spec_ == np.inf)
             RMS = real_rms(spec_, freq_, sigma=6, rms_vrange=[1390, 1400])
-
-            newspec = replace_spec(ti, spec_, freq_, low_use, rfi_width_lim=0, ext_sec=1, ext=ext, RMS=RMS, MAX=MAX)
+            restrict_use = np.full(freq.shape, False)
+            newspec = replace_spec(ti, spec_, freq_, exceed_use, restrict_use,
+                                   rfi_width_lim=0, ext_sec=1, ext=ext, RMS=RMS, MAX=MAX)
             newspec[-1] = 0
             data_[ti] = newspec
 
@@ -237,17 +260,17 @@ def replace_rfi_lower(data, freq, method, times_lower_thr=3, times_lower=None,
     RMS = real_rms(data[0, :], freq, sigma=rms_sigma, rms_vrange=rms_frange)
 
     thr_lower = RMS*times_lower_thr
-    low_use = (np.abs(data) > thr_lower)
+    exceed_use = (np.abs(data) > thr_lower)
     from ..utils.misc import extend_Trues
-    low_use = extend_Trues(low_use, ext_add=10, leng_lim=20, axis=-1)
+    exceed_use = extend_Trues(exceed_use, ext_add=10, leng_lim=20, axis=-1)
 
     data_low = deepcopy(data)
     if method == 'lower':
-        data_low[low_use] = data[low_use]/times_lower
+        data_low[exceed_use] = data[exceed_use]/times_lower
     elif method == 'set_zeros':
-        data_low[low_use] = 0
+        data_low[exceed_use] = 0
     elif method == 'set_noise':
-        data_low[low_use] = np.random.normal(scale=RMS, size=data.shape)[low_use]
+        data_low[exceed_use] = np.random.normal(scale=RMS, size=data.shape)[exceed_use]
     return data_low
 
 
