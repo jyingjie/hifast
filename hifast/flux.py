@@ -47,8 +47,10 @@ if __name__ == '__main__':
     args_ = parser.parse_args()
     # print(parser.format_help())
     # print("----------")
+    dests_hide = ['flux',]
+    hide_paras(parser, dests_hide)
     print('#'*35+'Args'+'#'*35)
-    print(parser.format_values())  # useful for logging where different settings came from
+    print(del_paras_in_string(parser.format_values(), dests_hide))  # useful for logging where different settings came from
     print('#'*35+'####'+'#'*35)
     io = IO(args_)
     io()

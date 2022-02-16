@@ -393,8 +393,32 @@ if __name__ == '__main__':
     args_ = parser.parse_args()
     # print(parser.format_help())
     # print("----------")
+    # for clarity and testing purpose
+    dests_hide = [
+                 'rms_sigma',
+                 's_method_t',
+                 's_sigma_t',
+                 's_method_freq',
+                 's_sigma_freq',
+                 'pdr',
+                 'rfi_thr',
+                 'rfi_width_lim',
+                 'ext_sec',
+                 'freq_thr',
+                 'freq_step',
+                 'rfi_groups',
+                 'mask_RFI_method',
+                 'freq_from_theory',
+                 'mask_thr',
+                 'ext_edge',
+                 'small_rfi_times',
+                 'chan_step',
+                 'mask_all_theory',
+                 'time_coherent_per'
+                 ]
+    hide_paras(parser, dests_hide)
     print('#'*35+'Args'+'#'*35)
-    print(parser.format_values())  # useful for logging where different settings came from
+    print(del_paras_in_string(parser.format_values(), dests_hide))  # useful for logging where different settings came from
     print('#'*35+'####'+'#'*35)
     io = IO(args_)
     io()
