@@ -174,7 +174,8 @@ if __name__ == '__main__':
     import os
     import argparse
     from hifast.utils.io import PolarMjdChan_to_MjdChanPolar
-    parser = argparse.ArgumentParser(allow_abbrev=False)
+    from hifast.utils.io import formatter_class
+    parser = argparse.ArgumentParser(allow_abbrev=False, formatter_class=formatter_class)
     parser.add_argument('fname',nargs='+',
                         help='file name')
     parser.add_argument('--ra_range', type=float,nargs=2,
@@ -189,13 +190,15 @@ if __name__ == '__main__':
                        help='unit: arc second')
     parser.add_argument('--outname', required=True,
                        help='output file name, full path')
+    parser.add_argument('-f', action='store_true', dest='force',
+                        help='if set, overwriting file if output file exists')
     parser.add_argument('-k', '--key', choices=['flux', 'Ta'],
                        help='properties to make fits cube. flux or Ta')
     parser.add_argument('-p','--proj', default='AIT', #choices=['AIT', 'SIN', 'TAN'],
                        help='fits wcs projection')
     parser.add_argument('--r_cut', type=float, default=90,
                        help='spectra inside r_cut from the grid point will be considered; unit: arc second')
-    parser.add_argument('-m','--method', default='mean', choices=['reweight', 'mean', 'median', 'gaussian', 'bessel_gaussian', 'sinc_gaussian'],
+    parser.add_argument('-m','--method', default='bessel_gaussian', choices=['reweight', 'mean', 'median', 'gaussian', 'bessel_gaussian', 'sinc_gaussian'],
                        help='method to process the spec in r_cut')
     parser.add_argument('-t','--threshold', type=float,
                        help='vals less than threshold will be masked as nan')
@@ -214,8 +217,15 @@ if __name__ == '__main__':
     method= args.method
     threshold = args.threshold
     range3 = args.range3
+    
     if os.path.exists(outname):
-        raise(OSError(f"{outname} already exists."))
+        if args.force:
+            print(f"will overwrite the existing output file {outname}")
+        else:
+            print(f"File exists {outname}")
+            print("exit... Use ' -f ' to overwrite it or change outname.")
+            sys.exit(0)
+            
     #make sure bwidth not to samll
     if (np.array(bwidth)<1).any():
         raise(ValueError('input --bwidth is too small, its unit is arc second'))
