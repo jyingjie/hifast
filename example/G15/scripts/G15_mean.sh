@@ -22,6 +22,6 @@ EOF
 )
 # echo "$commands"
 
-/data/inspur_disk01/userdir/xuc/FAST/G15/new_22/scripts/hifast.sh "${fpaths}" -c "$commands" -n 2
+hifast.sh "${fpaths}" -c "$commands" -n 2
 
 

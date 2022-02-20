@@ -647,7 +647,7 @@ def find_RFI(spec,freq,is_rfi,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge 
 ####################### time rfi ########################
 
 def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
-           ext_add = 0,plot = False,pdf = None,ylim = None,plot_norfi=True,axis = 'time'):
+           ext_add = 0,plot = False,pdf = None,ylim = None,plot_norfi=False,axis = 'time'):
     """
     data: 2D arrays
     frange: like [a,b]
@@ -669,7 +669,7 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
         pat_mean = np.nanmean(pat_data,axis = 1)
         t = np.arange(data.shape[0])
         ylabel = 'mean along freq axis'
-        xlabel = 'spec number (time axis )'
+        xlabel = 'spec number (time axis)'
     elif axis == 'freq':
         pat_mean = np.nanmean(pat_data,axis = 0)
         t = deepcopy(freq)#np.arange(data.shape[1])
@@ -682,7 +682,7 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
     pat_mean[np.isnan(pat_mean)] = 0
 
     is_pat = pat_mean > pat_med * times
-    if is_pat.any() == False:
+    if (is_pat.any() == False) and (plot_norfi == True):
         if pdf is not None:
             plt.switch_backend('agg')
         fig,ax = plt.subplots(figsize = (15,3))
@@ -757,7 +757,7 @@ def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,**kwargs):
 
     f_use = (freq>frange[0])&(freq<frange[1])
 
-    is_timerfi = find_t(data,freq,frange =frange,plot_norfi = False,**kwargs)
+    is_timerfi = find_t(data,freq,frange = frange,**kwargs)
 
     if is_timerfi.any() == False:
         return ret

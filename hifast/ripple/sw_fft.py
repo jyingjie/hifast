@@ -36,7 +36,7 @@ def replace_spec(tn, spec, freq, exceed_use, restrict_use, rfi_width_lim, ext_se
 
     start, end = get_startend(exceed_use, rfi_width_lim, ext_sec)
     if len(start) == 0:
-        print(f"tn={tn} raised a warning")
+#         print(f"tn={tn} raised a warning")
         return spec
     N = len(freq)
     newspec = deepcopy(spec)
@@ -344,6 +344,7 @@ class SW_FFT(object):
 
     def gen_amp_thr_s(self, amp_thr_mean_factor=1.05, amp_thr_solo_factor=1.4,
                       is_on=None, is_excluded_mean=None):
+
         if is_excluded_mean is None:
             is_excluded_mean = np.full(len(self.amp), False, dtype=bool)
         self.amp_mean_t = np.nanmean(self.amp[~is_excluded_mean], axis=0)
@@ -393,7 +394,9 @@ class SW_FFT(object):
                 self.is_use_sw_chan |= (np.abs(np.arange(len(self.x))-self.loc_list[i]) < nchans[i])
 
     def choose_and_ifft(self, method='interpolate', inplace_amp=True, sw_base=True):
-
+        """
+        inplace_amp: make a copy of self.amp
+        """
         amp = self.amp if inplace_amp else np.copy(self.amp)
         if not hasattr(self, 'is_use_sw_chan'):
             self.is_use_sw_chan = np.full(len(self.x), False)
@@ -430,7 +433,18 @@ def get_sw_conf(chan_wide, chan_narr):
 def fit_sw_fft(s1p, freq, nproc, is_on=None, amp_thr_mean_factor=1.05, amp_thr_solo_factor=1.4, is_excluded_mean=None,
                chan_wide=5, chan_narr=3, sw_periods=['1mhz', '2mhz', '0_04mhz'],
                sw_base=True, choose_method='all'):
-
+    """
+    is_on: bool, noise on
+    amp_thr_mean_factor: above mean amptitude threshold will be chosed
+    amp_thr_solo_factor: above solo amptitude threshold will be chosed
+    is_excluded_mean: bool, exclude large RFI
+    chan_wide: channel numbers near 1mhz to be chosed (wide)
+    chan_narr: channel numbers near 1mhz to be chosed (narrow)
+    sw_periods: remove ripple (1mhz: 1.08mhz, 2mhz:1.92mhz, 0_04mhz: 0.039 mhz)
+    choose_method: use 'all' modes or 'interpolate' from nearby modes
+    sw_base: if True, remove constant components / the base frequency (0 \mu s) 
+    """
+    
     sw_conf = get_sw_conf(chan_wide, chan_narr)
     sw = SW_FFT(s1p, freq, nproc)
     sw.do_fft()
@@ -445,7 +459,12 @@ def fit_sw_fft(s1p, freq, nproc, is_on=None, amp_thr_mean_factor=1.05, amp_thr_s
 
 # Cell
 def mean_fit_ripple(data, nspec, func='iter'):
-
+    """
+    data: 2D
+    nspec: moving window length
+    func: 'iter' using numpy or bottleneck
+          'smooth' boxcar filter
+    """
     n = nspec // 2
     if func == 'iter':
         print(f'mean {2*n}')
@@ -483,7 +502,12 @@ def mean_fit_ripple(data, nspec, func='iter'):
 
 
 def med_fit_ripple(data, nspec, func='iter'):
-
+    """
+    data: 2D
+    nspec: moving window length
+    func: 'iter' using numpy or bottleneck
+          'smooth' boxcar filter
+    """
     n = nspec // 2
     if func == 'iter':
         print(f'median {2*n}')

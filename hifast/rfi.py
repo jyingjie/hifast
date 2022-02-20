@@ -174,6 +174,9 @@ class IO(BaseIO):
         import numpy as np
 
     def get_tr(self,):
+        """
+        Time domain continuous RFI
+        """
         args = self.args
         from .core.rfi_t import mask_rfi_t
         fit_kwargs = {}
@@ -193,6 +196,9 @@ class IO(BaseIO):
         return mask_rfi_t(self.freq, self.s2p, method='smooth', **fit_kwargs)
 
     def get_pr(self,):
+        """
+        Polarized RFI
+        """
         args = self.args
         from .core.rfi_polar import mask_rfi_p
         fit_kwargs = {}
@@ -207,6 +213,9 @@ class IO(BaseIO):
         return mask_rfi_p(self.s2p_mask, **fit_kwargs)
 
     def get_nr(self):
+        """
+        Narrowband single channel RFI
+        """
         args = self.args
         T = np.nanmean(self.s2p_mask, axis = 2)
         from .ripple.markRFI import mask_freq_rfi
@@ -224,6 +233,9 @@ class IO(BaseIO):
                               **narr_args)
 
     def get_lf(self,T):
+        """
+        Time domain uncontinuous RFI: long freq time RFI
+        """
         args = self.args
         from .ripple.markRFI import mask_time_rfi
 
@@ -240,6 +252,9 @@ class IO(BaseIO):
                               **longf_args)
 
     def get_sf(self,T):
+        """
+        Time domain uncontinuous RFI: short freq time RFI
+        """
         args = self.args
         from .ripple.markRFI import mask_time_rfi
 
@@ -259,6 +274,9 @@ class IO(BaseIO):
                                **shortf_args)
 
     def get_time_rfi(self,):
+        """
+        lf & sf
+        """
         args = self.args
         T = self.s2p_mean
 
@@ -276,6 +294,9 @@ class IO(BaseIO):
         return t_rfi
 
     def get_pdr(self):
+        """
+        Period 8 MHZ RFI
+        """
         args = self.args
         T = deepcopy(self.s2p_mean)
         sm_kwargs = {}

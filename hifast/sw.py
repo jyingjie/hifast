@@ -230,6 +230,9 @@ class IO(BaseIO):
 
     @staticmethod
     def fit_sw(s2p, freq, args, subtract):
+        """
+        sin poly
+        """
         fit_kwargs = {}
         keys = ['method',
                 'njoin', 's_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',
@@ -255,6 +258,9 @@ class IO(BaseIO):
             self.args.rms_frange = get_rms_frange(spec,self.freq,rms_step=10,)
 
     def fft_fit_sw(self, s1p, is_rfi=None, is_on=None, s1m = None, s2m = None, s3m = None,):
+        """
+        fft
+        """
         from .ripple import sw_fft
         args = self.args
 
@@ -293,6 +299,9 @@ class IO(BaseIO):
         return sw_fft.fit_sw_fft(s1p, self.freq, args.nproc, **fft_args)
 
     def med_fit_sw(self, s1p, is_on=None,):
+        """
+        running median or mean
+        """
         from .ripple.sw_fft import mean_fit_ripple, med_fit_ripple
         args = self.args
 
