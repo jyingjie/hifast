@@ -255,7 +255,11 @@ class IO(BaseIO):
         if (rms_frange is None) or (rms_frange[1] - rms_frange[0] <= 0):
             from .ripple.markRFI import get_rms_frange
             spec = np.nanmean(np.nanmean(self.s2p, axis = 0),axis = -1)
-            self.args.rms_frange = get_rms_frange(spec,self.freq,rms_step=10,)
+            self.args.rms_frange = get_rms_frange(spec,self.freq,rms_step=5,)
+        else:
+            freq = self.freq
+            if (rms_frange[0] < freq[0]) or (rms_frange[1] > freq[-1]):
+                raise ValueError(f"rms frange {rms_frange} is not in freq range {[freq[0],freq[-1]]}.")
 
     def fft_fit_sw(self, s1p, is_rfi=None, is_on=None, s1m = None, s2m = None, s3m = None,):
         """

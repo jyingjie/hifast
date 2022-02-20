@@ -355,6 +355,10 @@ class IO(BaseIO):
             from .ripple.markRFI import get_rms_frange
             spec = np.nanmean(np.nanmean(self.s2p, axis = 0),axis = -1)
             self.args.rms_frange = get_rms_frange(spec,self.freq,rms_step=10,)
+        else:
+            freq = self.freq
+            if (rms_frange[0] < freq[0]) or (rms_frange[1] > freq[-1]):
+                raise ValueError(f"rms frange {rms_frange} is not in freq range {[freq[0],freq[-1]]}.")
 
     def gen_s2p_out(self,):
         args = self.args
