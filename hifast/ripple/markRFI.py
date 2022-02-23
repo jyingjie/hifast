@@ -647,7 +647,7 @@ def find_RFI(spec,freq,is_rfi,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge 
 ####################### time rfi ########################
 
 def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
-           ext_add = 0,plot = False,pdf = None,ylim = None,plot_norfi=False,axis = 'time'):
+           ext_add = 0,plot = False,pdf = None,xylim = None,plot_norfi=False,axis = 'time'):
     """
     data: 2D arrays
     frange: like [a,b]
@@ -712,14 +712,15 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
         print(f"rfis start at tn = {start}, end in tn = {end}")
         for s,e in zip(start,end):
             #cond = ((pat_diff[s] - pat_diff[s-1])/pat_med > thr) & ((pat_diff[e] - pat_diff[e+1])/pat_med > thr)
-            cond = (pat_diff[s]/pat_med > thr)& (pat_diff[e]/pat_med > thr)
+            cond = (pat_diff[s]/pat_med > thr) & (pat_diff[e]/pat_med > thr)
             if cond:
                 is_timerfi[s:e] = True
-
+                
+        s,e = get_startend(is_timerfi, exclude = False)
         if ext_add > 0 and is_timerfi.any():
             from ..utils.misc import extend_Trues
             is_timerfi = extend_Trues(is_timerfi,axis = 0,ext_add = ext_add)
-            s,e = get_startend(is_timerfi)
+            s,e = get_startend(is_timerfi, exclude = False)
             print(f"After extension, rfis start at tn = {s}, end in tn = {e}")
 #     else:
 #         print("No True meets width condition.")
@@ -736,20 +737,21 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
         ax.plot(t,is_timerfi*np.max(pat_mean),label='is_timeRFI')
         ax.plot(t,pat_diff[:-1]-np.max(pat_mean),label='abs(diff)')
         ax.grid()
-        ax.plot(t[start],pat_mean[start],'r.',label = 'start')
-        ax.plot(t[end],pat_mean[end],'g.',label = 'end')
+        ax.plot(t[s],pat_mean[s],'r.',label = 'start')
+        ax.plot(t[e],pat_mean[e],'g.',label = 'end')
         ax.legend()
         ax.set_ylabel(ylabel)
         ax.set_xlabel(xlabel)
         if frange is not None:
             ax.set_title(f'freq in {frange} MHz')
-        if ylim is not None:
-            ax.set_ylim(ylim[0],ylim[1])
+        if xylim is not None:
+            ax.set_xlim(xylim[0],xylim[1])
+            ax.set_ylim(xylim[2],xylim[3])
         if pdf is not None:
             pdf.savefig();plt.close()
     return  is_timerfi
 
-def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,**kwargs):
+def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,rms_thr_times=3,**kwargs):
     """
     Other parameters are the same as previous.
     """
@@ -772,7 +774,7 @@ def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,**kwargs):
         fmax = freq[f_use][np.argmax(sm)]
         f50 = freq[f_use][sm > MAX / 2]
         w50 = f50[-1] - f50[0]
-        rms_thresh = rms(mspec,freq,rms_frange)
+        rms_thresh = rms(mspec,freq,rms_frange) * rms_thr_times
 
         mask_frange = find_edge_2sides(mspec[f_use],freq[f_use],peak_position=fmax-w50/2,step=w50,
                  rms_thresh=rms_thresh,Print=False,ext_times=ext_times,small_rfi_times=0)

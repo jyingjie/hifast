@@ -342,10 +342,16 @@ class IO(BaseIO):
         args = self.args
         freq = self.freq
         mw_frange = args.mw_frange
+            
         if mw_frange is None:
-            protect_use = np.zeros_like(freq,dtype='bool')
-        else:
-            protect_use = (freq>mw_frange[0])&(freq<mw_frange[1])
+            mw_frange = [1419, 1422]
+            if (freq[0] > mw_frange[1]) or (freq[-1] < mw_frange[0]):
+                # Do not need to protect mw.
+                pass
+            else:
+                print(f"mw_frange redicting to {mw_frange}, you should check it again.")
+                
+        protect_use = (freq>mw_frange[0])&(freq<mw_frange[1])
         return protect_use
 
     def check_rms_range(self):
