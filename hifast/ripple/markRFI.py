@@ -708,6 +708,7 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
 #         return  is_timerfi
 
     pat_diff = np.abs(np.diff(pat_mean, prepend=0, append=0))
+    s,e = get_startend(is_timerfi, exclude = False)
     if len(start) > 0:
         print(f"rfis start at tn = {start}, end in tn = {end}")
         for s,e in zip(start,end):
@@ -716,7 +717,6 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
             if cond:
                 is_timerfi[s:e] = True
                 
-        s,e = get_startend(is_timerfi, exclude = False)
         if ext_add > 0 and is_timerfi.any():
             from ..utils.misc import extend_Trues
             is_timerfi = extend_Trues(is_timerfi,axis = 0,ext_add = ext_add)
