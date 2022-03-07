@@ -72,15 +72,30 @@ def do_smooth(s1p, s_method_t = 'none', s_sigma_t = None,
     is_excluded = np.all(is_rfi,axis = 1)
     T[is_rfi] = 0
 
-    from hifast.utils.misc import smooth1d
+    from ..utils.misc import smooth1d
     if s_method_t in ['gaussian', 'boxcar', 'median']:
         print('Smoothing t ...')
         T[~is_excluded] = smooth1d(T[~is_excluded], axis=0, sigma=s_sigma_t, method=s_method_t)
+    elif s_method_t == 'iter_median':
+        print('Smoothing t ...')
+        from .sw_fft import med_fit_ripple
+        T[~is_excluded] = med_fit_ripple(T[~is_excluded], nspec = s_sigma_t, func='iter')
 
     if s_method_freq in ['gaussian', 'boxcar', 'median']:
         print('Smoothing freq ...')
         T[~is_excluded] = smooth1d(T[~is_excluded], axis=1, sigma=s_sigma_freq, method=s_method_freq)
     return T
+
+def do_smooth_onoff(s1p, is_on = None,is_rfi = None, **kwargs):
+    T = deepcopy(s1p)
+    if is_on is None: 
+        T = do_smooth(T,is_rfi = is_rfi, **kwargs)
+    else:
+        if is_rfi is None: is_rfi = np.full(T.shape[:2], False, dtype=bool)
+        T[is_on] = do_smooth(T[is_on],is_rfi = is_rfi[is_on], **kwargs)
+        T[~is_on] = do_smooth(T[~is_on],is_rfi = is_rfi[~is_on], **kwargs)
+    return T
+
     
 class Args(object):
     def __init__(self, fpath, frange = None, outdir = None,):
@@ -135,15 +150,13 @@ class Read_hdf5(BaseIO):
         
         if len(data.shape) != 2:
             raise ValueError(f"Check your input data shape {data.shape}. Are they 2D? ")
-        if data.shape[1] != len(freq):
-            data = data.T
 
         if xrange != None:
             x1,x2 = np.min(xrange),np.max(xrange)
             is_use = (x>=x1)&(x<=x2)
             x = x[is_use]
-            if data.shape[1] != x.shape[0]:
-                data = data[:,is_use]
+#             if data.shape[1] != x.shape[0]:
+#                 data = data[:,is_use]
         else:
             xrange = [x[0],x[-1]]
 

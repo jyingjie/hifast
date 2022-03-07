@@ -159,7 +159,7 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=
             # sm2 used to define replace area
             RMS = rms(sm2, freq, rms_vrange=rms_frange)
             thr_s = RMS*times_s_thr2
-            exceed_use = (sm2 > thr_s) | time_rfi[tn]
+            exceed_use = (np.abs(sm2) > thr_s) | time_rfi[tn]
 
             if RESTRICT:
                 sm3 = data_sm3[tn]
@@ -341,23 +341,24 @@ class SW_FFT(object):
         self.period = 1/self.x
         self.amp = np.abs(A_data)
         self.phi = np.angle(A_data,)
+    
+    @property    
+    def normal_amp(self):
+        N = len(self.freq)
+        data = deepcopy(self.amp) # K
+        data[:,0] = data[:,0] / N
+        data[:,1:] = data[:,1:] / (N / 2)
+        return data * 1e3 # mK
 
     def gen_amp_thr_s(self, amp_thr_mean_factor=1.05, amp_thr_solo_factor=1.4,
-                      is_on=None, is_excluded_mean=None):
+                      is_excluded_mean=None):
 
         if is_excluded_mean is None:
             is_excluded_mean = np.full(len(self.amp), False, dtype=bool)
         self.amp_mean_t = np.nanmean(self.amp[~is_excluded_mean], axis=0)
         self.amp_thr_mean = np.nanmedian(self.amp_mean_t) * amp_thr_mean_factor
-        if is_on is None:
-            self.amp_thr_solo = np.nanmedian(self.amp_mean_t) * amp_thr_solo_factor
-        else:
-            self.amp_thr_solo = np.empty(self.amp.shape[0])
-            self.amp_thr_solo[~is_on] = np.nanmedian(np.nanmean(
-                self.amp[(~is_on) & (~is_excluded_mean)], axis=0)) * amp_thr_solo_factor
-            self.amp_thr_solo[is_on] = np.nanmedian(np.nanmean(
-                self.amp[is_on & (~is_excluded_mean)], axis=0)) * amp_thr_solo_factor
-            self.amp_thr_solo = self.amp_thr_solo[:, None]
+        
+        self.amp_thr_solo = np.nanmedian(self.amp_mean_t) * amp_thr_solo_factor
 
     def find_sw_loc(self, xlims=[[.90, .95], [1.8, 1.9]]):
         """
@@ -430,11 +431,10 @@ def get_sw_conf(chan_wide, chan_narr):
     return sw_conf
 
 
-def fit_sw_fft(s1p, freq, nproc, is_on=None, amp_thr_mean_factor=1.05, amp_thr_solo_factor=1.4, is_excluded_mean=None,
+def fit_sw_fft(s1p, freq, nproc, amp_thr_mean_factor=1.05, amp_thr_solo_factor=1.4, is_excluded_mean=None,
                chan_wide=5, chan_narr=3, sw_periods=['1mhz', '2mhz', '0_04mhz'],
                sw_base=True, choose_method='all'):
     """
-    is_on: bool, noise on
     amp_thr_mean_factor: above mean amptitude threshold will be chosed
     amp_thr_solo_factor: above solo amptitude threshold will be chosed
     is_excluded_mean: bool, exclude large RFI
@@ -449,7 +449,7 @@ def fit_sw_fft(s1p, freq, nproc, is_on=None, amp_thr_mean_factor=1.05, amp_thr_s
     sw = SW_FFT(s1p, freq, nproc)
     sw.do_fft()
     sw.gen_amp_thr_s(amp_thr_mean_factor=amp_thr_mean_factor, amp_thr_solo_factor=amp_thr_solo_factor,
-                     is_on=is_on, is_excluded_mean=is_excluded_mean)
+                     is_excluded_mean=is_excluded_mean)
     if 'none' not in sw_periods:
         for key in sw_periods:
             sw.find_sw_loc(xlims=sw_conf[key]['xlims'])

@@ -96,10 +96,10 @@ group.add_argument('--sw_periods', nargs='+', choices=['1mhz', '2mhz', '0_04mhz'
 group.add_argument('--check_2mhz', type=bool_fun, choices=[True, False], default='True',
                    help='if True, remove 2mhz from sw_periods except for Beam 6')
 
-group.add_argument('--amp_thr_mean_factor', type=float, default=1.05,
-                   help='above mean amptitude threshold will be chosed')
-group.add_argument('--amp_thr_solo_factor', type=float, default=1.4,
-                   help='above amptitude threshold will be chosed in every spec')
+group.add_argument('--amp_thr_mean_factor', type=float, nargs=2, default=[1.05, 1.4],
+                   help='above mean amptitude threshold will be chosed, noise off and on')
+group.add_argument('--amp_thr_solo_factor', type=float, nargs=2, default=[1.4, 1.7],
+                   help='above amptitude threshold will be chosed in every spec, noise off and on')
 group.add_argument('--chan_wide', type=int, default=5,
                    help='channel numbers near 1mhz to be chosed (wide)')
 group.add_argument('--chan_narr', type=int, default=3,
@@ -284,7 +284,7 @@ class IO(BaseIO):
 
         # fft args
         fft_args = {}
-        keys = ['amp_thr_mean_factor', 'amp_thr_solo_factor', 'chan_wide', 'chan_narr',  'choose_method',
+        keys = ['chan_wide', 'chan_narr',  'choose_method',
                 'choose_method', 'sw_periods', 'sw_base']
         for key in keys:
             fft_args[key] = getattr(args, key)
@@ -298,9 +298,24 @@ class IO(BaseIO):
                 fft_args['sw_periods'].insert(-1, '2mhz')
             else:
                 print('beam number !=6, remove 2mhz in sw_periods if it exists')
-        fft_args['is_on'] = is_on
-        fft_args['is_excluded_mean'] = np.all(is_rfi, axis=1) if is_rfi is not None else None
-        return sw_fft.fit_sw_fft(s1p, self.freq, args.nproc, **fft_args)
+        # use the first factor for noise off or not defined
+        for key in ['amp_thr_mean_factor', 'amp_thr_solo_factor']:
+            fft_args[key] = getattr(args, key)[0]
+        
+        if is_on is not None:
+            ret = np.zeros_like(s1p)
+            print("# noise off")
+            ret[is_on] = sw_fft.fit_sw_fft(s1p[is_on], self.freq, args.nproc, **fft_args)
+            fft_args['is_excluded_mean'] = np.all(is_rfi[~is_on], axis=1) if is_rfi is not None else None
+            ret[~is_on] = sw_fft.fit_sw_fft(s1p[~is_on], self.freq, args.nproc, **fft_args)
+            print("# noise on")
+            for key in ['amp_thr_mean_factor', 'amp_thr_solo_factor']:
+                fft_args[key] = getattr(args, key)[1]
+            fft_args['is_excluded_mean'] = np.all(is_rfi[is_on], axis=1) if is_rfi is not None else None
+        else:
+            fft_args['is_excluded_mean'] = np.all(is_rfi, axis=1) if is_rfi is not None else None
+            ret = sw_fft.fit_sw_fft(s1p, self.freq, args.nproc, **fft_args)
+        return ret
 
     def med_fit_sw(self, s1p, is_on=None,):
         """
@@ -365,15 +380,16 @@ class IO(BaseIO):
                 for key in keys:
                     sm_kwargs[key] = getattr(args, key)
                 sm_kwargs['is_rfi'] = is_rfi
-
-                from .ripple.util import do_smooth
-                s1m = do_smooth(s2p, **sm_kwargs)
+                sm_kwargs['is_on'] = is_on
+                
+                from .ripple.util import do_smooth_onoff
+                s1m = do_smooth_onoff(s2p, **sm_kwargs)
 
                 if sm_kwargs['s_method_t'] != 'none' and args.restrict_bound:
                     sm_kwargs3 = {}
                     sm_kwargs3['s_method_freq'] = 'gaussian'
                     sm_kwargs3['s_sigma_freq'] = args.rms_sigma
-                    s3m = do_smooth(s2p, **sm_kwargs3)
+                    s3m = do_smooth_onoff(s2p, **sm_kwargs3)
                 else:
                     s3m = np.array([None, None])[None,None,:]
 
@@ -385,9 +401,9 @@ class IO(BaseIO):
                     print("Second iter ...")
                     # smooth
                     s2p_in = self._load_s2p_ori()[:] if args.nobld else s2p
-                    s2m = do_smooth(s2p_out, **sm_kwargs)
+                    s2m = do_smooth_onoff(s2p_out, **sm_kwargs)
                     if sm_kwargs['s_method_t'] != 'none' and args.restrict_bound:
-                        s3m = do_smooth(s2p_out, **sm_kwargs3)
+                        s3m = do_smooth_onoff(s2p_out, **sm_kwargs3)
                     else:
                         s3m = np.array([None, None])[None,None,:]
 
