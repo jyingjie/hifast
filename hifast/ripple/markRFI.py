@@ -36,21 +36,29 @@ def rms(data,vel,rms_vrange=None):
     ans = np.sqrt(np.nanmean((data)**2,axis = -1))
     return ans
 
-def get_rms_frange(spec,freq,rms_step=None,):
+def get_rms_frange(spec,freq,rms_step=None,is_excluded = None):
+    if is_excluded is None: is_excluded = np.full(len(freq),False)
     RMSl = []
     rms_vrangel = []
     for v in np.arange(freq[0],freq[-1],rms_step):
-        RMS_ = rms(spec,freq,rms_vrange=[v,v+rms_step])
-        if RMS_>0:
-            RMSl += [RMS_,]
-            rms_vrangel += [[v,v+rms_step],]
+        rms_vrange=[v,v+rms_step]
+        use = (freq > rms_vrange[0]) & (freq < rms_vrange[1])
+        if not np.any(use & is_excluded):
+            RMS_ = rms(spec,freq,rms_vrange)
+            if RMS_>0:
+                RMSl += [RMS_,]
+                rms_vrangel += [rms_vrange,]
     RMSl = np.array(RMSl); rms_vrangel = np.array(rms_vrangel)
+    
+    if len(RMSl) < 1:
+        raise ValueError("Too much RFI, try a smaller rms_step or set a certain range by human!")
+    
     RMS = np.nanmedian(RMSl)
     loc = np.argmin(np.abs(RMSl-RMS))
-    rms_vrange = rms_vrangel[loc]
-    log.warning(f"Redirected to rms_range = {rms_vrange}. We recommend you to set a certain range.")
+    rms_range = rms_vrangel[loc]
+    log.info(f"Redirected to rms_range = {rms_range}.")
 
-    return rms_vrange
+    return rms_range
 
 def real_rms(data,vel,sigma,rms_vrange=None):
     """

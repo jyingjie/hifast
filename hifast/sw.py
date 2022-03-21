@@ -50,10 +50,7 @@ group.add_argument('--nobld', type=bool_fun, choices=[True, False], default='Fal
                    help="if True, use the spectra before bld to subtract standing wave and output file name will add 'nobld'")
 group.add_argument('--fpattern_nobld',
                    help='if not specify, guess from the History recored in the fpath')
-group.add_argument('--average_every_freq', type=int, default=0,
-                   help='average in every n channels along freq axis')
-# group.add_argument('--only_sub', type=bool_fun, choices=[True, False], default='True',
-#                    help='if True, only subtract standing wave, not baseline')
+
 # least square
 group = parser.add_argument_group(f'*parameters for --method sin_poly\n{sep_line}:' +
                                   '\n'+'addition options for preprocessing before fitting')
@@ -82,7 +79,10 @@ group.add_argument('--mw_frange', type=float, nargs=2, default=[0, 0],
 group.add_argument('--rms_sigma', type=float, default=6,
                    help='gauss filter sigma to compute real rms')
 group.add_argument('--rms_frange', type=float, nargs=2, default=[0, 0],
-                   help='freq range to compute rms, NEED TO DEFINE when fft')
+                   help='freq range to compute rms')
+group.add_argument('--rms_step', type=float, default=5,
+                   help='a step (MHz) to find where to compute real rms')
+
 group.add_argument('--times_thr', type=float, default=4,
                    help='sparks above ~ times of rms will be set noise (unsmooth)')
 group.add_argument('--times_s_thr', type=float, default=3,
@@ -260,13 +260,16 @@ class IO(BaseIO):
         fit_kwargs['exclude_fun'] = get_exclude_fun(args.exclude_m)
         return sub_baseline(freq, s2p, subtract=subtract, opt_para=opt_para, **fit_kwargs)
 
-    def check_rms_range(self):
+    def check_rms_range(self, is_rfi, rms_step=5):
         args = self.args
         rms_frange = args.rms_frange
         if (rms_frange is None) or (rms_frange[1] - rms_frange[0] <= 0):
             from .ripple.markRFI import get_rms_frange
-            spec = np.nanmean(np.nanmean(self.s2p, axis = 0),axis = -1)
-            self.args.rms_frange = get_rms_frange(spec,self.freq,rms_step=5,)
+            is_lf = np.all(is_rfi, axis = 1)
+            is_excluded = np.any(is_rfi[~is_lf], axis = 0)
+            data = self.s2p[~is_lf]
+            spec = np.nanmean(np.nanmean(data, axis = 0),axis = -1)
+            self.args.rms_frange = get_rms_frange(spec,self.freq,rms_step=5,is_excluded = is_excluded)
         else:
             freq = self.freq
             if (rms_frange[0] < freq[0]) or (rms_frange[1] > freq[-1]):
@@ -283,7 +286,7 @@ class IO(BaseIO):
         # replace rfi and mw
         # replace args
         rep_args = {}
-        self.check_rms_range()
+        self.check_rms_range(is_rfi, rms_step = args.rms_step)
         if args.rfi_method in ['near_ripple','zero_ripple',]:
             keys = ['rms_sigma', 'rms_frange', 'times_s_thr','times_s_thr2',
                     'times_thr', 'rfi_width_lim', 'ext_sec', 'ext_freq', 'mw_frange', ]
@@ -441,8 +444,10 @@ class IO(BaseIO):
                     # smooth
                     s2p_in = self._load_s2p_ori()[:] if args.nobld else s2p
                     sm_find = do_smooth_onoff(s2p_out, **find_kwargs)
+                    print("------------------")
                     if trough_kwargs['s_method_t'] != 'none' and args.restrict_bound:
                         sm_res = do_smooth_onoff(s2p_out, **res_kwargs)
+                        print("------------------")
                     else:
                         sm_res = np.array([None, None])[None,None,:]
 
