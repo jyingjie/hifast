@@ -390,9 +390,6 @@ class IO(BaseIO):
 
 # Cell
 if __name__ == '__main__':
-    args_ = parser.parse_args()
-    # print(parser.format_help())
-    # print("----------")
     # for clarity and testing purpose
     dests_hide = [
                  'rms_sigma',
@@ -417,6 +414,10 @@ if __name__ == '__main__':
                  'time_coherent_per'
                  ]
     hide_paras(parser, dests_hide)
+
+    args_ = parser.parse_args()
+    # print(parser.format_help())
+    # print("----------")
     print('#'*35+'Args'+'#'*35)
     print(del_paras_in_string(parser.format_values(), dests_hide))  # useful for logging where different settings came from
     print('#'*35+'####'+'#'*35)
