@@ -36,21 +36,29 @@ def rms(data,vel,rms_vrange=None):
     ans = np.sqrt(np.nanmean((data)**2,axis = -1))
     return ans
 
-def get_rms_frange(spec,freq,rms_step=None,):
+def get_rms_frange(spec,freq,rms_step=None,is_excluded = None):
+    if is_excluded is None: is_excluded = np.full(len(freq),False)
     RMSl = []
     rms_vrangel = []
     for v in np.arange(freq[0],freq[-1],rms_step):
-        RMS_ = rms(spec,freq,rms_vrange=[v,v+rms_step])
-        if RMS_>0:
-            RMSl += [RMS_,]
-            rms_vrangel += [[v,v+rms_step],]
+        rms_vrange=[v,v+rms_step]
+        use = (freq > rms_vrange[0]) & (freq < rms_vrange[1])
+        if not np.any(use & is_excluded):
+            RMS_ = rms(spec,freq,rms_vrange)
+            if RMS_>0:
+                RMSl += [RMS_,]
+                rms_vrangel += [rms_vrange,]
     RMSl = np.array(RMSl); rms_vrangel = np.array(rms_vrangel)
+    
+    if len(RMSl) < 1:
+        raise ValueError("Too much RFI, try a smaller rms_step or set a certain range by human!")
+    
     RMS = np.nanmedian(RMSl)
     loc = np.argmin(np.abs(RMSl-RMS))
-    rms_vrange = rms_vrangel[loc]
-    log.warning(f"Redirected to rms_range = {rms_vrange}. We recommend you to set a certain range.")
+    rms_range = rms_vrangel[loc]
+    log.info(f"Redirected to rms_range = {rms_range}.")
 
-    return rms_vrange
+    return rms_range
 
 def real_rms(data,vel,sigma,rms_vrange=None):
     """
@@ -647,7 +655,7 @@ def find_RFI(spec,freq,is_rfi,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge 
 ####################### time rfi ########################
 
 def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
-           ext_add = 0,plot = False,pdf = None,ylim = None,plot_norfi=True,axis = 'time'):
+           ext_add = 0,plot = False,pdf = None,xylim = None,plot_norfi=False,axis = 'time'):
     """
     data: 2D arrays
     frange: like [a,b]
@@ -669,7 +677,7 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
         pat_mean = np.nanmean(pat_data,axis = 1)
         t = np.arange(data.shape[0])
         ylabel = 'mean along freq axis'
-        xlabel = 'spec number (time axis )'
+        xlabel = 'spec number (time axis)'
     elif axis == 'freq':
         pat_mean = np.nanmean(pat_data,axis = 0)
         t = deepcopy(freq)#np.arange(data.shape[1])
@@ -682,7 +690,7 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
     pat_mean[np.isnan(pat_mean)] = 0
 
     is_pat = pat_mean > pat_med * times
-    if is_pat.any() == False:
+    if (is_pat.any() == False) and (plot_norfi == True):
         if pdf is not None:
             plt.switch_backend('agg')
         fig,ax = plt.subplots(figsize = (15,3))
@@ -708,18 +716,19 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
 #         return  is_timerfi
 
     pat_diff = np.abs(np.diff(pat_mean, prepend=0, append=0))
+    s,e = get_startend(is_timerfi, exclude = False)
     if len(start) > 0:
         print(f"rfis start at tn = {start}, end in tn = {end}")
         for s,e in zip(start,end):
             #cond = ((pat_diff[s] - pat_diff[s-1])/pat_med > thr) & ((pat_diff[e] - pat_diff[e+1])/pat_med > thr)
-            cond = (pat_diff[s]/pat_med > thr)& (pat_diff[e]/pat_med > thr)
+            cond = (pat_diff[s]/pat_med > thr) & (pat_diff[e]/pat_med > thr)
             if cond:
                 is_timerfi[s:e] = True
-
+                
         if ext_add > 0 and is_timerfi.any():
             from ..utils.misc import extend_Trues
             is_timerfi = extend_Trues(is_timerfi,axis = 0,ext_add = ext_add)
-            s,e = get_startend(is_timerfi)
+            s,e = get_startend(is_timerfi, exclude = False)
             print(f"After extension, rfis start at tn = {s}, end in tn = {e}")
 #     else:
 #         print("No True meets width condition.")
@@ -736,20 +745,21 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
         ax.plot(t,is_timerfi*np.max(pat_mean),label='is_timeRFI')
         ax.plot(t,pat_diff[:-1]-np.max(pat_mean),label='abs(diff)')
         ax.grid()
-        ax.plot(t[start],pat_mean[start],'r.',label = 'start')
-        ax.plot(t[end],pat_mean[end],'g.',label = 'end')
+        ax.plot(t[s],pat_mean[s],'r.',label = 'start')
+        ax.plot(t[e],pat_mean[e],'g.',label = 'end')
         ax.legend()
         ax.set_ylabel(ylabel)
         ax.set_xlabel(xlabel)
         if frange is not None:
             ax.set_title(f'freq in {frange} MHz')
-        if ylim is not None:
-            ax.set_ylim(ylim[0],ylim[1])
+        if xylim is not None:
+            ax.set_xlim(xylim[0],xylim[1])
+            ax.set_ylim(xylim[2],xylim[3])
         if pdf is not None:
             pdf.savefig();plt.close()
     return  is_timerfi
 
-def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,**kwargs):
+def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,rms_thr_times=3,**kwargs):
     """
     Other parameters are the same as previous.
     """
@@ -757,7 +767,7 @@ def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,**kwargs):
 
     f_use = (freq>frange[0])&(freq<frange[1])
 
-    is_timerfi = find_t(data,freq,frange =frange,plot_norfi = False,**kwargs)
+    is_timerfi = find_t(data,freq,frange = frange,**kwargs)
 
     if is_timerfi.any() == False:
         return ret
@@ -772,7 +782,7 @@ def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,**kwargs):
         fmax = freq[f_use][np.argmax(sm)]
         f50 = freq[f_use][sm > MAX / 2]
         w50 = f50[-1] - f50[0]
-        rms_thresh = rms(mspec,freq,rms_frange)
+        rms_thresh = rms(mspec,freq,rms_frange) * rms_thr_times
 
         mask_frange = find_edge_2sides(mspec[f_use],freq[f_use],peak_position=fmax-w50/2,step=w50,
                  rms_thresh=rms_thresh,Print=False,ext_times=ext_times,small_rfi_times=0)

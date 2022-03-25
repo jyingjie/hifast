@@ -174,6 +174,9 @@ class IO(BaseIO):
         import numpy as np
 
     def get_tr(self,):
+        """
+        Time domain continuous RFI
+        """
         args = self.args
         from .core.rfi_t import mask_rfi_t
         fit_kwargs = {}
@@ -193,6 +196,9 @@ class IO(BaseIO):
         return mask_rfi_t(self.freq, self.s2p, method='smooth', **fit_kwargs)
 
     def get_pr(self,):
+        """
+        Polarized RFI
+        """
         args = self.args
         from .core.rfi_polar import mask_rfi_p
         fit_kwargs = {}
@@ -207,6 +213,9 @@ class IO(BaseIO):
         return mask_rfi_p(self.s2p_mask, **fit_kwargs)
 
     def get_nr(self):
+        """
+        Narrowband single channel RFI
+        """
         args = self.args
         T = np.nanmean(self.s2p_mask, axis = 2)
         from .ripple.markRFI import mask_freq_rfi
@@ -224,6 +233,9 @@ class IO(BaseIO):
                               **narr_args)
 
     def get_lf(self,T):
+        """
+        Time domain uncontinuous RFI: long freq time RFI
+        """
         args = self.args
         from .ripple.markRFI import mask_time_rfi
 
@@ -240,6 +252,9 @@ class IO(BaseIO):
                               **longf_args)
 
     def get_sf(self,T):
+        """
+        Time domain uncontinuous RFI: short freq time RFI
+        """
         args = self.args
         from .ripple.markRFI import mask_time_rfi
 
@@ -259,6 +274,9 @@ class IO(BaseIO):
                                **shortf_args)
 
     def get_time_rfi(self,):
+        """
+        lf & sf
+        """
         args = self.args
         T = self.s2p_mean
 
@@ -276,6 +294,9 @@ class IO(BaseIO):
         return t_rfi
 
     def get_pdr(self):
+        """
+        Period 8 MHZ RFI
+        """
         args = self.args
         T = deepcopy(self.s2p_mean)
         sm_kwargs = {}
@@ -321,10 +342,16 @@ class IO(BaseIO):
         args = self.args
         freq = self.freq
         mw_frange = args.mw_frange
+            
         if mw_frange is None:
-            protect_use = np.zeros_like(freq,dtype='bool')
-        else:
-            protect_use = (freq>mw_frange[0])&(freq<mw_frange[1])
+            mw_frange = [1419, 1422]
+            if (freq[0] > mw_frange[1]) or (freq[-1] < mw_frange[0]):
+                # Do not need to protect mw.
+                pass
+            else:
+                print(f"mw_frange redicting to {mw_frange}, you should check it again.")
+                
+        protect_use = (freq>mw_frange[0])&(freq<mw_frange[1])
         return protect_use
 
     def check_rms_range(self):
@@ -334,6 +361,10 @@ class IO(BaseIO):
             from .ripple.markRFI import get_rms_frange
             spec = np.nanmean(np.nanmean(self.s2p, axis = 0),axis = -1)
             self.args.rms_frange = get_rms_frange(spec,self.freq,rms_step=10,)
+        else:
+            freq = self.freq
+            if (rms_frange[0] < freq[0]) or (rms_frange[1] > freq[-1]):
+                raise ValueError(f"rms frange {rms_frange} is not in freq range {[freq[0],freq[-1]]}.")
 
     def gen_s2p_out(self,):
         args = self.args

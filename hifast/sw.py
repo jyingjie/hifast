@@ -22,14 +22,24 @@ parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_f
 parser.add_argument('--nproc', '-n', type=int, default=1,
                     help='number of process used in fitting baseline')
 # smooth
-group = parser.add_argument_group('preprocessing before fitting or FFT')
-group.add_argument('--s_method_t', default='none', choices=['none', 'gaussian', 'boxcar', 'median'],
+group = parser.add_argument_group('For FFT, smooth to find where should be replaced; for sin-fitting, preprocess.')
+group.add_argument('--s_method_t', default='gaussian', choices=['none', 'gaussian', 'boxcar', 'median'],
                    help='smooth method along time axis')
 group.add_argument('--s_sigma_t', type=int, default=5,
                    help='smooth sigma along time axis, size = (2*sigma+1) for boxcar and median')
-group.add_argument('--s_method_freq', default='none', choices=['none', 'median', 'gaussian', 'boxcar'],
+group.add_argument('--s_method_freq', default='gaussian', choices=['none', 'median', 'gaussian', 'boxcar'],
                    help='smooth method along freq axis')
-group.add_argument('--s_sigma_freq', type=float, default=5,
+group.add_argument('--s_sigma_freq', type=float, default=3,
+                   help='smooth sigma along freq axis, size = (2*sigma+1) for boxcar and median')
+
+group = parser.add_argument_group('For FFT, smooth for finding Troughs of standing waves')
+group.add_argument('--s_method_t_T', default='gaussian', choices=['none', 'gaussian', 'boxcar', 'median'],
+                   help='smooth method along time axis')
+group.add_argument('--s_sigma_t_T', type=int, default=10,
+                   help='smooth sigma along time axis, size = (2*sigma+1) for boxcar and median')
+group.add_argument('--s_method_freq_T', default='gaussian', choices=['none', 'median', 'gaussian', 'boxcar'],
+                   help='smooth method along freq axis')
+group.add_argument('--s_sigma_freq_T', type=float, default=5,
                    help='smooth sigma along freq axis, size = (2*sigma+1) for boxcar and median')
 
 # method
@@ -40,10 +50,7 @@ group.add_argument('--nobld', type=bool_fun, choices=[True, False], default='Fal
                    help="if True, use the spectra before bld to subtract standing wave and output file name will add 'nobld'")
 group.add_argument('--fpattern_nobld',
                    help='if not specify, guess from the History recored in the fpath')
-group.add_argument('--average_every_freq', type=int, default=0,
-                   help='average in every n channels along freq axis')
-# group.add_argument('--only_sub', type=bool_fun, choices=[True, False], default='True',
-#                    help='if True, only subtract standing wave, not baseline')
+
 # least square
 group = parser.add_argument_group(f'*parameters for --method sin_poly\n{sep_line}:' +
                                   '\n'+'addition options for preprocessing before fitting')
@@ -64,14 +71,18 @@ group = parser.add_argument_group(f'*parameters for --method fft\n{sep_line}:' +
 group.add_argument('--iter_twice', type=bool_fun, choices=[True, False], default='True',
                    help='iterate twice? first remove the ripples and then back to find replace area again.')
 # replace big RFI or sources firstly
-group.add_argument('--rfi_method', default='near_ripple', choices=['near_ripple', 'lower', 'set_zeros', 'set_noise'],
+group.add_argument('--rfi_method', default='near_ripple', 
+                   choices=['near_ripple','zero_ripple',],
                    help='method to replace big RFI, recommend the first one')
 group.add_argument('--mw_frange', type=float, nargs=2, default=[0, 0],
                    help='milky way freq range. If do not use, keep it as default.')
 group.add_argument('--rms_sigma', type=float, default=6,
                    help='gauss filter sigma to compute real rms')
 group.add_argument('--rms_frange', type=float, nargs=2, default=[0, 0],
-                   help='freq range to compute rms, NEED TO DEFINE when fft')
+                   help='freq range to compute rms')
+group.add_argument('--rms_step', type=float, default=5,
+                   help='a step (MHz) to find where to compute real rms')
+
 group.add_argument('--times_thr', type=float, default=4,
                    help='sparks above ~ times of rms will be set noise (unsmooth)')
 group.add_argument('--times_s_thr', type=float, default=3,
@@ -96,10 +107,10 @@ group.add_argument('--sw_periods', nargs='+', choices=['1mhz', '2mhz', '0_04mhz'
 group.add_argument('--check_2mhz', type=bool_fun, choices=[True, False], default='True',
                    help='if True, remove 2mhz from sw_periods except for Beam 6')
 
-group.add_argument('--amp_thr_mean_factor', type=float, default=1.05,
-                   help='above mean amptitude threshold will be chosed')
-group.add_argument('--amp_thr_solo_factor', type=float, default=1.4,
-                   help='above amptitude threshold will be chosed in every spec')
+group.add_argument('--amp_thr_mean_factor', type=float, nargs=2, default=[1.05, 1.4],
+                   help='above mean amptitude threshold will be chosed, noise off and on')
+group.add_argument('--amp_thr_solo_factor', type=float, nargs=2, default=[1.4, 1.7],
+                   help='above amptitude threshold will be chosed in every spec, noise off and on')
 group.add_argument('--chan_wide', type=int, default=5,
                    help='channel numbers near 1mhz to be chosed (wide)')
 group.add_argument('--chan_narr', type=int, default=3,
@@ -230,6 +241,9 @@ class IO(BaseIO):
 
     @staticmethod
     def fit_sw(s2p, freq, args, subtract):
+        """
+        sin poly
+        """
         fit_kwargs = {}
         keys = ['method',
                 'njoin', 's_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',
@@ -246,35 +260,52 @@ class IO(BaseIO):
         fit_kwargs['exclude_fun'] = get_exclude_fun(args.exclude_m)
         return sub_baseline(freq, s2p, subtract=subtract, opt_para=opt_para, **fit_kwargs)
 
-    def check_rms_range(self):
+    def check_rms_range(self, is_rfi, rms_step=5):
         args = self.args
         rms_frange = args.rms_frange
         if (rms_frange is None) or (rms_frange[1] - rms_frange[0] <= 0):
             from .ripple.markRFI import get_rms_frange
-            spec = np.nanmean(np.nanmean(self.s2p, axis = 0),axis = -1)
-            self.args.rms_frange = get_rms_frange(spec,self.freq,rms_step=10,)
+            is_lf = np.all(is_rfi, axis = 1)
+            is_excluded = np.any(is_rfi[~is_lf], axis = 0)
+            data = self.s2p[~is_lf]
+            spec = np.nanmean(np.nanmean(data, axis = 0),axis = -1)
+            self.args.rms_frange = get_rms_frange(spec,self.freq,rms_step=5,is_excluded = is_excluded)
+        else:
+            freq = self.freq
+            if (rms_frange[0] < freq[0]) or (rms_frange[1] > freq[-1]):
+                raise ValueError(f"rms frange {rms_frange} is not in freq range {[freq[0],freq[-1]]}.")
 
-    def fft_fit_sw(self, s1p, is_rfi=None, is_on=None, s1m = None, s2m = None, s3m = None,):
+    def fft_fit_sw(self, s1p, is_rfi=None, is_on=None,iter_twice = False,
+                  sm_find = None, sm_trough = None, sm_res = None, ):
+        """
+        fft
+        """
         from .ripple import sw_fft
         args = self.args
 
         # replace rfi and mw
         # replace args
         rep_args = {}
-        self.check_rms_range()
-        if args.rfi_method in ['near_ripple']:
+        self.check_rms_range(is_rfi, rms_step = args.rms_step)
+        if args.rfi_method in ['near_ripple','zero_ripple',]:
             keys = ['rms_sigma', 'rms_frange', 'times_s_thr','times_s_thr2',
                     'times_thr', 'rfi_width_lim', 'ext_sec', 'ext_freq', 'mw_frange', ]
         else:
             raise(ValueError('not supported rfi_method'))
         for key in keys:
             rep_args[key] = getattr(args, key)
+        
+        if not iter_twice: rep_args['times_s_thr2'] = None
+        if args.rfi_method == 'zero_ripple': 
+            rep_args['fill'] = 'zero'
+            args.rfi_method = 'near_ripple'
+        
         s1p = sw_fft.replace_rfi(s1p, self.freq, time_rfi=is_rfi, method=args.rfi_method,
-                                 data_sm1 = s1m, data_sm2 = s2m, data_sm3 = s3m, **rep_args)
+                                  data_find = sm_find, data_trough = sm_trough, data_restrict = sm_res, **rep_args)
 
         # fft args
         fft_args = {}
-        keys = ['amp_thr_mean_factor', 'amp_thr_solo_factor', 'chan_wide', 'chan_narr',  'choose_method',
+        keys = ['chan_wide', 'chan_narr',  'choose_method',
                 'choose_method', 'sw_periods', 'sw_base']
         for key in keys:
             fft_args[key] = getattr(args, key)
@@ -288,11 +319,29 @@ class IO(BaseIO):
                 fft_args['sw_periods'].insert(-1, '2mhz')
             else:
                 print('beam number !=6, remove 2mhz in sw_periods if it exists')
-        fft_args['is_on'] = is_on
-        fft_args['is_excluded_mean'] = np.all(is_rfi, axis=1) if is_rfi is not None else None
-        return sw_fft.fit_sw_fft(s1p, self.freq, args.nproc, **fft_args)
+        # use the first factor for noise off or not defined
+        for key in ['amp_thr_mean_factor', 'amp_thr_solo_factor']:
+            fft_args[key] = getattr(args, key)[0]
+        
+        if is_on is not None:
+            ret = np.zeros_like(s1p)
+            print("# noise off")
+            ret[is_on] = sw_fft.fit_sw_fft(s1p[is_on], self.freq, args.nproc, **fft_args)
+            fft_args['is_excluded_mean'] = np.all(is_rfi[~is_on], axis=1) if is_rfi is not None else None
+            ret[~is_on] = sw_fft.fit_sw_fft(s1p[~is_on], self.freq, args.nproc, **fft_args)
+            print("# noise on")
+            for key in ['amp_thr_mean_factor', 'amp_thr_solo_factor']:
+                fft_args[key] = getattr(args, key)[1]
+            fft_args['is_excluded_mean'] = np.all(is_rfi[is_on], axis=1) if is_rfi is not None else None
+        else:
+            fft_args['is_excluded_mean'] = np.all(is_rfi, axis=1) if is_rfi is not None else None
+            ret = sw_fft.fit_sw_fft(s1p, self.freq, args.nproc, **fft_args)
+        return ret
 
     def med_fit_sw(self, s1p, is_on=None,):
+        """
+        running median or mean
+        """
         from .ripple.sw_fft import mean_fit_ripple, med_fit_ripple
         args = self.args
 
@@ -346,41 +395,65 @@ class IO(BaseIO):
                     s2p_in = s2p
                 else:
                     s2p_in = self._load_s2p_ori()[:] if args.nobld else s2p
-                # smooth
-                sm_kwargs = {}
+                
+                # smooth to find areas that need replacement
+                find_kwargs = {}
                 keys = ['s_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',]
                 for key in keys:
-                    sm_kwargs[key] = getattr(args, key)
-                sm_kwargs['is_rfi'] = is_rfi
-
-                from .ripple.util import do_smooth
-                s1m = do_smooth(s2p, **sm_kwargs)
-
-                if sm_kwargs['s_method_t'] != 'none' and args.restrict_bound:
-                    sm_kwargs3 = {}
-                    sm_kwargs3['s_method_freq'] = 'gaussian'
-                    sm_kwargs3['s_sigma_freq'] = args.rms_sigma
-                    s3m = do_smooth(s2p, **sm_kwargs3)
+                    find_kwargs[key] = getattr(args, key)
+                find_kwargs['is_rfi'] = is_rfi
+                find_kwargs['is_on'] = is_on
+                from .ripple.util import do_smooth_onoff
+                sm_find = do_smooth_onoff(s2p, **find_kwargs)
+                print("------------------")
+                
+                # smooth to find troughes 
+                if args.rfi_method != 'zero_ripple': 
+                    trough_kwargs = {}
+                    keys = ['s_method_t_T', 's_sigma_t_T', 's_method_freq_T', 's_sigma_freq_T',]
+                    for key in keys:
+                        trough_kwargs[key[:-2]] = getattr(args, key)
+                    trough_kwargs['is_rfi'] = is_rfi
+                    trough_kwargs['is_on'] = is_on
+                    if trough_kwargs == find_kwargs:
+                        sm_trough = sm_find
+                    else:
+                        sm_trough = do_smooth_onoff(s2p, **trough_kwargs)
+                        print("------------------")
                 else:
-                    s3m = np.array([None, None])[None,None,:]
+                    sm_trough = sm_find
+                    trough_kwargs = {}
+                    trough_kwargs['s_method_t'] = 'none'
+                    
+                # smooth to restrict bounds
+                if trough_kwargs['s_method_t'] != 'none' and args.restrict_bound:
+                    res_kwargs = {}
+                    res_kwargs['s_method_freq'] = 'gaussian'
+                    res_kwargs['s_sigma_freq'] = args.rms_sigma
+                    sm_res = do_smooth_onoff(s2p, **res_kwargs)
+                    print("------------------")
+                else:
+                    sm_res = np.array([None, None])[None,None,:]
 
                 for i in range(s2p.shape[2]):
                     s2p_out[..., i] = s2p_in[..., i] - self.fft_fit_sw(s2p[..., i], is_rfi, is_on,
-                                                               s1m = s1m[..., i], s2m = None, s3m = s3m[..., i])
+                          sm_find = sm_find[..., i], sm_trough = sm_trough[..., i], sm_res = sm_res[..., i])
 
                 if args.iter_twice:
                     print("Second iter ...")
                     # smooth
                     s2p_in = self._load_s2p_ori()[:] if args.nobld else s2p
-                    s2m = do_smooth(s2p_out, **sm_kwargs)
-                    if sm_kwargs['s_method_t'] != 'none' and args.restrict_bound:
-                        s3m = do_smooth(s2p_out, **sm_kwargs3)
+                    sm_find = do_smooth_onoff(s2p_out, **find_kwargs)
+                    print("------------------")
+                    if trough_kwargs['s_method_t'] != 'none' and args.restrict_bound:
+                        sm_res = do_smooth_onoff(s2p_out, **res_kwargs)
+                        print("------------------")
                     else:
-                        s3m = np.array([None, None])[None,None,:]
+                        sm_res = np.array([None, None])[None,None,:]
 
                     for i in range(s2p.shape[2]):
-                        s2p_out[..., i] = s2p_in[..., i] - self.fft_fit_sw(s2p[..., i], is_rfi, is_on,
-                                                                   s1m[..., i], s2m[..., i], s3m = s3m[..., i])
+                        s2p_out[..., i] = s2p_in[..., i] - self.fft_fit_sw(s2p[..., i], is_rfi, is_on, iter_twice = True,
+                               sm_find = sm_find[..., i], sm_trough = sm_trough[..., i], sm_res = sm_res[..., i])
 
             elif (args.method == 'median') or (args.method == 'mean'):
                 for i in range(s2p_out.shape[2]):

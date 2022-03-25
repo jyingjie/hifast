@@ -18,7 +18,7 @@ from matplotlib import pyplot as plt
 
 # Cell
 def replace_spec(tn, spec, freq, exceed_use, restrict_use, rfi_width_lim, ext_sec, ext, STD, MAX=None,
-                 test=False, sm = None):
+                 test=False, sm = None, fill = 'original', shift = 0):
     """
     replace mw, rfi or others by near ripple section in one spectrum
     exceed_use: spec > thr | rfi
@@ -36,7 +36,7 @@ def replace_spec(tn, spec, freq, exceed_use, restrict_use, rfi_width_lim, ext_se
 
     start, end = get_startend(exceed_use, rfi_width_lim, ext_sec)
     if len(start) == 0:
-        print(f"tn={tn} raised a warning")
+#         print(f"tn={tn} raised a warning")
         return spec
     N = len(freq)
     newspec = deepcopy(spec)
@@ -47,58 +47,69 @@ def replace_spec(tn, spec, freq, exceed_use, restrict_use, rfi_width_lim, ext_se
 
     for s, e in zip(start, end):
 #         print(freq[s],freq[e])
-        # used to find two min values as sin valleys
-        spec1 = np.zeros_like(freq) + MAX * 20
-        s0 = s - ext
-        s0 = max(s0, 0)
-        e0 = e + ext
-        e0 = min(e0, N)
-#         print(freq[s0],freq[e0])
-        spec1[s0:e0] = sm[s0:e0]
-        peak = np.max(sm[s:e])
-        peak_loc = np.where(spec1 == peak)[0][0]
-
-        spec1l = deepcopy(spec1)
-        spec1r = deepcopy(spec1)
-
-        spec1l[peak_loc:] = MAX * 20
-        l1 = np.argmin(spec1l)
-        spec1r[:peak_loc] = MAX * 20
-        r1 = np.argmin(spec1r)
-        if test:
-            rep_to[l1:r1] = True
-        # [l1:r1] will be replaced, length = L
-        # print(l1,r1)
-        L = r1 - l1
-        if l1 - L < 0:
-            direc = 'right'
-        elif r1 + L > N - 1:
-            direc = 'left'
+        if fill == 'zero':
+            newspec[s:e] = 0
+            if test: rep_to[s:e] = 1
         else:
-            rmsl = rms(sm[l1 - L:l1], freq[l1 - L:l1])
-            rmsr = rms(sm[r1:r1 + L], freq[r1:r1 + L])
-            if rmsl < rmsr:
+            # used to find two min values as sin valleys
+            spec1 = np.zeros_like(freq) + MAX * 20
+            s0 = s - ext
+            s0 = max(s0, 0)
+            e0 = e + ext
+            e0 = min(e0, N)
+    #         print(freq[s0],freq[e0])
+            spec1[s0:e0] = sm[s0:e0]
+
+            spec1l = deepcopy(spec1)
+            spec1r = deepcopy(spec1)
+
+            spec1l[s:] = MAX * 20
+            l1 = np.argmin(spec1l) if s > 0 else 0
+            spec1r[:e] = MAX * 20
+            r1 = np.argmin(spec1r) if e < N else N
+
+            if test:
+                rep_to[l1:r1] = True
+            # [l1:r1] will be replaced, length = L
+            # print(l1,r1)
+            L = r1 - l1
+            if l1 - L - int(L * shift) < 0:
+                direc = 'right'
+            elif r1 + L + int(L * shift)> N - 1:
                 direc = 'left'
             else:
-                direc = 'right'
-        if direc == 'left':
-            s1 = l1 - L
-            e1 = l1
-        elif direc == 'right':
-            s1 = r1
-            e1 = r1 + L
-        # print(direc,s1,e1)
-        # [s1:e1] will be copied into [l1:r1]
-        try:
-            newspec_[l1:r1] = newspec[s1:e1]
-            newspec[s:e] = newspec_[s:e] # only s to e will be changed
-            if test:
-                rep_from[s1:e1] = 1
-        except ValueError:
-            log.info(f"tn = {tn} has a ValueError, will replace with noise")
-            # import traceback
-            # traceback.print_exc()
-            newspec[s:e] = np.random.normal(scale=STD, size=int(e-s)) + np.nanmedian(spec)
+                rmsl = rms(sm[l1 - L:l1], freq[l1 - L:l1])
+                rmsr = rms(sm[r1:r1 + L], freq[r1:r1 + L])
+                if rmsl < rmsr:
+                    direc = 'left'
+                else:
+                    direc = 'right'
+
+            if direc == 'left':
+                s1 = l1 - L     - int(L * shift)
+                e1 = l1         - int(L * shift)
+            elif direc == 'right':
+                s1 = r1         + int(L * shift)
+                e1 = r1 + L     + int(L * shift)
+
+            # print(direc,s1,e1)
+            # [s1:e1] will be copied into [l1:r1]
+            # fill what kinds of noise is not important, because they are high frequency compoents.
+            if fill == 'original':
+                ripple = spec[s1:e1] 
+            elif fill == 'smooth':
+                ripple = sm[s1:e1]
+            elif fill == 'artificial':
+                ripple = sm[s1:e1] + np.random.normal(scale=STD, size=int(e1-s1))
+            if test: rep_from[s1:e1] = 1
+            try:
+                newspec_[l1:r1] = ripple
+                newspec[s:e] = newspec_[s:e] # only s to e will be changed
+            except ValueError:
+                log.info(f"tn = {tn} has a ValueError, will replace with noise")
+                # import traceback
+                # traceback.print_exc()
+                newspec[s:e] = np.random.normal(scale=STD, size=int(e-s)) + np.nanmedian(spec)
     # restrict bound
     if not restrict_use.all(): newspec[~restrict_use] = spec[~restrict_use]
     if test:
@@ -109,7 +120,7 @@ def replace_spec(tn, spec, freq, exceed_use, restrict_use, rfi_width_lim, ext_se
 # Cell
 def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=None, times_s_thr2=None,
                  rms_sigma=None,  ext_freq=None, rms_frange=None, rfi_width_lim=None,
-                 ext_sec=None, data_sm1 = None, data_sm2 = None, data_sm3 = None,):
+                 ext_sec=None, data_find = None, data_trough = None, data_restrict = None, **kwargs):
     """
     replace mw, rfi or others by near ripple section
 
@@ -124,7 +135,7 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=
 
     ext = int(np.around(ext_freq / fdelta))
 
-    from .markRFI import real_rms, rms
+    from .markRFI import real_std, real_rms, std, rms
     if time_rfi is not None:
         whole_rfi = np.all(time_rfi, axis=1)
         is_rfi_num = np.arange(data.shape[0])[whole_rfi]
@@ -137,14 +148,13 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=
         mw_use = np.full(freq.shape, False)
 
     data_rep = deepcopy(data)
-    if data_sm1 is None: data_sm1 = data
-    if data_sm2 is None:
-        data_sm2 = data_sm1
-        times_s_thr2 = times_s_thr
-    if data_sm3 is None:
+    if data_find is None: data_find = data
+    if times_s_thr2 is None: times_s_thr2 = times_s_thr
+    if data_trough is None: data_trough = data_find
+    if data_restrict is None:
         RESTRICT = False
     else:
-        RESTRICT = False if data_sm3.shape != data.shape else True
+        RESTRICT = False if data_restrict.shape != data.shape else True
 
     from ..utils.misc import smooth1d
     MAX = np.nanmax(data)*20
@@ -155,23 +165,24 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=
             if np.sum(include) > 0:
                 spec[include] = MAX * 20
 
-            sm2 = data_sm2[tn]
-            # sm2 used to define replace area
-            RMS = rms(sm2, freq, rms_vrange=rms_frange)
+            find = data_find[tn]
+            # find used to define replace area
+            RMS = rms(find, freq, rms_vrange=rms_frange)
             thr_s = RMS*times_s_thr2
-            exceed_use = (sm2 > thr_s) | time_rfi[tn]
+            exceed_use = (np.abs(find) > thr_s) | time_rfi[tn]
 
             if RESTRICT:
-                sm3 = data_sm3[tn]
-                # sm3 used to restrict replace area in one spectra
-                restrict_use = (sm3 > thr_s) | time_rfi[tn]
+                restrict = data_restrict[tn]
+                # restrict used to restrict replace area in one spectra
+                restrict_use = (restrict > thr_s) | time_rfi[tn]
             else:
                 restrict_use = np.full(freq.shape, True)
 
-            # sm1 used to find ripples valleys
-            sm1 = data_sm1[tn]
+            # trough used to find ripples valleys
+            trough = data_trough[tn]
+            STD = real_std(spec, freq, sigma = rms_sigma, vrange = rms_frange)
             newspec = replace_spec(tn, spec, freq, exceed_use, restrict_use, rfi_width_lim, ext_sec,
-                                   ext, RMS, MAX, sm = sm1,)
+                                   ext, STD, MAX, sm = trough, **kwargs)
 
             RMS = real_rms(spec, freq, sigma=rms_sigma, rms_vrange=rms_frange)
             strange = np.where(np.abs(newspec) > times_thr * RMS)[0]
@@ -207,7 +218,7 @@ def replace_margin_side(data, freq, is_rfi, mw_use, margin_width=20, ext_freq=1.
 
     ext = int(np.around(ext_freq / fdelta))
 
-    from hifas.ripple.markRFI import real_rms
+    from hifas.ripple.markRFI import real_std
     whole_rfi = np.all(is_rfi, axis=1)
     is_rfi_num = np.arange(data.shape[0])[whole_rfi]
 
@@ -215,10 +226,10 @@ def replace_margin_side(data, freq, is_rfi, mw_use, margin_width=20, ext_freq=1.
         if ti not in is_rfi_num:
             spec_ = data_[ti]
             exceed_use = (spec_ == np.inf)
-            RMS = real_rms(spec_, freq_, sigma=6, rms_vrange=[1390, 1400])
+            STD = real_std(spec_, freq_, sigma=6, vrange=[1390, 1400])
             restrict_use = np.full(freq.shape, False)
             newspec = replace_spec(ti, spec_, freq_, exceed_use, restrict_use,
-                                   rfi_width_lim=0, ext_sec=1, ext=ext, RMS=RMS, MAX=MAX)
+                                   rfi_width_lim=0, ext_sec=1, ext=ext, STD = STD, MAX=MAX)
             newspec[-1] = 0
             data_[ti] = newspec
 
@@ -256,7 +267,7 @@ def get_margin_num(margin, side):
 def replace_rfi_lower(data, freq, method, times_lower_thr=3, times_lower=None,
                       rms_sigma=5, rms_frange=None):
 
-    from markRFI import real_rms
+    from .markRFI import real_rms
     RMS = real_rms(data[0, :], freq, sigma=rms_sigma, rms_vrange=rms_frange)
 
     thr_lower = RMS*times_lower_thr
@@ -341,22 +352,24 @@ class SW_FFT(object):
         self.period = 1/self.x
         self.amp = np.abs(A_data)
         self.phi = np.angle(A_data,)
+    
+    @property    
+    def normal_amp(self):
+        N = len(self.freq)
+        data = deepcopy(self.amp) # K
+        data[:,0] = data[:,0] / N
+        data[:,1:] = data[:,1:] / (N / 2)
+        return data * 1e3 # mK
 
     def gen_amp_thr_s(self, amp_thr_mean_factor=1.05, amp_thr_solo_factor=1.4,
-                      is_on=None, is_excluded_mean=None):
+                      is_excluded_mean=None):
+
         if is_excluded_mean is None:
             is_excluded_mean = np.full(len(self.amp), False, dtype=bool)
         self.amp_mean_t = np.nanmean(self.amp[~is_excluded_mean], axis=0)
         self.amp_thr_mean = np.nanmedian(self.amp_mean_t) * amp_thr_mean_factor
-        if is_on is None:
-            self.amp_thr_solo = np.nanmedian(self.amp_mean_t) * amp_thr_solo_factor
-        else:
-            self.amp_thr_solo = np.empty(self.amp.shape[0])
-            self.amp_thr_solo[~is_on] = np.nanmedian(np.nanmean(
-                self.amp[(~is_on) & (~is_excluded_mean)], axis=0)) * amp_thr_solo_factor
-            self.amp_thr_solo[is_on] = np.nanmedian(np.nanmean(
-                self.amp[is_on & (~is_excluded_mean)], axis=0)) * amp_thr_solo_factor
-            self.amp_thr_solo = self.amp_thr_solo[:, None]
+        
+        self.amp_thr_solo = np.nanmedian(self.amp_mean_t) * amp_thr_solo_factor
 
     def find_sw_loc(self, xlims=[[.90, .95], [1.8, 1.9]]):
         """
@@ -393,7 +406,9 @@ class SW_FFT(object):
                 self.is_use_sw_chan |= (np.abs(np.arange(len(self.x))-self.loc_list[i]) < nchans[i])
 
     def choose_and_ifft(self, method='interpolate', inplace_amp=True, sw_base=True):
-
+        """
+        inplace_amp: make a copy of self.amp
+        """
         amp = self.amp if inplace_amp else np.copy(self.amp)
         if not hasattr(self, 'is_use_sw_chan'):
             self.is_use_sw_chan = np.full(len(self.x), False)
@@ -427,15 +442,25 @@ def get_sw_conf(chan_wide, chan_narr):
     return sw_conf
 
 
-def fit_sw_fft(s1p, freq, nproc, is_on=None, amp_thr_mean_factor=1.05, amp_thr_solo_factor=1.4, is_excluded_mean=None,
+def fit_sw_fft(s1p, freq, nproc, amp_thr_mean_factor=1.05, amp_thr_solo_factor=1.4, is_excluded_mean=None,
                chan_wide=5, chan_narr=3, sw_periods=['1mhz', '2mhz', '0_04mhz'],
                sw_base=True, choose_method='all'):
-
+    """
+    amp_thr_mean_factor: above mean amptitude threshold will be chosed
+    amp_thr_solo_factor: above solo amptitude threshold will be chosed
+    is_excluded_mean: bool, exclude large RFI
+    chan_wide: channel numbers near 1mhz to be chosed (wide)
+    chan_narr: channel numbers near 1mhz to be chosed (narrow)
+    sw_periods: remove ripple (1mhz: 1.08mhz, 2mhz:1.92mhz, 0_04mhz: 0.039 mhz)
+    choose_method: use 'all' modes or 'interpolate' from nearby modes
+    sw_base: if True, remove constant components / the base frequency (0 \mu s) 
+    """
+    
     sw_conf = get_sw_conf(chan_wide, chan_narr)
     sw = SW_FFT(s1p, freq, nproc)
     sw.do_fft()
     sw.gen_amp_thr_s(amp_thr_mean_factor=amp_thr_mean_factor, amp_thr_solo_factor=amp_thr_solo_factor,
-                     is_on=is_on, is_excluded_mean=is_excluded_mean)
+                     is_excluded_mean=is_excluded_mean)
     if 'none' not in sw_periods:
         for key in sw_periods:
             sw.find_sw_loc(xlims=sw_conf[key]['xlims'])
@@ -445,7 +470,12 @@ def fit_sw_fft(s1p, freq, nproc, is_on=None, amp_thr_mean_factor=1.05, amp_thr_s
 
 # Cell
 def mean_fit_ripple(data, nspec, func='iter'):
-
+    """
+    data: 2D
+    nspec: moving window length
+    func: 'iter' using numpy or bottleneck
+          'smooth' boxcar filter
+    """
     n = nspec // 2
     if func == 'iter':
         print(f'mean {2*n}')
@@ -483,7 +513,12 @@ def mean_fit_ripple(data, nspec, func='iter'):
 
 
 def med_fit_ripple(data, nspec, func='iter'):
-
+    """
+    data: 2D
+    nspec: moving window length
+    func: 'iter' using numpy or bottleneck
+          'smooth' boxcar filter
+    """
     n = nspec // 2
     if func == 'iter':
         print(f'median {2*n}')
