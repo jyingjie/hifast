@@ -74,7 +74,7 @@ group.add_argument('--lf', '--long_freq', type=bool_fun, choices=[True, False], 
                    help='find time rfi')
 # group.add_argument('--lf_beams',
 #                    help='beam numbers which has long-freq time rfi')
-group.add_argument('--lf_frange', type=float, nargs=2,
+group.add_argument('--lf_frange', type=float, nargs=2, default=[1300, 1500],
                    help='freq range exists long-freq time rfi')
 group.add_argument('--lf_times', type=float, default=2,
                    help='first threhold, rfi is this times of median value')
@@ -88,7 +88,7 @@ group.add_argument('--lf_ext_add',type = int,default=50,
 group = parser.add_argument_group(f'*Short freq \n{sep_line}')
 group.add_argument('--sf', '--short_freq', type=bool_fun, choices=[True, False], default='False',
                    help='find time rfi')
-group.add_argument('--sf_frange', type=float, nargs=2,
+group.add_argument('--sf_frange', type=float, nargs=2, default=[1300, 1500],
                    help='freq range exists short-freq time rfi')
 group.add_argument('--sf_frange_step',type = int,default=30,
                    help='if sf_frange is None and sf_file is None, cycle in whole freq band.')
@@ -154,7 +154,7 @@ group.add_argument('--mask_all_theory', action= 'store_true',
                    help='mask_all_theory')
 ### time coherent
 group.add_argument('--time_coherent_per', type=float, default = 1,
-                   help='rfi in one freq appears more than emmm, maybe 70%%, mask them all on time axis.')
+                   help='rfi in one freq appears more than emmm, maybe 0.7, mask them all on time axis.')
 
 # Cell
 class IO(BaseIO):

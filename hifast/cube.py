@@ -4,6 +4,7 @@
 import numpy as np
 from glob import glob
 import os
+import sys
 from astropy.io import fits
 from astropy.wcs import WCS
 from astropy import units as u
@@ -323,7 +324,8 @@ if __name__ == '__main__':
     out, nums= grid.gridding(ra, dec, Ta, ra_grid, dec_grid, r=r_cut, method=method) 
     hdu = fits.PrimaryHDU(out.astype('float32'), header=header)
     print(f'Saving to {outname}.')
-    hdu.writeto(outname,overwrite=False)
+    overwrite = True if args.force else False
+    hdu.writeto(outname,overwrite=overwrite)
     # save the spec count in each grid
     outname_c = '.'.join(outname.split('.')[:-1]) + '-count.fits'
     hdu = fits.PrimaryHDU(nums, header=header_3to2(header))
