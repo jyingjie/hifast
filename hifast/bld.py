@@ -131,7 +131,7 @@ class IO(BaseIO):
 def check_backend():
     import matplotlib as mpl
     if 'ipympl' not in mpl.get_backend():
-        print('Please run interaction in Jupyert and \'%matplotlib ipympl\' in the notebook cell ')
+        print('Please use interaction mode in Jupyert and run \'%matplotlib ipympl\' in the notebook cell first')
         sys.exit()
 
 
@@ -147,7 +147,12 @@ def interact(args):
         T = fs['Ta']
     elif 'flux' in fs.keys():
         T = fs['flux']
+    if 'is_excluded' in fs.keys():
+        is_excluded = fs['is_excluded']
+    else:
+        is_excluded = None
     interact.T2p = T
+    interact.is_excluded = is_excluded
     interact.freq = fs['freq'][:]
     interact.frange = args.frange
     interact.nproc = args.nproc
