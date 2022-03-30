@@ -71,7 +71,7 @@ group = parser.add_argument_group(f'*parameters for --method fft\n{sep_line}:' +
 group.add_argument('--iter_twice', type=bool_fun, choices=[True, False], default='True',
                    help='iterate twice? first remove the ripples and then back to find replace area again.')
 # replace big RFI or sources firstly
-group.add_argument('--rfi_method', default='near_ripple', 
+group.add_argument('--rfi_method', default='near_ripple',
                    choices=['near_ripple','zero_ripple',],
                    help='method to replace big RFI, recommend the first one')
 group.add_argument('--mw_frange', type=float, nargs=2, default=[0, 0],
@@ -296,9 +296,9 @@ class IO(BaseIO):
             raise(ValueError('not supported rfi_method'))
         for key in keys:
             rep_args[key] = getattr(args, key)
-        
+
         if not iter_twice: rep_args['times_s_thr2'] = None
-        if args.rfi_method == 'zero_ripple': 
+        if args.rfi_method == 'zero_ripple':
             rep_args['fill'] = 'zero'
             args.rfi_method = 'near_ripple'
             
@@ -326,7 +326,7 @@ class IO(BaseIO):
         # use the first factor for noise off or not defined
         for key in ['amp_thr_mean_factor', 'amp_thr_solo_factor']:
             fft_args[key] = getattr(args, key)[0]
-        
+
         if is_on is not None:
             ret = np.zeros_like(s1p)
             print("# noise off")
@@ -399,7 +399,7 @@ class IO(BaseIO):
                     s2p_in = s2p
                 else:
                     s2p_in = self._load_s2p_ori()[:] if args.nobld else s2p
-                
+
                 # smooth to find areas that need replacement
                 find_kwargs = {}
                 keys = ['s_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',]
@@ -410,9 +410,9 @@ class IO(BaseIO):
                 from .ripple.util import do_smooth_onoff
                 sm_find = do_smooth_onoff(s2p, **find_kwargs)
                 print("------------------")
-                
-                # smooth to find troughes 
-                if args.rfi_method != 'zero_ripple': 
+
+                # smooth to find troughes
+                if args.rfi_method != 'zero_ripple':
                     trough_kwargs = {}
                     keys = ['s_method_t_T', 's_sigma_t_T', 's_method_freq_T', 's_sigma_freq_T',]
                     for key in keys:
@@ -428,7 +428,7 @@ class IO(BaseIO):
                     sm_trough = sm_find
                     trough_kwargs = {}
                     trough_kwargs['s_method_t'] = 'none'
-                    
+
                 # smooth to restrict bounds
                 if trough_kwargs['s_method_t'] != 'none' and args.restrict_bound:
                     res_kwargs = {}
@@ -480,8 +480,6 @@ class IO(BaseIO):
         # save to hdf5 file
         if save:
             self.save()
-
-
 
 # Internal Cell
 def check_backend():

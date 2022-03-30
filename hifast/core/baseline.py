@@ -544,7 +544,7 @@ def get_exclude_fun(exclude_m):
     return exclude_fun
 
 
-def sub_baseline(freq, yss, *, subtract=True, nproc=1, exclude_fun=None, inplace=False,
+def sub_baseline(freq, yss, *, subtract=True, nproc=1, exclude_fun=None, is_excluded=None, inplace=False,
                  njoin=1, s_method_t='none', s_sigma_t=None,
                  method='arPLS', s_method_freq='none', s_sigma_freq=None, average_every_freq=None,
                  lam=1e8, deg=2, offset=2, ratio=0.01, niter=100, sin_f=[0.925, ], rew=True, opt_para=None,
@@ -600,7 +600,10 @@ def sub_baseline(freq, yss, *, subtract=True, nproc=1, exclude_fun=None, inplace
     if njoin is not None and njoin > 1:
         yss = average_every_n(yss, njoin, axis=0, drop=False)
     # add exclude
-    if exclude_fun is not None:
+    if is_excluded is not None:
+        exclude = is_excluded
+        print('use is_excluded')
+    elif exclude_fun is not None:
         exclude = exclude_fun(yss)
     else:
         exclude = None

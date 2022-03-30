@@ -96,7 +96,7 @@ def replace_spec(tn, spec, freq, exceed_use, restrict_use, rfi_width_lim, ext_se
             # [s1:e1] will be copied into [l1:r1]
             # fill what kinds of noise is not important, because they are high frequency compoents.
             if fill == 'original':
-                ripple = spec[s1:e1] 
+                ripple = spec[s1:e1]
             elif fill == 'smooth':
                 ripple = sm[s1:e1]
             elif fill == 'artificial':
@@ -390,8 +390,8 @@ class SW_FFT(object):
         self.period = 1/self.x
         self.amp = np.abs(A_data)
         self.phi = np.angle(A_data,)
-    
-    @property    
+
+    @property
     def normal_amp(self):
         N = len(self.freq)
         data = deepcopy(self.amp) # K
@@ -406,7 +406,7 @@ class SW_FFT(object):
             is_excluded_mean = np.full(len(self.amp), False, dtype=bool)
         self.amp_mean_t = np.nanmean(self.amp[~is_excluded_mean], axis=0)
         self.amp_thr_mean = np.nanmedian(self.amp_mean_t) * amp_thr_mean_factor
-        
+
         self.amp_thr_solo = np.nanmedian(self.amp_mean_t) * amp_thr_solo_factor
 
     def find_sw_loc(self, xlims=[[.90, .95], [1.8, 1.9]]):
@@ -491,9 +491,9 @@ def fit_sw_fft(s1p, freq, nproc, amp_thr_mean_factor=1.05, amp_thr_solo_factor=1
     chan_narr: channel numbers near 1mhz to be chosed (narrow)
     sw_periods: remove ripple (1mhz: 1.08mhz, 2mhz:1.92mhz, 0_04mhz: 0.039 mhz)
     choose_method: use 'all' modes or 'interpolate' from nearby modes
-    sw_base: if True, remove constant components / the base frequency (0 \mu s) 
+    sw_base: if True, remove constant components / the base frequency (0 \mu s)
     """
-    
+
     sw_conf = get_sw_conf(chan_wide, chan_narr)
     sw = SW_FFT(s1p, freq, nproc)
     sw.do_fft()

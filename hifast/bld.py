@@ -90,7 +90,7 @@ class IO(BaseIO):
         from .core.baseline import sub_baseline
 
     @staticmethod
-    def fit_baseline(s2p, freq, mjd, args):
+    def fit_baseline(s2p, freq, mjd, args, is_excluded=None):
         fit_kwargs = {}
         keys = ['method', 'nproc',
                 'njoin', 's_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',
@@ -98,19 +98,31 @@ class IO(BaseIO):
         for key in keys:
             fit_kwargs[key] = getattr(args, key)
         fit_kwargs['verbose'] = args.show_prog
+        fit_kwargs['is_excluded'] = is_excluded
         if args.trans:
             return sub_baseline(mjd, s2p.transpose((1, 0, 2)), subtract=True, **fit_kwargs).transpose((1, 0, 2))
         else:
             return sub_baseline(freq, s2p, subtract=True, **fit_kwargs)
 
+    def _load_is_excluded(self,):
+        import numpy as np
+        fs = self.fs
+        if 'is_excluded' in fs.keys():
+            is_excluded = fs['is_excluded'][:]
+            if is_excluded.ndim != self.s2p.ndim:
+                is_excluded = np.full(is_excluded.shape + (2,), is_excluded[...,None])
+            self.is_excluded = is_excluded
+
     def gen_s2p_out(self,):
         args = self.args
         # gen self.s2p_out
         s2p = self.s2p[:]
+        # is_excluded
+        self._load_is_excluded()
         # fit baseline:
         if args.method is not None and args.method != 'none':
             print('fit and substract baseline')
-            s2p = self.fit_baseline(s2p, self.freq, self.mjd, args)
+            s2p = self.fit_baseline(s2p, self.freq, self.mjd, args, getattr(self, 'is_excluded', None))
         else:
             print('no baseline method assigned, skip. Make sure the input spectra have been baselined.')
         self.s2p_out = s2p
@@ -119,7 +131,7 @@ class IO(BaseIO):
 def check_backend():
     import matplotlib as mpl
     if 'ipympl' not in mpl.get_backend():
-        print('Please run interaction in Jupyert and \'%matplotlib ipympl\' in the notebook cell ')
+        print('Please use interaction mode in Jupyert and run \'%matplotlib ipympl\' in the notebook cell first')
         sys.exit()
 
 
@@ -135,7 +147,12 @@ def interact(args):
         T = fs['Ta']
     elif 'flux' in fs.keys():
         T = fs['flux']
+    if 'is_excluded' in fs.keys():
+        is_excluded = fs['is_excluded']
+    else:
+        is_excluded = None
     interact.T2p = T
+    interact.is_excluded = is_excluded
     interact.freq = fs['freq'][:]
     interact.frange = args.frange
     interact.nproc = args.nproc

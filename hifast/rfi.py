@@ -74,7 +74,7 @@ group.add_argument('--lf', '--long_freq', type=bool_fun, choices=[True, False], 
                    help='find time rfi')
 # group.add_argument('--lf_beams',
 #                    help='beam numbers which has long-freq time rfi')
-group.add_argument('--lf_frange', type=float, nargs=2,
+group.add_argument('--lf_frange', type=float, nargs=2, default=[1300, 1500],
                    help='freq range exists long-freq time rfi')
 group.add_argument('--lf_times', type=float, default=2,
                    help='first threhold, rfi is this times of median value')
@@ -88,7 +88,7 @@ group.add_argument('--lf_ext_add',type = int,default=50,
 group = parser.add_argument_group(f'*Short freq \n{sep_line}')
 group.add_argument('--sf', '--short_freq', type=bool_fun, choices=[True, False], default='False',
                    help='find time rfi')
-group.add_argument('--sf_frange', type=float, nargs=2,
+group.add_argument('--sf_frange', type=float, nargs=2, default=[1300, 1500],
                    help='freq range exists short-freq time rfi')
 group.add_argument('--sf_frange_step',type = int,default=30,
                    help='if sf_frange is None and sf_file is None, cycle in whole freq band.')
@@ -154,7 +154,7 @@ group.add_argument('--mask_all_theory', action= 'store_true',
                    help='mask_all_theory')
 ### time coherent
 group.add_argument('--time_coherent_per', type=float, default = 1,
-                   help='rfi in one freq appears more than emmm, maybe 70%%, mask them all on time axis.')
+                   help='rfi in one freq appears more than emmm, maybe 0.7, mask them all on time axis.')
 
 # Cell
 class IO(BaseIO):
@@ -342,7 +342,7 @@ class IO(BaseIO):
         args = self.args
         freq = self.freq
         mw_frange = args.mw_frange
-            
+
         if mw_frange is None:
             mw_frange = [1419, 1422]
             if (freq[0] > mw_frange[1]) or (freq[-1] < mw_frange[0]):
@@ -350,7 +350,7 @@ class IO(BaseIO):
                 pass
             else:
                 print(f"mw_frange redicting to {mw_frange}, you should check it again.")
-                
+
         protect_use = (freq>mw_frange[0])&(freq<mw_frange[1])
         return protect_use
 
@@ -421,9 +421,6 @@ class IO(BaseIO):
 
 # Cell
 if __name__ == '__main__':
-    args_ = parser.parse_args()
-    # print(parser.format_help())
-    # print("----------")
     # for clarity and testing purpose
     dests_hide = [
                  'rms_sigma',
@@ -448,6 +445,10 @@ if __name__ == '__main__':
                  'time_coherent_per'
                  ]
     hide_paras(parser, dests_hide)
+
+    args_ = parser.parse_args()
+    # print(parser.format_help())
+    # print("----------")
     print('#'*35+'Args'+'#'*35)
     print(del_paras_in_string(parser.format_values(), dests_hide))  # useful for logging where different settings came from
     print('#'*35+'####'+'#'*35)

@@ -61,13 +61,17 @@ if __name__ == '__main__':
     parser.add_argument('--save_p_cal', action='store_true',
                         help='save power of cal to file')
     parser.add_argument('--not_cali', action='store_true',
-                        help='save power of cal to file')
+                        help='save power data, no temperature calibration')
     parser.add_argument('--check_cal', choices=['none', 'A'], default='none',
                         help='check if cal is on continuous source')
-    parser.add_argument('--method_interp', choices=['gaussian', 'slinear', 'quadratic', 'cubic', 'nearest'],
-                        help='Interpolate the amplitude offset to the median of pcals ')
+    
+
+    parser.add_argument('--which_cal', choices=['nearest', 'median'], default='nearest',
+                        help='for each spectrum, how to choose the power of cal')
+    parser.add_argument('--method_interp', choices=['gaussian', 'slinear', 'quadratic', 'cubic', 'nearest'], default='quadratic',
+                        help='Interpolate the amplitude offset to the median of pcals, used when ``--which_cal median``')
     parser.add_argument('--sigma_t', type=float, default=300,
-                        help='sigma_t in  method_interp as gaussian')
+                        help='sigma_t in  ``--method_interp gaussian``')
     
     args = parser.parse_args()
 #     print('#'*35+'Args'+'#'*35)
@@ -145,7 +149,7 @@ if __name__ == '__main__':
     from .core.cal import CalOnOff, CalOnOffA
     import json
     header = rec_his(args=json.dumps(args.__dict__))
-    if args.method_interp is not None:
+    if args.which_cal != 'nearest':
         from .core.cal2 import CalOnOffAA
         Cal_cls = CalOnOffAA
     else:
@@ -159,7 +163,7 @@ if __name__ == '__main__':
                       smooth=smooth, s_para=s_para, dfactor=dfactor,
                       med_filter_size=med_filter_size, noise_mode=noise_mode, noise_date=noise_date,
                       med_filter_size_cal=med_filter_size_cal, p_cal_fname=p_cal_fname)
-    if args.method_interp is not None:
+    if args.which_cal != 'nearest':
         spec.set_para_pcals(method_interp=args.method_interp, sigma_t=args.sigma_t)
     spec(outdir=outdir, step=step, header=header, sep_save=sep_save, save_p_cal=save_p_cal, cali=(not args.not_cali))
     

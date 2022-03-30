@@ -49,10 +49,10 @@ def get_rms_frange(spec,freq,rms_step=None,is_excluded = None):
                 RMSl += [RMS_,]
                 rms_vrangel += [rms_vrange,]
     RMSl = np.array(RMSl); rms_vrangel = np.array(rms_vrangel)
-    
+
     if len(RMSl) < 1:
         raise ValueError("Too much RFI, try a smaller rms_step or set a certain range by human!")
-    
+
     RMS = np.nanmedian(RMSl)
     loc = np.argmin(np.abs(RMSl-RMS))
     rms_range = rms_vrangel[loc]
@@ -724,7 +724,7 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
             cond = (pat_diff[s]/pat_med > thr) & (pat_diff[e]/pat_med > thr)
             if cond:
                 is_timerfi[s:e] = True
-                
+
         if ext_add > 0 and is_timerfi.any():
             from ..utils.misc import extend_Trues
             is_timerfi = extend_Trues(is_timerfi,axis = 0,ext_add = ext_add)

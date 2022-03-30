@@ -21,9 +21,12 @@ warnings.filterwarnings("ignore", r'overflow encountered in exp')
 
 # Cell
 class Test(object):
-    def __init__(self, T2p, freq, frange=None):
+    def __init__(self, T2p, freq, frange=None, is_excluded=None):
 
+        if T2p.ndim != 3:
+            raise(ValueError('T2p should be 3 dim'))
         self.T2p = T2p
+        self.is_excluded = is_excluded
         freq = freq[:]
         if frange is not None:
             self.is_use = (freq > frange[0]) & (freq < frange[1])
@@ -35,11 +38,24 @@ class Test(object):
 
     def select(self, start=0, length=20, polar=0):
         self.T2p_t = PolarMjdChan_to_MjdChanPolar(self.T2p[polar:polar+1, start:start+length])
+        if self.is_excluded is not None:
+            if self.is_excluded.shape == self.T2p.shape:
+                self.is_excluded_t = PolarMjdChan_to_MjdChanPolar(self.is_excluded[polar:polar+1, start:start+length])
+            elif self.is_excluded.ndim == 2 and self.is_excluded.shape == T2p.shape[1:]:
+                self.is_excluded_t = self.is_excluded[start:start+length][...,None]
+            else:
+                raise('shape of ``is_excluded``')
+        else:
+            self.is_excluded_t = None
+
         if self.is_use is not None:
             self.T2p_t = self.T2p_t[:, self.is_use]
+            if self.is_excluded_t is not None:
+                self.is_excluded_t = self.is_excluded_t[:, self.is_use]
+
     def sub(self, x, start=0, length=20, polar=0, **kwargs):
         self.select(start, length, polar)
-        self.bld = sub_baseline(self.freq, self.T2p_t,
+        self.bld = sub_baseline(self.freq, self.T2p_t, is_excluded=self.is_excluded_t,
                                 verbose=False, **kwargs)
         return np.full(x.shape, np.nan)
 
@@ -70,7 +86,7 @@ def phrase_ylim(ylim, vals):
 def main():
     global ylim
 
-    tes = Test(T2p, freq, frange)
+    tes = Test(T2p, freq, frange, is_excluded)
 
     sliders = {}
     sliders.update(_BoundedIntText(

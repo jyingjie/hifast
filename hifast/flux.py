@@ -44,11 +44,12 @@ class IO(BaseIO):
 
 # Cell
 if __name__ == '__main__':
+    dests_hide = ['flux',]
+    hide_paras(parser, dests_hide)
+
     args_ = parser.parse_args()
     # print(parser.format_help())
     # print("----------")
-    dests_hide = ['flux',]
-    hide_paras(parser, dests_hide)
     print('#'*35+'Args'+'#'*35)
     print(del_paras_in_string(parser.format_values(), dests_hide))  # useful for logging where different settings came from
     print('#'*35+'####'+'#'*35)

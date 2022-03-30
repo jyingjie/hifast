@@ -72,11 +72,14 @@ class FastRawData(object):
         self.lens= [header['NAXIS2'] for header in self.hd1s]
         self.inds = np.arange(np.sum(self.lens))
 
-        # adjust frange
-        if dfactor is not None and frange is not None:
-            if dfactor.upper() == 'W' :
+        if isinstance(dfactor, str):
+            if dfactor.upper() == 'W':
                 dfactor = 16
-                frange = adjust_frange(frange)
+            else:
+                raise(ValueError("dfactor should be 'W' or an int"))
+        # adjust frange
+        if dfactor == 16 and frange is not None:
+            frange = adjust_frange(frange)
 
         self.frange = frange
         self.dfactor = dfactor
