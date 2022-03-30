@@ -133,7 +133,7 @@ def find_local_peak(rfi1,freq1,RMS,distance=5,):
     elif loc_shape > 1:
         loc = loc_max[np.argmax(rfi1[loc_max])]
     elif loc_shape == 0:
-        print("No local peak is found")
+#         print("No local peak is found")
         return np.nan,np.nan
 
     freq_max = np.float(freq1[loc])
@@ -244,12 +244,9 @@ def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,check = True,
         rfi1 = spec[s:e]
         freq1 = freq[s:e]
         freq_peak,flux_peak = find_local_peak(rfi1,freq1,RMS=RMS)
-        #half_v_left, half_v_righ = fit_line(rfi1,freq1,half_factor =.5,RMS=RMS)
-        #if np.sum(np.isnan([half_v_left, half_v_righ])) == 0:
-            #vc = np.float((half_v_left + half_v_righ)/2)
-            #if (vc > freq1[0])&(vc < freq1[-1]):
-        vc = freq_peak
-        fc0 += [vc,]; peaks += [flux_peak,]
+        if not np.isnan(freq_peak):
+            vc = freq_peak
+            fc0 += [vc,]; peaks += [flux_peak,]
 
     peaks = np.array(peaks)
     # from the biggest one to guess rfi set 1
@@ -618,7 +615,7 @@ def find_RFI(spec,freq,is_rfi,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge 
         ax.vlines(fc0,ymin=ymin,ymax=ymax,linestyles='--',colors='k',label = 'all')
         ax.vlines(fcenter1,ymin=ymin,ymax=ymax,linestyles='--',colors='r',label = '1')
         ax.vlines(fcenter2,ymin=ymin,ymax=ymax,linestyles='--',colors='g',label = '2')
-        if (rfi_groups == 'three groups') & (fcenter3.size>0):
+        if (rfi_groups == 'three_groups') & (fcenter3.size>0):
             ax.vlines(fcenter3,ymin=ymin,ymax=ymax,linestyles='--',colors='b',label = '3')
         if ylim is not None:
             ax.set_ylim(ylim[0],ylim[1])
@@ -632,10 +629,10 @@ def find_RFI(spec,freq,is_rfi,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge 
         spec_ = np.full(spec.shape[0],np.nan)
         spec_[bigrfi2] = spec[bigrfi2]
         ax.plot(freq,spec_)
-        if (rfi_groups == 'two groups')|(rfi_groups == 'three groups'):
+        if (rfi_groups == 'two_groups')|(rfi_groups == 'three_groups'):
             ax.vlines(theory1,ymin=ymin,ymax=ymax,linestyles='--',colors='r',label = 'theory1')
             ax.vlines(theory2,ymin=ymin,ymax=ymax,linestyles='--',colors='g',label = 'theory2')
-            if (rfi_groups == 'three groups') & (theory3.size>0):
+            if (rfi_groups == 'three_groups') & (theory3.size>0):
                 ax.vlines(theory3,ymin=ymin,ymax=ymax,linestyles='--',colors='b',label = 'theory3')
         elif rfi_groups == 'all':
             ax.vlines(theory0,ymin=ymin,ymax=ymax,linestyles='--',colors='k',label = 'theory0')
@@ -718,7 +715,7 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
     pat_diff = np.abs(np.diff(pat_mean, prepend=0, append=0))
     s,e = get_startend(is_timerfi, exclude = False)
     if len(start) > 0:
-        print(f"rfis start at tn = {start}, end in tn = {end}")
+        print(f"rfi starts at tn = {start}, ends in tn = {end}")
         for s,e in zip(start,end):
             #cond = ((pat_diff[s] - pat_diff[s-1])/pat_med > thr) & ((pat_diff[e] - pat_diff[e+1])/pat_med > thr)
             cond = (pat_diff[s]/pat_med > thr) & (pat_diff[e]/pat_med > thr)
@@ -727,9 +724,9 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
 
         if ext_add > 0 and is_timerfi.any():
             from ..utils.misc import extend_Trues
-            is_timerfi = extend_Trues(is_timerfi,axis = 0,ext_add = ext_add)
+            is_timerfi = extend_Trues(is_timerfi,axis = 0,ext_frac = 0,ext_add = ext_add)
             s,e = get_startend(is_timerfi, exclude = False)
-            print(f"After extension, rfis start at tn = {s}, end in tn = {e}")
+            print(f"After extension, rfi starts at tn = {s}, ends in tn = {e}")
 #     else:
 #         print("No True meets width condition.")
     if axis == 'time':
@@ -786,7 +783,7 @@ def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,rms_thr_times=
 
         mask_frange = find_edge_2sides(mspec[f_use],freq[f_use],peak_position=fmax-w50/2,step=w50,
                  rms_thresh=rms_thresh,Print=False,ext_times=ext_times,small_rfi_times=0)
-        print(f"mask frange:",mask_frange)
+        print(f"tn = {[s,e]} mask frange:",mask_frange)
 
         mask_use =  (freq>mask_frange[0])&(freq<mask_frange[1])
         ret[s:e,mask_use] = True
@@ -794,7 +791,7 @@ def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,rms_thr_times=
     ext_add = kwargs['ext_add']
     if ext_add is not None:
         from ..utils.misc import extend_Trues
-        ret = extend_Trues(ret,axis = -1,ext_add = ext_add)
+        ret = extend_Trues(ret,axis = -1,ext_frac = 0,ext_add = ext_add)
 
     print("Found :D")
     return ret

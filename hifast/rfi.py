@@ -74,7 +74,7 @@ group.add_argument('--lf', '--long_freq', type=bool_fun, choices=[True, False], 
                    help='find time rfi')
 # group.add_argument('--lf_beams',
 #                    help='beam numbers which has long-freq time rfi')
-group.add_argument('--lf_frange', type=float, nargs=2, default=[1300, 1500],
+group.add_argument('--lf_frange', type=float, nargs=2, default = [1400, 1500],
                    help='freq range exists long-freq time rfi')
 group.add_argument('--lf_times', type=float, default=2,
                    help='first threhold, rfi is this times of median value')
@@ -88,9 +88,9 @@ group.add_argument('--lf_ext_add',type = int,default=50,
 group = parser.add_argument_group(f'*Short freq \n{sep_line}')
 group.add_argument('--sf', '--short_freq', type=bool_fun, choices=[True, False], default='False',
                    help='find time rfi')
-group.add_argument('--sf_frange', type=float, nargs=2, default=[1300, 1500],
+group.add_argument('--sf_frange', type=float, nargs=2, default = [1370, 1390],
                    help='freq range exists short-freq time rfi')
-group.add_argument('--sf_frange_step',type = int,default=30,
+group.add_argument('--sf_frange_step',type = int,
                    help='if sf_frange is None and sf_file is None, cycle in whole freq band.')
 group.add_argument('--sf_file',
                    help='freq range exists short-freq time rfi npy filename')
@@ -227,7 +227,7 @@ class IO(BaseIO):
             narr_args[key[3:]] = getattr(args, key)
         narr_args['frange'] = None
         narr_args['rfi_width_lim'] = [0,2]
-#         narr_args['ext_add'] = 0
+        narr_args['ext_add'] = 1
 
         return mask_freq_rfi(T, self.freq, rtype = 'long-time',plot = False,
                               **narr_args)
@@ -287,6 +287,7 @@ class IO(BaseIO):
         if args.lf:
             print('finding lf')
             t_rfi |= self.get_lf(Tt)
+        Tt[t_rfi] = 0
         if args.sf:
             print('finding sf')
             t_rfi |= self.get_sf(Tt)
@@ -298,11 +299,12 @@ class IO(BaseIO):
         Period 8 MHZ RFI
         """
         args = self.args
-        T = deepcopy(self.s2p_mean)
+        T = np.nanmean(self.s2p_mask, axis = 2)
         sm_kwargs = {}
         keys = ['s_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',]
         for key in keys:
             sm_kwargs[key] = getattr(args, key)
+        sm_kwargs['is_rfi'] = np.isnan(T)
         from .ripple.util import do_smooth
         T = do_smooth(T, **sm_kwargs)
 
@@ -324,7 +326,7 @@ class IO(BaseIO):
             if tn in self.not_rfi_num:
                 spec = deepcopy(T[tn,:])
                 RMS = real_rms(spec, self.freq, args.rms_sigma, args.rms_frange)
-                is_rfi_mw = (spec > RMS * rfi_thr)
+#                 is_rfi_mw = (spec > RMS * rfi_thr)
                 is_rfi = (spec > RMS * rfi_thr) & (~self.protect_use)
                 try:
                     pd_rfi[tn,:],_ = find_RFI(spec,self.freq,is_rfi,RMS = RMS,
@@ -332,9 +334,14 @@ class IO(BaseIO):
                 except ValueError:
                     pd_rfi[tn,:] = True
                     print(f"tn={tn} has a ValueError !")
-                    #import traceback
-                    #traceback.print_exc()
+#                     import traceback
+#                     traceback.print_exc()
         print("Finish finding period RFI...")
+        
+        time_coherent_per = args.time_coherent_per
+        if (time_coherent_per > 0)&(time_coherent_per <1):
+            per_use = (np.sum(pd_rfi,axis = 0)/pd_rfi.shape[0] > time_coherent_per)
+            pd_rfi[:,per_use] = True
 
         return pd_rfi
 
