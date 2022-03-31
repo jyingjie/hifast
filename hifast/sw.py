@@ -463,6 +463,8 @@ class IO(BaseIO):
                         s2p_out[..., i] = s2p_in[..., i] - sw2[..., i]       
                     if args.save_is_excluded: 
                         self.is_excluded = np.any(is_excluded,axis = -1)
+                        if is_rfi is not None:
+                            self.is_excluded |= is_rfi
                         
 
             elif (args.method == 'median') or (args.method == 'mean'):
@@ -477,6 +479,8 @@ class IO(BaseIO):
         if hasattr(self,'is_excluded'): 
             print("save is_excluded :D")
             self.gen_dict_out(is_excluded = self.is_excluded)
+        else:
+            self.gen_dict_out()
         # save to hdf5 file
         if save:
             self.save()

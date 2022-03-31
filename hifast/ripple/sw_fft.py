@@ -516,7 +516,6 @@ def mean_fit_ripple(data, nspec, func='iter'):
     """
     n = nspec // 2
     if func == 'iter':
-        print(f'mean {2*n}')
         try:
             import bottleneck as bn
         except ModuleNotFoundError:
@@ -525,6 +524,8 @@ def mean_fit_ripple(data, nspec, func='iter'):
         tlen = data.shape[0]
         if tlen < 2*n:
             print("use all specs to mean")
+        else:
+            print(f"use {2*n} specs to mean")
         t1 = np.arange(tlen)-n
         t2 = np.arange(tlen)+n
         t1[t1 < 0] = 0
@@ -542,7 +543,7 @@ def mean_fit_ripple(data, nspec, func='iter'):
                 sw[i, :, 1] = bn.nanmean(data[t1[i]:t2[i], :, 1], axis=0)
 
     elif func == 'smooth':
-        print(f'mean {2*n+1}')
+        print(f"use {2*n +1} specs to mean")
         from ..utils.misc import smooth1d
         s_method_t = 'boxcar'
         print('Smooth ing ...')
@@ -559,7 +560,6 @@ def med_fit_ripple(data, nspec, func='iter'):
     """
     n = nspec // 2
     if func == 'iter':
-        print(f'median {2*n}')
         try:
             import bottleneck as bn
         except ModuleNotFoundError:
@@ -568,6 +568,8 @@ def med_fit_ripple(data, nspec, func='iter'):
         tlen = data.shape[0]
         if tlen < 2*n:
             print("use all specs to median")
+        else:
+            print(f"use {2*n} specs to median")
         t1 = np.arange(tlen)-n
         t2 = np.arange(tlen)+n
         t1[t1 < 0] = 0
@@ -584,7 +586,7 @@ def med_fit_ripple(data, nspec, func='iter'):
                 sw[i, :, 0] = bn.nanmedian(data[t1[i]:t2[i], :, 0], axis=0)
                 sw[i, :, 1] = bn.nanmedian(data[t1[i]:t2[i], :, 1], axis=0)
     elif func == 'smooth':
-        print(f'median {2*n+1}')
+        print(f"use {2*n +1} specs to median")
         from ..utils.misc import smooth1d
         s_method_t = 'median'
         print('Smooth ing ...')
