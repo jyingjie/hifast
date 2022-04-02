@@ -301,7 +301,7 @@ class IO(BaseIO):
         if args.rfi_method == 'zero_ripple':
             rep_args['fill'] = 'zero'
             args.rfi_method = 'near_ripple'
-            
+
         save_is_excluded = args.save_is_excluded & iter_twice
 #         print("############ save_is_excluded", save_is_excluded)
         s1p, is_excluded = sw_fft.replace_rfi(s1p, self.freq, time_rfi=is_rfi, method=args.rfi_method,
@@ -454,27 +454,27 @@ class IO(BaseIO):
                         print("------------------")
                     else:
                         sm_res = np.array([None, None])[None,None,:]
-                        
+
                     is_excluded = np.zeros_like(s2p,dtype=bool)
                     sw2 = deepcopy(s2p)
                     for i in range(s2p.shape[2]):
                         sw2[..., i], is_excluded[..., i] = self.fft_fit_sw(s2p[..., i], is_rfi, is_on, iter_twice = True,
                                sm_find = sm_find[..., i], sm_trough = sm_trough[..., i], sm_res = sm_res[..., i])
-                        s2p_out[..., i] = s2p_in[..., i] - sw2[..., i]       
-                    if args.save_is_excluded: 
+                        s2p_out[..., i] = s2p_in[..., i] - sw2[..., i]
+                    if args.save_is_excluded:
                         self.is_excluded = np.any(is_excluded,axis = -1)
-                        
+
 
             elif (args.method == 'median') or (args.method == 'mean'):
                 for i in range(s2p_out.shape[2]):
                     s2p_out[..., i] -= self.med_fit_sw(s2p_out[..., i], is_on)
 
             self.s2p_out = s2p_out
-            
-            
+
+
     def __call__(self, save=True):
         self.gen_s2p_out()
-        if hasattr(self,'is_excluded'): 
+        if hasattr(self,'is_excluded'):
             print("save is_excluded :D")
             self.gen_dict_out(is_excluded = self.is_excluded)
         # save to hdf5 file
