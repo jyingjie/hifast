@@ -18,7 +18,7 @@ from matplotlib import pyplot as plt
 
 # Cell
 def replace_spec(tn, spec, freq, exceed_use, restrict_use, rfi_width_lim, ext_sec, ext, STD, MAX=None,
-                 test=False, sm = None, fill = 'original', shift = 0):
+                 test=False, sm = None, fill = 'original', shift = 0,):
     """
     replace mw, rfi or others by near ripple section in one spectrum
     exceed_use: spec > thr | rfi
@@ -116,11 +116,40 @@ def replace_spec(tn, spec, freq, exceed_use, restrict_use, rfi_width_lim, ext_se
         return newspec, rep_from, rep_to
     else:
         return newspec
+    
+def save_rep(sm, freq, exceed_use, rfi_width_lim, ext_sec, ext, thr,):
+    """
+    save the extended replaced area 
+    """
+    from .markRFI import get_startend, find_edge_2sides
+    
+    is_excluded = np.zeros_like(sm, dtype='bool') 
+    if np.sum(exceed_use) == 0:
+        return is_excluded
+
+    start, end = get_startend(exceed_use, rfi_width_lim, ext_sec,)
+    if len(start) == 0:
+        return is_excluded
+    
+    N = len(freq)
+    for s, e in zip(start, end):
+        s0 = s - ext * 3
+        s0 = max(s0, 0)
+        e0 = e + ext * 3
+        e0 = min(e0, N)
+#         print(freq[s0],freq[e0])
+        mask_frange = find_edge_2sides(sm[s0:e0],freq[s0:e0],peak_position = freq[int((s0+e0)/2)],
+                small_rfi_times = 0, step=ext*fdelta, rms_thresh=thr,Print=False)
+#         print(mask_frange)
+        is_excluded[(freq>=mask_frange[0])&(freq<=mask_frange[1])] = True
+        
+    return is_excluded
 
 # Cell
 def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=None, times_s_thr2=None,
                  rms_sigma=None,  ext_freq=None, rms_frange=None, rfi_width_lim=None,
-                 ext_sec=None, data_find = None, data_trough = None, data_restrict = None, **kwargs):
+                 ext_sec=None, data_find = None, data_trough = None, data_restrict = None,
+                 save_is_excluded = False, **kwargs):
     """
     replace mw, rfi or others by near ripple section
 
@@ -131,6 +160,7 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=
     rfi_width_lim: rfi should contain more channels than limit
     ext_sec: extend channel number of start and end of each section
     """
+    global fdelta
     fdelta = freq[1]-freq[0]
 
     ext = int(np.around(ext_freq / fdelta))
@@ -146,6 +176,8 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=
 
     if mw_use is None:
         mw_use = np.full(freq.shape, False)
+        
+    save_is_excluded = True if save_is_excluded and (times_s_thr2 is not None) else False 
 
     data_rep = deepcopy(data)
     if data_find is None: data_find = data
@@ -155,6 +187,8 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=
         RESTRICT = False
     else:
         RESTRICT = False if data_restrict.shape != data.shape else True
+    
+    is_excluded = np.zeros_like(data,dtype=bool) if save_is_excluded else np.array([None])
 
     from ..utils.misc import smooth1d
     MAX = np.nanmax(data)*20
@@ -170,6 +204,10 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=
             RMS = rms(find, freq, rms_vrange=rms_frange)
             thr_s = RMS*times_s_thr2
             exceed_use = (np.abs(find) > thr_s) | time_rfi[tn]
+            
+            if save_is_excluded:
+                is_excluded[tn,:] = save_rep(find, freq, exceed_use, rfi_width_lim, 
+                                             ext_sec, ext, thr_s,)
 
             if RESTRICT:
                 restrict = data_restrict[tn]
@@ -190,7 +228,7 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=
 
             data_rep[tn, :] = newspec
 
-    return data_rep
+    return data_rep, is_excluded
 
 # Cell
 
@@ -297,15 +335,15 @@ def replace_rfi(data, freq, time_rfi=None, method='near_ripple',
             mw_use = None
     else:
         mw_use = (freq >= mw_frange[0]) & (freq <= mw_frange[1])
-
+    is_excluded = None
     if method == 'near_ripple':
-        data_rep = repalce_near(data, freq, time_rfi=time_rfi, mw_use=mw_use, **rep_args)
+        data_rep, is_excluded = repalce_near(data, freq, time_rfi=time_rfi, mw_use=mw_use, **rep_args)
     elif (method == 'lower') or (method == 'set_zeros') or (method == 'set_noise'):
         data_rep = replace_rfi_lower(data, freq, method=method, **rep_args)
     else:
         raise ValueError("Unsupport replace RFI method!")
 
-    return data_rep
+    return data_rep, is_excluded
 
 # Cell
 def find_loc(amp, x, amp_thr, xlim, rip_mhz=True, Print=True):

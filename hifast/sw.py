@@ -97,6 +97,8 @@ group.add_argument('--ext_sec', type=int, default=20,
                    help='extend channel number of start and end of each section')
 group.add_argument('--restrict_bound', type=bool_fun, choices=[True, False], default='False',
                    help='restrict replace area bound')
+group.add_argument('--save_is_excluded', type=bool_fun, choices=[True, False], default='False',
+                   help='save the replaced area as is_excluded')
 
 group = parser.add_argument_group(f'phase space')
 # remove which component in fft? (only 4 types now)
@@ -289,7 +291,7 @@ class IO(BaseIO):
         self.check_rms_range(is_rfi, rms_step = args.rms_step)
         if args.rfi_method in ['near_ripple','zero_ripple',]:
             keys = ['rms_sigma', 'rms_frange', 'times_s_thr','times_s_thr2',
-                    'times_thr', 'rfi_width_lim', 'ext_sec', 'ext_freq', 'mw_frange', ]
+                    'times_thr', 'rfi_width_lim', 'ext_sec', 'ext_freq', 'mw_frange',]
         else:
             raise(ValueError('not supported rfi_method'))
         for key in keys:
@@ -299,10 +301,12 @@ class IO(BaseIO):
         if args.rfi_method == 'zero_ripple':
             rep_args['fill'] = 'zero'
             args.rfi_method = 'near_ripple'
-
-        s1p = sw_fft.replace_rfi(s1p, self.freq, time_rfi=is_rfi, method=args.rfi_method,
-                                  data_find = sm_find, data_trough = sm_trough, data_restrict = sm_res, **rep_args)
-
+            
+        save_is_excluded = args.save_is_excluded & iter_twice
+#         print("############ save_is_excluded", save_is_excluded)
+        s1p, is_excluded = sw_fft.replace_rfi(s1p, self.freq, time_rfi=is_rfi, method=args.rfi_method,
+                                  data_find = sm_find, data_trough = sm_trough, data_restrict = sm_res,
+                                 save_is_excluded = save_is_excluded, **rep_args)
         # fft args
         fft_args = {}
         keys = ['chan_wide', 'chan_narr',  'choose_method',
@@ -336,7 +340,7 @@ class IO(BaseIO):
         else:
             fft_args['is_excluded_mean'] = np.all(is_rfi, axis=1) if is_rfi is not None else None
             ret = sw_fft.fit_sw_fft(s1p, self.freq, args.nproc, **fft_args)
-        return ret
+        return ret, is_excluded
 
     def med_fit_sw(self, s1p, is_on=None,):
         """
@@ -437,7 +441,7 @@ class IO(BaseIO):
 
                 for i in range(s2p.shape[2]):
                     s2p_out[..., i] = s2p_in[..., i] - self.fft_fit_sw(s2p[..., i], is_rfi, is_on,
-                          sm_find = sm_find[..., i], sm_trough = sm_trough[..., i], sm_res = sm_res[..., i])
+                          sm_find = sm_find[..., i], sm_trough = sm_trough[..., i], sm_res = sm_res[..., i])[0]
 
                 if args.iter_twice:
                     print("Second iter ...")
@@ -450,16 +454,32 @@ class IO(BaseIO):
                         print("------------------")
                     else:
                         sm_res = np.array([None, None])[None,None,:]
-
+                        
+                    is_excluded = np.zeros_like(s2p,dtype=bool)
+                    sw2 = deepcopy(s2p)
                     for i in range(s2p.shape[2]):
-                        s2p_out[..., i] = s2p_in[..., i] - self.fft_fit_sw(s2p[..., i], is_rfi, is_on, iter_twice = True,
+                        sw2[..., i], is_excluded[..., i] = self.fft_fit_sw(s2p[..., i], is_rfi, is_on, iter_twice = True,
                                sm_find = sm_find[..., i], sm_trough = sm_trough[..., i], sm_res = sm_res[..., i])
+                        s2p_out[..., i] = s2p_in[..., i] - sw2[..., i]       
+                    if args.save_is_excluded: 
+                        self.is_excluded = np.any(is_excluded,axis = -1)
+                        
 
             elif (args.method == 'median') or (args.method == 'mean'):
                 for i in range(s2p_out.shape[2]):
                     s2p_out[..., i] -= self.med_fit_sw(s2p_out[..., i], is_on)
 
             self.s2p_out = s2p_out
+            
+            
+    def __call__(self, save=True):
+        self.gen_s2p_out()
+        if hasattr(self,'is_excluded'): 
+            print("save is_excluded :D")
+            self.gen_dict_out(is_excluded = self.is_excluded)
+        # save to hdf5 file
+        if save:
+            self.save()
 
 # Internal Cell
 def check_backend():
