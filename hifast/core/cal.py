@@ -12,11 +12,14 @@ import re
 from glob import glob
 
 import numpy as np
-from matplotlib import pyplot as plt
-plt.switch_backend('agg')
 import scipy.interpolate as interp
 import h5py
 from astropy.io import fits
+
+from matplotlib import pyplot as plt
+import __main__
+if hasattr(__main__, '__file__'):
+    plt.switch_backend('agg')
 
 # Cell
 from ..utils.tcal import read_tcal
@@ -289,6 +292,8 @@ class FastRawSpec(FastRawData):
             stop = len(glob(fname_part+'*.fits'))
         self.fname_part = fname_part
         filenames = [fname_part+'%04d.fits'%i for i in range(start,stop+1)]
+        if len(filenames) == 0:
+            raise(OSError(f"can not find file, please check fname_part:{fname_part}"))
         super().__init__(filenames, frange=frange, dfactor=dfactor, med_filter_size=med_filter_size, verbose=verbose)
 
         self.nB= int(re.findall(r'-M[0-1][0-9]', fname_part)[-1][2:])

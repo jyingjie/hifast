@@ -66,10 +66,14 @@ if __name__ == '__main__':
                         help='check if cal is on continuous source')
     
 
-    parser.add_argument('--which_cal', choices=['nearest', 'median'], default='nearest',
-                        help='for each spectrum, how to choose the power of cal')
+    parser.add_argument('--merge_pcals', choices=['not', 'median'], default='not',
+                        help='Whether merge pcal to calculate pcal with frequency')
+    parser.add_argument('--calc_diff_method', choices=['div', 'sub'], default='div',
+                        help="used if '--merge_pcals' is not set as 'not'")
+    parser.add_argument('--squeeze_diff_freq', choices=['median', 'mean', 'sigclip_median', 'sigclip_mean'], default='sigclip_median',
+                        help="method applied to the difference of pcals with the 'merged-pcals' along freq")
     parser.add_argument('--method_interp', choices=['gaussian', 'slinear', 'quadratic', 'cubic', 'nearest'], default='quadratic',
-                        help='Interpolate the amplitude offset to the median of pcals, used when ``--which_cal median``')
+                        help="Interpolate the difference to get pcal for each spectrum, used if '--merge_pcals' is not set as 'not'")
     parser.add_argument('--sigma_t', type=float, default=300,
                         help='sigma_t in  ``--method_interp gaussian``')
     
@@ -149,7 +153,7 @@ if __name__ == '__main__':
     from .core.cal import CalOnOff, CalOnOffA
     import json
     header = rec_his(args=json.dumps(args.__dict__))
-    if args.which_cal != 'nearest':
+    if args.merge_pcals != 'not':
         from .core.cal2 import CalOnOffAA
         Cal_cls = CalOnOffAA
     else:
@@ -163,7 +167,10 @@ if __name__ == '__main__':
                       smooth=smooth, s_para=s_para, dfactor=dfactor,
                       med_filter_size=med_filter_size, noise_mode=noise_mode, noise_date=noise_date,
                       med_filter_size_cal=med_filter_size_cal, p_cal_fname=p_cal_fname)
-    if args.which_cal != 'nearest':
-        spec.set_para_pcals(method_interp=args.method_interp, sigma_t=args.sigma_t)
+    if args.merge_pcals != 'not':
+        spec.set_para_pcals(calc_diff_method=args.calc_diff_method,
+                            squeeze_diff_freq=args.squeeze_diff_freq,
+                            method_interp=args.method_interp,
+                            sigma_t=args.sigma_t)
     spec(outdir=outdir, step=step, header=header, sep_save=sep_save, save_p_cal=save_p_cal, cali=(not args.not_cali))
     

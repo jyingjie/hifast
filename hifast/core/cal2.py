@@ -11,6 +11,8 @@ from scipy import ndimage
 from .cal import *
 from ..utils.io import MjdChanPolar_to_PolarMjdChan, gen_carta_group, save_specs_hdf5
 
+from astropy.stats import sigma_clip
+
 # Cell
 import h5py
 import os
@@ -50,28 +52,37 @@ class CalOnOffAA(CalOnOffA):
         self.pcals_merged = pcals_merged
         self.pcals_merged_s = self._get_smoothed(pcals_merged)
 
-    def pcals_amp_interp(self, inds_cal, pcals, method_along_freq='median', exclued_franges=None, method_interp='gaussian', sigma_t=600):
+    def pcals_amp_interp(self, inds_cal, pcals, squeeze_diff_freq='median', exclued_franges=None, method_interp='gaussian', sigma_t=600):
         """
         run self.merge_pcals first to get self.pcals_merged and self.pcals_merged_s
         gen self.pcals_amp_interp_values: the amplitude offset relate to mergred pcals, shape is (inds, polar)
 
         Parameters
         ----------
-        method_along_freq: str; 'median' or 'mean'
+        squeeze_diff_freq: str; 'median', 'mean', 'sigclip_median', 'sigclip_mean'
         method_interp: str; 'gaussian' or kind in scipy.interpolate.interp1d
         exclued_franges: str; freq ranges which are not used in calculating amplitude offset; e.g. [[1375, 1385],]
         """
-        pcals_diff = pcals - self.pcals_merged
+        if self.calc_diff_method == 'div':
+            pcals_diff = pcals / self.pcals_merged_s
+        elif self.calc_diff_method == 'sub':
+            pcals_diff = pcals - self.pcals_merged_s
+        else:
+            raise(ValueError(f"self.calc_diff_method:{self.calc_diff_method}"))
         if exclued_franges is not None:
             is_not = np.full(len(self.freq_use), False)
             for (start, end) in exclued_franges:
                 is_not |= ((self.freq_use > start) & (self.freq_use < end))
             pcals_diff = pcals_diff[:, ~is_not]
             self.freq_use_amp_interp = self.freq_use[~is_not]
-        if method_along_freq == 'median':
-            pcals_diff_m = np.median(pcals_diff, axis=1)
-        elif method_along_freq == 'mean':
-            pcals_diff_m = np.mean(pcals_diff, axis=1, dtype='float64')
+        if squeeze_diff_freq == 'median':
+            pcals_diff_m = np.nanmedian(pcals_diff, axis=1)
+        elif squeeze_diff_freq == 'mean':
+            pcals_diff_m = np.nanmean(pcals_diff, axis=1, dtype='float64')
+        elif squeeze_diff_freq == 'sigclip_median':
+            pcals_diff_m = np.nanmedian(sigma_clip(pcals_diff, axis=1, masked=False, return_bounds=False, copy=True), axis=1)
+        elif squeeze_diff_freq == 'sigclip_mean':
+            pcals_diff_m = np.nanmean(sigma_clip(pcals_diff, axis=1, masked=False, return_bounds=False, copy=True), axis=1)
 
         if method_interp == 'gaussian':
             t_sample = self.hduls[0][1].data['EXPOSURE'][0]
@@ -85,7 +96,7 @@ class CalOnOffAA(CalOnOffA):
 
     def get_count_tcal(self, inds_on, inds_off):
         """
-        run self.prepare_pcals
+        run self.prepare_pcals first
         get count of tcal
         """
         #
@@ -100,15 +111,26 @@ class CalOnOffAA(CalOnOffA):
             figname = self.out_name_base + "-sep.pdf"
             plot_sep(inds_on, inds_off, c_on, c_off, figname=figname)
         # count as pcal
-        c_on /= (self.pcals_merged_s + amp_interp_on[:, None, :])
-        c_on -= 1  # have subtracted cal
-        c_off /= (self.pcals_merged_s + amp_interp_off[:, None, :])
+        if self.calc_diff_method == 'div':
+            c_on /= (self.pcals_merged_s * amp_interp_on[:, None, :])
+            c_on -= 1  # have subtracted cal
+            c_off /= (self.pcals_merged_s * amp_interp_off[:, None, :])
+        elif self.calc_diff_method == 'sub':
+            c_on /= (self.pcals_merged_s + amp_interp_on[:, None, :])
+            c_on -= 1  # have subtracted cal
+            c_off /= (self.pcals_merged_s + amp_interp_off[:, None, :])
+
         return c_on, c_off
 
-    def set_para_pcals(self, method_interp='gaussian', sigma_t=600):
+    def set_para_pcals(self, calc_diff_method='div', squeeze_diff_freq='median', method_interp='gaussian', sigma_t=600):
         """
         para used in self.prepare_pcals
+
+        calc_diff_method: str; 'div', 'sub'
         """
+        self.calc_diff_method = calc_diff_method # in self.pcals_amp_interp & self.get_count_tcal
+
+        self.squeeze_diff_freq = squeeze_diff_freq
         self.method_interp = method_interp
         self.sigma_t = sigma_t
 
@@ -117,6 +139,7 @@ class CalOnOffAA(CalOnOffA):
         pcals_use = self._get_cal_power(self.inds_ton[is_], self.inds_toff_bef[is_], self.inds_toff_aft[is_])
         self.merge_pcals(pcals_use)
         self.pcals_amp_interp(np.mean(self.inds_ton[is_], axis=1), pcals_use,
+                              squeeze_diff_freq=self.squeeze_diff_freq,
                               method_interp=self.method_interp, sigma_t=self.sigma_t)
         return pcals_use, self.inds_ton[is_]
 
@@ -194,6 +217,10 @@ class CalOnOffAA(CalOnOffA):
                 res['freq'] = self.freq_use
                 res['Ta'] = MjdChanPolar_to_PolarMjdChan(T)
                 res['Tcal'] = tc_inter
+                res['pcals_merged'] = self.pcals_merged
+                res['pcals_merged_s'] = self.pcals_merged_s
+                res['pcals_amp_interp_values'] = self.pcals_amp_interp_values[inds[sort]]
+
                 # print(res)
                 outname = self.out_name_base + f"-specs_T_{i:04d}_{i+1:04d}.hdf5"
                 res['Header'] = header
@@ -224,6 +251,10 @@ class CalOnOffAA(CalOnOffA):
             g['mjd'] = np.hstack(mjds)
             g['freq'] = self.freq_use
             g['Tcal'] = tc_inter
+            g['pcals_merged'] = self.pcals_merged
+            g['pcals_merged_s'] = self.pcals_merged_s
+            g['pcals_amp_interp_values'] = self.pcals_amp_interp_values
+
             print(f"Saved to {outname}")
             gen_carta_group(fout, g['Ta'].shape, wcs_data_name='Ta', axis1=g['freq'], axis2=g['mjd'])
             fout.close()
