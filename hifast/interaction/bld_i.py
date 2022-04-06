@@ -88,11 +88,17 @@ def main():
 
     tes = Test(T2p, freq, frange, is_excluded)
 
+    rew_type = ['asym1', 'asym2', 'asym3', 'sym1',]
+    method = ['PLS-'+r for r in rew_type]
+    method += ['poly-'+r for r in rew_type]
+    method += ['masPLS-'+r for r in rew_type]
+    method += ['asPLS',]
+
     sliders = {}
     sliders.update(_BoundedIntText(
         start=(0, 0, tes.T2p.shape[1]-length, 1), polar=(0, 0, 1, 1)))
     sliders.update(_IntSlider(njoin=(0, 1, length, 1)))
-    sliders.update(_Dropdown(method=('arPLS', 'srPLS', 'asPLS', 'masPLS', 'poly', 'Chebyshev'),
+    sliders.update(_Dropdown(method=method,
                              s_method_freq=('gaussian', 'boxcar', 'none'),
                              s_method_t=('none', 'gaussian', 'boxcar'),
                              ))
