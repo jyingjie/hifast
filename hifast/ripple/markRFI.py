@@ -458,9 +458,10 @@ def find_edge_2sides(spec,vel,peak_position,step,rms_thresh,Print=False,small_rf
     """
     start = deepcopy(peak_position)
     part_rms = rms(spec,vel,rms_vrange=[start-step/2,start+step/2])
+    if Print: print("peak in ",start,"initial rms:", part_rms, "rms_thresh:", rms_thresh)
 
     if part_rms < rms_thresh * small_rfi_times:
-        #print("theory peak rms < rms_thresh")
+        if Print: print(f"initial rms {part_rms} < rms_thresh {rms_thresh} * {small_rfi_times}")
         edge = np.array([np.nan,np.nan])
         return edge
 
@@ -469,7 +470,7 @@ def find_edge_2sides(spec,vel,peak_position,step,rms_thresh,Print=False,small_rf
         if start < min(vel):
             break
         part_rms = rms(spec,vel,rms_vrange=[start-step/2,start+step/2])
-        if Print:print(part_rms)
+        if Print: print("left step rms:", part_rms)
 
     end = deepcopy(peak_position)
     part_rms = rms(spec,vel,rms_vrange=[end-step/2,start+end/2])
@@ -478,14 +479,14 @@ def find_edge_2sides(spec,vel,peak_position,step,rms_thresh,Print=False,small_rf
         if end > max(vel):
             break
         part_rms = rms(spec,vel,rms_vrange=[end-step/2,end+step/2])
-        if Print:print(part_rms)
+        if Print: print("right step rms:", part_rms)
 
     edge = np.array([start,end]) + np.array([-1,1]) * ext_times * step
     edge[edge < min(vel)] = min(vel)
     edge[edge > max(vel)] = max(vel)
     if Print:
-        print(start,end)
-        print(peak_position,edge)
+        print("start, end ",[start,end])
+        print("final edge:", edge)
     return edge
 
 def mask_RFI_2sides(spec,freq,is_rfi,theory0,mark_rfi_width,small_rfi_times,RMS,
@@ -651,12 +652,14 @@ def find_RFI(spec,freq,is_rfi,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge 
 # Cell
 ####################### time rfi ########################
 
-def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
-           ext_add = 0,plot = False,pdf = None,xylim = None,plot_norfi=False,axis = 'time'):
+def find_t(data,freq,frange,thr_type = 'input_med_times',
+           mean_times = 10,diff_times = 20,rfi_width_lim = 20,ext_add = 0,plot = False,
+           pdf = None,xylim = None,plot_norfi=False,axis = 'time'):
     """
     data: 2D arrays
     frange: like [a,b]
-    times: thr = median value * times
+    mean_times: mean_thr = median value * mean_times
+    diff_times: diff_thr = median value * diff_times
     rfi_width_lim: width limit
     ext_add: extend edge
     """
@@ -684,22 +687,34 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
     is_timerfi = np.zeros_like(t,dtype = 'bool')
 
     pat_med = np.nanmedian(pat_mean)
+    
+    if pat_med <= 0 and thr_type == 'input_med_times':
+        raise ValueError(f"Median value <= 0. You should switch to thr_type = 'input_thr'")
+        
+    if thr_type == 'input_med_times':   
+        mean_thr = pat_med * mean_times
+        diff_thr = pat_med * diff_times
+    elif thr_type == 'input_thr':
+        pat_mean -= pat_med # make it near zeros
+        mean_thr = mean_times
+        diff_thr = diff_times
+         
     pat_mean[np.isnan(pat_mean)] = 0
-
-    is_pat = pat_mean > pat_med * times
+    is_pat = pat_mean > mean_thr
     if (is_pat.any() == False) and (plot_norfi == True):
         if pdf is not None:
             plt.switch_backend('agg')
         fig,ax = plt.subplots(figsize = (15,3))
         ax.plot(t,pat_mean)
-        ax.axhline(pat_med*times,c = 'k',linestyle = '--',label='median')
+        ax.axhline(mean_thr,c = 'k',linestyle = '--',label='mean_thr')
         ax.grid()
         ax.set_ylabel(ylabel)
         ax.set_xlabel(xlabel)
         if frange is not None:
             ax.set_title(f'freq in {frange} MHz')
-        if ylim is not None:
-            ax.set_ylim(ylim[0],ylim[1])
+        if xylim is not None:
+            ax.set_xlim(xylim[0],xylim[1])
+            ax.set_ylim(xylim[2],xylim[3])
         if pdf is not None:
             pdf.savefig();plt.close()
         return  is_timerfi
@@ -717,8 +732,7 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
     if len(start) > 0:
         print(f"rfi starts at tn = {start}, ends in tn = {end}")
         for s,e in zip(start,end):
-            #cond = ((pat_diff[s] - pat_diff[s-1])/pat_med > thr) & ((pat_diff[e] - pat_diff[e+1])/pat_med > thr)
-            cond = (pat_diff[s]/pat_med > thr) & (pat_diff[e]/pat_med > thr)
+            cond = (pat_diff[s] > diff_thr) & (pat_diff[e] > diff_thr)
             if cond:
                 is_timerfi[s:e] = True
 
@@ -736,11 +750,16 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
     if plot:
         if pdf is not None:
             plt.switch_backend('agg')
+        print(f"Median value is {pat_med}. mean_thr = {mean_thr}. diff_thr = {diff_thr}")
         fig,ax = plt.subplots(figsize = (15,3))
         ax.plot(t,pat_mean)
-        ax.axhline(pat_med*times,c = 'k',linestyle = '--',label='thr')
+        ax.axhline(mean_thr,c = 'k',linestyle = '--',label='mean_thr')
         ax.plot(t,is_timerfi*np.max(pat_mean),label='is_timeRFI')
-        ax.plot(t,pat_diff[:-1]-np.max(pat_mean),label='abs(diff)')
+        offset = np.max(pat_mean)
+        ax.axhline( - offset,c = 'k',linestyle = '-')
+        ax.plot(t,pat_diff[:-1] - offset,label='abs(diff)')
+        ax.axhline(diff_thr - offset,c = 'k',linestyle = '--',label='diff_thr')
+        
         ax.grid()
         ax.plot(t[s],pat_mean[s],'r.',label = 'start')
         ax.plot(t[e],pat_mean[e],'g.',label = 'end')
