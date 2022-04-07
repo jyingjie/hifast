@@ -477,6 +477,8 @@ class IO(BaseIO):
         if hasattr(self,'is_excluded'):
             print("save is_excluded :D")
             self.gen_dict_out(is_excluded = self.is_excluded)
+        else:
+            self.gen_dict_out()
         # save to hdf5 file
         if save:
             self.save()
