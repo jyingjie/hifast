@@ -96,7 +96,7 @@ def main():
 
     sliders = {}
     sliders.update(_BoundedIntText(
-        start=(0, 0, tes.T2p.shape[1]-length, 1), polar=(0, 0, 1, 1)))
+        start=(0, 0, tes.T2p.shape[1]-length, 1), polar=(0, 0, tes.T2p.shape[0], 1)))
     sliders.update(_IntSlider(njoin=(0, 1, length, 1)))
     sliders.update(_Dropdown(method=method,
                              s_method_freq=('gaussian', 'boxcar', 'none'),

@@ -83,8 +83,12 @@ def get_baseline(x, ys, axis=None, *,
         is_finite = np.isfinite(ys)
         if not is_finite.all():
             # replace value as 0 and add to exclude
+            ys_finite = ys[is_finite]
+            if 0 in ys_finite.shape:
+                # all nan
+                return ys
             ys = np.copy(ys)
-            ys[~is_finite] = np.max(ys[is_finite])
+            ys[~is_finite] = np.max(ys_finite)
             if exclude is not None:
                 exclude = exclude | (~is_finite)
             else:
