@@ -53,8 +53,12 @@ class Test(object):
             if self.is_excluded_t is not None:
                 self.is_excluded_t = self.is_excluded_t[:, self.is_use]
 
-    def sub(self, x, start=0, length=20, polar=0, **kwargs):
+    def sub(self, x, start=0, length=20, polar=0, frange_excluded=None, **kwargs):
         self.select(start, length, polar)
+        if frange_excluded is not None:
+            is_ = (x > frange_excluded[0]) & (x < frange_excluded[1])
+            self.is_excluded_t = np.full(self.T2p_t.shape, is_[None,...,None])
+            self.frange_excluded = frange_excluded
         self.bld = sub_baseline(self.freq, self.T2p_t, is_excluded=self.is_excluded_t,
                                 verbose=False, **kwargs)
         return np.full(x.shape, np.nan)
@@ -83,6 +87,7 @@ def phrase_ylim(ylim, vals):
     return ylim
 
 # Cell
+
 def main():
     global ylim
 
@@ -108,7 +113,10 @@ def main():
                               niter=(100, 1, 200, 1)))
     sliders.update(_FloatSlider(offset=(2, 0.1, 4, 0.1),))
 
-
+    bak = w_conf.pop('layout')
+    w_conf['layout'] = widgets.Layout(width='100%',)
+    sliders.update(_FloatRangeSlider(frange_excluded=([tes.freq[0], tes.freq[0]], tes.freq[0], tes.freq[-1], tes.freq[2]-tes.freq[0])))
+    w_conf['layout'] = bak
 
     plt.ioff()
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=figsize)
@@ -143,6 +151,11 @@ def main():
     controls3 = iplt.plot(tes.freq, tes.get_bl,
                           controls=controls2, xlim=xlim, ylim=ylim, ax=ax1)
 
+    def return_v(*args, **kwargs): return tes.frange_excluded[0]
+    iplt.axvline(return_v, controls=controls, ax=ax1, color='r')
+    def return_v(*args, **kwargs): return tes.frange_excluded[1]
+    iplt.axvline(return_v, controls=controls, ax=ax1, color='r')
+
     iplt.plot(tes.freq, tes.get_bld,
               controls=controls2, xlim=xlim, ylim=ylim2, ax=ax2)
     plt.axhline(y=0,)
@@ -164,6 +177,7 @@ def main():
         widgets.HBox([w['s_method_t'], w['s_sigma_t'],
                      w['s_method_freq'], w['s_sigma_freq']]),
         widgets.HBox([w['method'], w['lam'], w['deg'], w['niter']]),
+        widgets.HBox([w['frange_excluded']]),
         widgets.HBox(
             [widgets.Label(value=f"3. Show one spectra in top and middle panels:"), w['i']]),
         widgets.HBox([widgets.Label(
@@ -175,4 +189,4 @@ def main():
     plt.show()
     display(BOX)
 
-    return tes
+    return tes, w, BOX
