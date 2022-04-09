@@ -19,6 +19,8 @@ from .widgets import *
 import warnings
 warnings.filterwarnings("ignore", r'overflow encountered in exp')
 
+import matplotlib as mpl
+
 # Cell
 class Test(object):
     def __init__(self, T2p, freq, frange=None, is_excluded=None):
@@ -26,7 +28,10 @@ class Test(object):
         if T2p.ndim != 3:
             raise(ValueError('T2p should be 3 dim'))
         self.T2p = T2p
-        self.is_excluded = is_excluded
+
+        #self.is_excluded = is_excluded
+        self.is_excluded = None
+
         freq = freq[:]
         if frange is not None:
             self.is_use = (freq > frange[0]) & (freq < frange[1])
@@ -44,7 +49,7 @@ class Test(object):
             elif self.is_excluded.ndim == 2 and self.is_excluded.shape == T2p.shape[1:]:
                 self.is_excluded_t = self.is_excluded[start:start+length][...,None]
             else:
-                raise('shape of ``is_excluded``')
+                raise(ValueError('shape of ``is_excluded``'))
         else:
             self.is_excluded_t = None
 
@@ -53,13 +58,24 @@ class Test(object):
             if self.is_excluded_t is not None:
                 self.is_excluded_t = self.is_excluded_t[:, self.is_use]
 
-    def sub(self, x, start=0, length=20, polar=0, frange_excluded=None, **kwargs):
+    def sub(self, x, start=0, length=20, polar=0, frange_excluded=None, frange_excluded_atlast=None, **kwargs):
         self.select(start, length, polar)
-        if frange_excluded is not None:
+        if frange_excluded is not None and frange_excluded[0] != frange_excluded[1]:
             is_ = (x > frange_excluded[0]) & (x < frange_excluded[1])
             self.is_excluded_t = np.full(self.T2p_t.shape, is_[None,...,None])
-            self.frange_excluded = frange_excluded
+        else:
+            self.is_excluded_t = None
+        self.frange_excluded = frange_excluded
+
+        if frange_excluded_atlast is not None and frange_excluded_atlast[0] != frange_excluded_atlast[1]:
+            is_ = (x > frange_excluded_atlast[0]) & (x < frange_excluded_atlast[1])
+            self.is_excluded_atlast_t = np.full(self.T2p_t.shape, is_[None,...,None])
+        else:
+            self.is_excluded_atlast_t = None
+        self.frange_excluded_atlast = frange_excluded_atlast
+
         self.bld = sub_baseline(self.freq, self.T2p_t, is_excluded=self.is_excluded_t,
+                                is_excluded_atlast = self.is_excluded_atlast_t,
                                 verbose=False, **kwargs)
         return np.full(x.shape, np.nan)
 
@@ -111,15 +127,20 @@ def main():
     sliders.update(_FloatLog10Slider(lam=(1e8, 5, 13, 0.2), readout_format='.2e'))
     sliders.update(_IntSlider(deg=(2, 1, 10, 1),
                               niter=(100, 1, 200, 1)))
-    sliders.update(_FloatSlider(offset=(2, 0.1, 4, 0.1),))
+    sliders.update(_FloatSlider(offset=(2, 0.1, 4, 0.1)))
+    sliders.update(_FloatSlider(ratio=(0.01, 0.001, 0.015,0.001),
+                                readout_format='.3f'))
 
     bak = w_conf.pop('layout')
-    w_conf['layout'] = widgets.Layout(width='100%',)
+    #w_conf['style'] = {'description_width': 'initial'}
+    w_conf['layout'] = widgets.Layout(width=f"{mpl.rcParams['figure.dpi']*figsize[0]*1.2}px",)
     sliders.update(_FloatRangeSlider(frange_excluded=([tes.freq[0], tes.freq[0]], tes.freq[0], tes.freq[-1], tes.freq[2]-tes.freq[0])))
+    sliders.update(_FloatRangeSlider(frange_excluded_atlast=([tes.freq[0], tes.freq[0]], tes.freq[0], tes.freq[-1], tes.freq[2]-tes.freq[0])))
     w_conf['layout'] = bak
 
     plt.ioff()
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=figsize)
+    fig.canvas.header_visible = False
 
     if isinstance(ylim, str):
         if ylim == 'auto':
@@ -151,11 +172,6 @@ def main():
     controls3 = iplt.plot(tes.freq, tes.get_bl,
                           controls=controls2, xlim=xlim, ylim=ylim, ax=ax1)
 
-    def return_v(*args, **kwargs): return tes.frange_excluded[0]
-    iplt.axvline(return_v, controls=controls, ax=ax1, color='r')
-    def return_v(*args, **kwargs): return tes.frange_excluded[1]
-    iplt.axvline(return_v, controls=controls, ax=ax1, color='r')
-
     iplt.plot(tes.freq, tes.get_bld,
               controls=controls2, xlim=xlim, ylim=ylim2, ax=ax2)
     plt.axhline(y=0,)
@@ -167,21 +183,31 @@ def main():
     ax1.set_title('origial spectra', fontsize=8)
     ax2.set_title('spectra after baseline removed', fontsize=8)
 
+    def return_v(*args, **kwargs): return tes.frange_excluded[0]
+    [iplt.axvline(return_v, controls=controls, ax=ax, color='r') for ax in [ax1, ax2, ax3]]
+    def return_v(*args, **kwargs): return tes.frange_excluded[1]
+    [iplt.axvline(return_v, controls=controls, ax=ax, color='r') for ax in [ax1, ax2, ax3]]
+
+    def return_v(*args, **kwargs): return tes.frange_excluded_atlast[0]
+    [iplt.axvline(return_v, controls=controls, ax=ax, color='k') for ax in [ax1, ax2, ax3]]
+    def return_v(*args, **kwargs): return tes.frange_excluded_atlast[1]
+    [iplt.axvline(return_v, controls=controls, ax=ax, color='k') for ax in [ax1, ax2, ax3]]
     fig.tight_layout()
 
     w = controls.controls
     hbs = [
         widgets.HBox([widgets.Label(value=f"1. Select spectra from $start$(max:{controls.controls['start'].max}) to $start+{length}$ to fit:"),
                       w['start'], w['polar']]),
-        widgets.HBox([widgets.Label(value=f"2. Fitting:"), w['njoin'], w['offset']]),
+        widgets.HBox([widgets.Label(value=f"2. Fitting:"), w['njoin'], w['offset'],w['ratio']]),
         widgets.HBox([w['s_method_t'], w['s_sigma_t'],
                      w['s_method_freq'], w['s_sigma_freq']]),
         widgets.HBox([w['method'], w['lam'], w['deg'], w['niter']]),
-        widgets.HBox([w['frange_excluded']]),
         widgets.HBox(
             [widgets.Label(value=f"3. Show one spectra in top and middle panels:"), w['i']]),
         widgets.HBox([widgets.Label(
             value=f"4. Show the stack spectra of in the range in the bottom panel:"), w['start_stop']]),
+        widgets.HBox([w['frange_excluded']]),
+        widgets.HBox([w['frange_excluded_atlast']]),
     ]
 
     BOX = widgets.VBox(hbs)

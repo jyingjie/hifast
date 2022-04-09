@@ -33,6 +33,7 @@ except ImportError:
 # Cell
 def get_baseline(x, ys, axis=None, *,
                  s_method='none', s_sigma=3, average_every=None, exclude=None,
+                 exclude_atlast=None,
                  method='arPLS', bl_para=None,
                  verbose=False, return_f=False, check=True):
     """
@@ -54,6 +55,8 @@ def get_baseline(x, ys, axis=None, *,
         ys = ys[:, None]
         if exclude is not None:
             exclude = exclude[:, None]
+        if exclude_atlast is not None:
+            exclude_atlast = exclude_atlast[:, None]
         ch = True
         axis = 0
     else:
@@ -78,6 +81,9 @@ def get_baseline(x, ys, axis=None, *,
         if exclude is not None:
             exclude = average_every_n(
                 exclude, average_every, axis=axis, drop=drop).astype('bool')
+        if exclude_atlast is not None:
+            exclude_atlast = average_every_n(
+                exclude_atlast, average_every, axis=axis, drop=drop).astype('bool')
     # after smooth(average), check nan, posinf, neginf
     if check:
         is_finite = np.isfinite(ys)
@@ -93,6 +99,8 @@ def get_baseline(x, ys, axis=None, *,
                 exclude = exclude | (~is_finite)
             else:
                 exclude = ~is_finite
+            if exclude_atlast is not None:
+                exclude_atlast = exclude_atlast | (~is_finite)
         del is_finite
     # select baseline method
     if '-' in method:
@@ -136,6 +144,8 @@ def get_baseline(x, ys, axis=None, *,
     ys = np.moveaxis(ys, axis, -1)
     if exclude is not None:
         exclude = np.moveaxis(exclude, axis, -1)
+    if exclude_atlast is not None:
+        exclude_atlast = np.moveaxis(exclude_atlast, axis, -1)
     shape_bak = ys.shape
     # ys = ys.reshape((-1,shape_bak[-1])) #will copy the data
     # or np.apply_along_axis
@@ -155,7 +165,11 @@ def get_baseline(x, ys, axis=None, *,
             _exclude = exclude[ii + np.s_[:, ]]
         else:
             _exclude = None
-        bl = BL.fit(x=x, y=y, exclude=_exclude)
+        if exclude_atlast is not None:
+            _exclude_atlast = exclude_atlast[ii + np.s_[:, ]]
+        else:
+            _exclude_atlast = None
+        bl = BL.fit(x=x, y=y, exclude=_exclude, exclude_atlast=_exclude_atlast)
         bls[ii + np.s_[:, ]] = bl
         if return_f:
             weis[ii + np.s_[:, ]] = BL.wei
@@ -188,7 +202,7 @@ class get_baseline_mp(object):
     def get_baseline_q(q, *args, **kwargs):
         res = get_baseline(*args, **kwargs)
         q.put(res)
-    def __call__(self, x, ys, *, exclude=None,  **kwargs):
+    def __call__(self, x, ys, *, exclude=None, exclude_atlast=None, **kwargs):
         """
         testing...
         only support axis=1,
@@ -210,11 +224,15 @@ class get_baseline_mp(object):
             exclude_list = np.array_split(exclude, n)
         else:
             exclude_list = [None, ] * n
+        if exclude_atlast is not None:
+            exclude_atlast_list = np.array_split(exclude_atlast, n)
+        else:
+            exclude_atlast_list = [None, ] * n
         ys_list = np.array_split(ys, n)
-        for ys, exclude in zip(ys_list, exclude_list):
+        for ys, exclude_, exclude_atlast_ in zip(ys_list, exclude_list, exclude_atlast_list):
             q = Queue()
             p = Process(target=self.get_baseline_q, args=(q, x, ys),
-                        kwargs={'exclude': exclude, **kwargs})
+                        kwargs={'exclude': exclude_, 'exclude_atlast': exclude_atlast_, **kwargs})
             if 'verbose' in kwargs.keys():
                 kwargs['verbose'] = False
 
@@ -322,7 +340,7 @@ class BL_PLS(object):
         if not rew:
             self.niter = 1
 
-    def fit(self, *, x=None, y=None, exclude=None, wei=None):
+    def fit(self, *, x=None, y=None, exclude=None, exclude_atlast=None, wei=None):
         """
         iteration
 
@@ -356,6 +374,13 @@ class BL_PLS(object):
             ratio_fit = norm(w-wt)/norm(w)
             if ratio_fit < self.ratio:
                 break
+        if exclude_atlast is not None:
+            w = w
+            w[exclude_atlast] = 0
+            W = sparse.spdiags(w, 0, N, N)
+            Z = W + H
+            z = linalg.spsolve(Z, w*y)
+
         bl = z
         self.success = True if ratio_fit <= self.ratio else False
         self.wei = w
@@ -389,7 +414,7 @@ class BL_base(object):
     def _fit(self, x, y, w):
         return y
 
-    def fit(self, x, y, exclude=None, wei=None):
+    def fit(self, x, y, exclude=None, exclude_atlast=None, wei=None):
         self.exclude = exclude
         N = len(y)
         wt = np.ones(N) if wei is None else np.copy(wei)
@@ -408,6 +433,11 @@ class BL_base(object):
             ratio_fit = norm(w-wt)/norm(w)
             if ratio_fit < self.ratio:
                 break
+        if exclude_atlast is not None:
+            w = w
+            w[exclude_atlast] = 0
+            z = self._fit(x, y, w)
+
         bl = z
         if self.rew:
             self.success = True if ratio_fit <= self.ratio else False
@@ -633,6 +663,7 @@ def get_exclude_fun(exclude_m):
 
 
 def sub_baseline(freq, yss, *, subtract=True, nproc=1, exclude_fun=None, is_excluded=None, inplace=False,
+                 is_excluded_atlast=None,
                  njoin=1, s_method_t='none', s_sigma_t=None,
                  method='arPLS', s_method_freq='none', s_sigma_freq=None, average_every_freq=None,
                  lam=1e8, deg=2, offset=2, ratio=0.01, niter=100, sin_f=[0.925, ], rew=True, opt_para=None,
@@ -690,11 +721,12 @@ def sub_baseline(freq, yss, *, subtract=True, nproc=1, exclude_fun=None, is_excl
     # add exclude
     if is_excluded is not None:
         exclude = is_excluded
-        print('use is_excluded')
     elif exclude_fun is not None:
         exclude = exclude_fun(yss)
     else:
         exclude = None
+
+    exclude_atlast = is_excluded_atlast
 
     if s_method_freq == 'PLS':
         # use arPLS, lam from s_sigma ( s_sigma_freq)
@@ -702,7 +734,9 @@ def sub_baseline(freq, yss, *, subtract=True, nproc=1, exclude_fun=None, is_excl
             'lam': para['s_sigma'], "offset": 2, 'deg': 2}, verbose=verbose)
         s_method_freq = None
     # get baseline
-    bls = get_baseline_mp(nproc)(freq, yss, axis=1, exclude=exclude, s_method=s_method_freq, s_sigma=s_sigma_freq, average_every=average_every_freq,
+    bls = get_baseline_mp(nproc)(freq, yss, axis=1, exclude=exclude,
+                                 exclude_atlast= exclude_atlast,
+                                 s_method=s_method_freq, s_sigma=s_sigma_freq, average_every=average_every_freq,
                           method=method, bl_para=bl_para, verbose=verbose)
 
     if njoin is not None and njoin > 1:
