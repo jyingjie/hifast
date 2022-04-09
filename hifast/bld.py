@@ -68,6 +68,8 @@ group.add_argument('--ratio', type=float, default=0.01,
                    help='baseline fit parameters')
 group.add_argument('--niter', type=int, default=100,
                    help='baseline fit parameters')
+group.add_argument('--exclude_type',
+                   help='baseline fit parameters')
 
 # interaction
 group = parser.add_argument_group(f'*Interaction\n{sep_line}')
@@ -103,7 +105,7 @@ class IO(BaseIO):
         fit_kwargs = {}
         keys = ['method', 'nproc',
                 'njoin', 's_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',
-                'lam', 'deg', 'offset', 'ratio', 'niter']
+                'lam', 'deg', 'offset', 'ratio', 'niter', 'exclude_type']
         for key in keys:
             fit_kwargs[key] = getattr(args, key)
         fit_kwargs['verbose'] = args.show_prog

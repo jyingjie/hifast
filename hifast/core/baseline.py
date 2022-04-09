@@ -33,6 +33,7 @@ except ImportError:
 # Cell
 def get_baseline(x, ys, axis=None, *,
                  s_method='none', s_sigma=3, average_every=None, exclude=None,
+                 exclude_type='always',
                  method='arPLS', bl_para=None,
                  verbose=False, return_f=False, check=True):
     """
@@ -155,7 +156,7 @@ def get_baseline(x, ys, axis=None, *,
             _exclude = exclude[ii + np.s_[:, ]]
         else:
             _exclude = None
-        bl = BL.fit(x=x, y=y, exclude=_exclude)
+        bl = BL.fit(x=x, y=y, exclude=_exclude, exclude_type=exclude_type)
         bls[ii + np.s_[:, ]] = bl
         if return_f:
             weis[ii + np.s_[:, ]] = BL.wei
@@ -322,7 +323,7 @@ class BL_PLS(object):
         if not rew:
             self.niter = 1
 
-    def fit(self, *, x=None, y=None, exclude=None, wei=None):
+    def fit(self, *, x=None, y=None, exclude=None, exclude_type='end', wei=None):
         """
         iteration
 
@@ -341,7 +342,7 @@ class BL_PLS(object):
         for i in range(self.deg):
             D = D[:, 1:] - D[:, :-1] # D is a csc sparse matrix, don't use np.diff
         wt = np.ones(N) if wei is None else np.copy(wei)
-        if self.exclude is not None:
+        if self.exclude is not None and exclude_type == 'always':
             wt[self.exclude] = 0
         H = D.dot(D.transpose()).multiply(self.lam)
         for i in range(self.niter):
@@ -351,11 +352,27 @@ class BL_PLS(object):
             z = linalg.spsolve(Z, w*y)
             d = y - z
             wt = self._reweight(d)
-            if self.exclude is not None:
+            if self.exclude is not None and exclude_type == 'always':
                 wt[self.exclude] = 0
             ratio_fit = norm(w-wt)/norm(w)
             if ratio_fit < self.ratio:
                 break
+
+        if exclude_type == 'auto' or exclude_type == 'auto1':
+            # overwrite self.exclude
+            self.exclude = extend_Trues(w<0.01, axis=-1, ext_frac=1/3)
+        elif exclude_type == 'auto2':
+            # overwrite self.exclude
+            ds = ndimage.gaussian_filter1d(d, 5)
+            self.exclude = extend_Trues(ds > 3*STD(d[d<0]), axis=-1, ext_frac=1/3)
+
+        if self.exclude is not None and (exclude_type == 'end' or exclude_type[:4] == 'auto'):
+            w = w
+            w[self.exclude] = 0
+            W = sparse.spdiags(w, 0, N, N)
+            Z = W + H
+            z = linalg.spsolve(Z, w*y)
+
         bl = z
         self.success = True if ratio_fit <= self.ratio else False
         self.wei = w
@@ -389,11 +406,13 @@ class BL_base(object):
     def _fit(self, x, y, w):
         return y
 
-    def fit(self, x, y, exclude=None, wei=None):
+    def fit(self, x, y, exclude=None, exclude_type='always', wei=None):
         self.exclude = exclude
+        if exclude_type not in ['always', 'end', 'auto']:
+            raise(ValueError(f"not supporeted `exclude_type`:{exclude_type}"))
         N = len(y)
         wt = np.ones(N) if wei is None else np.copy(wei)
-        if self.exclude is not None:
+        if self.exclude is not None and exclude_type == 'always':
             wt[self.exclude] = 0
         for i in range(self.niter):
             w = wt
@@ -402,12 +421,18 @@ class BL_base(object):
                 break
             d = y - z
             wt = self._reweight(d)
-            if self.exclude is not None:
+            if self.exclude is not None and exclude_type == 'always':
                 wt[self.exclude] = 0
             # check exit condition and backup
             ratio_fit = norm(w-wt)/norm(w)
             if ratio_fit < self.ratio:
                 break
+
+        if self.exclude is not None and exclude_type in ['end', 'auto']:
+            w = w
+            w[self.exclude] = 0
+            z = self._fit(x, y, w)
+
         bl = z
         if self.rew:
             self.success = True if ratio_fit <= self.ratio else False
@@ -632,7 +657,7 @@ def get_exclude_fun(exclude_m):
     return exclude_fun
 
 
-def sub_baseline(freq, yss, *, subtract=True, nproc=1, exclude_fun=None, is_excluded=None, inplace=False,
+def sub_baseline(freq, yss, *, subtract=True, nproc=1, exclude_fun=None, is_excluded=None, exclude_type='always', inplace=False,
                  njoin=1, s_method_t='none', s_sigma_t=None,
                  method='arPLS', s_method_freq='none', s_sigma_freq=None, average_every_freq=None,
                  lam=1e8, deg=2, offset=2, ratio=0.01, niter=100, sin_f=[0.925, ], rew=True, opt_para=None,
@@ -690,7 +715,6 @@ def sub_baseline(freq, yss, *, subtract=True, nproc=1, exclude_fun=None, is_excl
     # add exclude
     if is_excluded is not None:
         exclude = is_excluded
-        print('use is_excluded')
     elif exclude_fun is not None:
         exclude = exclude_fun(yss)
     else:
@@ -702,7 +726,9 @@ def sub_baseline(freq, yss, *, subtract=True, nproc=1, exclude_fun=None, is_excl
             'lam': para['s_sigma'], "offset": 2, 'deg': 2}, verbose=verbose)
         s_method_freq = None
     # get baseline
-    bls = get_baseline_mp(nproc)(freq, yss, axis=1, exclude=exclude, s_method=s_method_freq, s_sigma=s_sigma_freq, average_every=average_every_freq,
+    bls = get_baseline_mp(nproc)(freq, yss, axis=1, exclude=exclude,
+                                 exclude_type=exclude_type,
+                                 s_method=s_method_freq, s_sigma=s_sigma_freq, average_every=average_every_freq,
                           method=method, bl_para=bl_para, verbose=verbose)
 
     if njoin is not None and njoin > 1:
