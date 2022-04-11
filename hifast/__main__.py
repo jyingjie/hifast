@@ -17,6 +17,7 @@ subcomands_type1 = [
     'add_radec',
     'sub_ref',
     'convert',
+    'downsample',
      ]
 
 subcomands_type2 = [
