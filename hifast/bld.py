@@ -126,6 +126,10 @@ class IO(BaseIO):
 
     def gen_s2p_out(self,):
         args = self.args
+        if args.interact:
+            self.s2p_out = interact_spec.bld
+            return
+
         # gen self.s2p_out
         s2p = self.s2p[:]
         # is_excluded
@@ -167,10 +171,10 @@ def interact(args):
     interact.freq = fs['freq'][:]
     interact.frange = args.frange
     interact.nproc = args.nproc
-    interact.length = args.length
+    interact.length = min(args.length, interact.T2p.shape[1])
     interact.figsize = args.figsize
     interact.ylim = args.ylim[0] if len(args.ylim) == 1 else args.ylim
-    interact.main()
+    return interact.main()
     # sys.exit()
 
 # Cell
@@ -181,7 +185,9 @@ if __name__ == '__main__':
     # print("----------")
     # print(parser.format_values())  # useful for logging where different settings came from
     if args_.interact:
-        interact(args_)
+        interact_spec = interact(args_)[0]
+        save = IO(args_)
+        print('Please run \'save()\' in the notebook cell to save your results')
     else:
         print('#'*35+'Args'+'#'*35)
         print(parser.format_values())  # useful for logging where different settings came from
