@@ -107,6 +107,8 @@ group.add_argument('--sf_rfi_last',type=float, default=10,
                    help='rfi lasts at least 10 spec numbers')
 group.add_argument('--sf_ext_add',type = int,default=0,
                    help='extend edge')
+group.add_argument('--sf_mask_rms_times',type = float, default=3,
+                   help='mask from peak to 2 sides, until RMS drops to 3 times of RMS')
 
 ################## Period 8 MHZ RFI #######################
 parser.add_argument('--rms_sigma', type=float, default =6,
@@ -271,7 +273,8 @@ class IO(BaseIO):
                 'sf_frange_step',
                 'sf_mean_times',
                 'sf_diff_times',
-                'sf_ext_add',]
+                'sf_ext_add',
+                'sf_mask_rms_times',]
         for key in keys:
             shortf_args[key[3:]] = getattr(args, key)
         shortf_args['rfi_width_lim'] = args.sf_rfi_last

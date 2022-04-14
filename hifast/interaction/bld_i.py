@@ -44,7 +44,7 @@ class Test(object):
             elif self.is_excluded.ndim == 2 and self.is_excluded.shape == T2p.shape[1:]:
                 self.is_excluded_t = self.is_excluded[start:start+length][...,None]
             else:
-                raise('shape of ``is_excluded``')
+                raise ValueError('shape of ``is_excluded``')
         else:
             self.is_excluded_t = None
 

@@ -775,7 +775,7 @@ def find_t(data,freq,frange,thr_type = 'input_med_times',
             pdf.savefig();plt.close()
     return  is_timerfi
 
-def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,rms_thr_times=3,**kwargs):
+def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,mask_rms_times=3,**kwargs):
     """
     Other parameters are the same as previous.
     """
@@ -798,7 +798,7 @@ def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,rms_thr_times=
         fmax = freq[f_use][np.argmax(sm)]
         f50 = freq[f_use][sm > MAX / 2]
         w50 = f50[-1] - f50[0]
-        rms_thresh = rms(mspec,freq,rms_frange) * rms_thr_times
+        rms_thresh = rms(mspec,freq,rms_frange) * mask_rms_times
 
         mask_frange = find_edge_2sides(mspec[f_use],freq[f_use],peak_position=fmax-w50/2,step=w50,
                  rms_thresh=rms_thresh,Print=False,ext_times=ext_times,small_rfi_times=0)

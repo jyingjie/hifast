@@ -117,9 +117,38 @@ def replace_spec(tn, spec, freq, exceed_use, restrict_use, rfi_width_lim, ext_se
     else:
         return newspec
     
-def save_rep(sm, freq, exceed_use, rfi_width_lim, ext_sec, ext, thr,):
+def save_rep_fixed(sm, freq, exceed_use, rfi_width_lim, ext_sec, step, freq_d, freq_u):
     """
-    save the extended replaced area 
+    save the extended replaced area, fixed freq step
+    """
+    from .markRFI import get_startend
+    
+    is_excluded = np.zeros_like(sm, dtype='bool') 
+    if np.sum(exceed_use) == 0:
+        return is_excluded
+
+    start, end = get_startend(exceed_use, rfi_width_lim, ext_sec,)
+    if len(start) == 0:
+        return is_excluded
+    
+    N = len(freq)
+    for s, e in zip(start, end):
+        if e > freq_d and s < freq_u:
+            if step > 0:
+                s0 = s - step
+                s0 = max(s0, 0)
+                e0 = e + step
+                e0 = min(e0, N)
+            else:
+                s0 = s 
+                e0 = e
+            is_excluded[s0:e0] = True
+        
+    return is_excluded
+    
+def save_rep_2sides(sm, freq, exceed_use, rfi_width_lim, ext_sec, ext, thr, freq_d, freq_u):
+    """
+    save the extended replaced area, from peak to 2 sides
     """
     from .markRFI import get_startend, find_edge_2sides
     
@@ -133,15 +162,20 @@ def save_rep(sm, freq, exceed_use, rfi_width_lim, ext_sec, ext, thr,):
     
     N = len(freq)
     for s, e in zip(start, end):
-        s0 = s - ext * 3
-        s0 = max(s0, 0)
-        e0 = e + ext * 3
-        e0 = min(e0, N)
-#         print(freq[s0],freq[e0])
-        mask_frange = find_edge_2sides(sm[s0:e0],freq[s0:e0],peak_position = freq[int((s0+e0)/2)],
-                small_rfi_times = 0, step=ext*fdelta, rms_thresh=thr,Print=False)
-#         print(mask_frange)
-        is_excluded[(freq>=mask_frange[0])&(freq<=mask_frange[1])] = True
+        if e > freq_d and s < freq_u:
+            s0 = s - ext * 5
+            s0 = max(s0, 0)
+            e0 = e + ext * 5
+            e0 = min(e0, N)
+            peak_position = freq[s:e][np.argmax(sm[s:e])]
+#             if e0 < N: print(s,e,s0,e0,freq[s],freq[e],freq[s0],freq[e0], peak_position)
+            mask_frange = find_edge_2sides(sm[s0:e0],freq[s0:e0],peak_position = peak_position,
+                    small_rfi_times = 1, step=1*ext*fdelta, rms_thresh=thr,Print=False)
+            if not np.isnan(mask_frange[0]):
+                dist = np.max(np.abs(mask_frange - peak_position))
+                mask_frange = peak_position + np.array([-1,1]) * dist
+#                 print(mask_frange)
+                is_excluded[(freq>=mask_frange[0])&(freq<=mask_frange[1])] = True
         
     return is_excluded
 
@@ -149,7 +183,7 @@ def save_rep(sm, freq, exceed_use, rfi_width_lim, ext_sec, ext, thr,):
 def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=None, times_s_thr2=None,
                  rms_sigma=None,  ext_freq=None, rms_frange=None, rfi_width_lim=None,
                  ext_sec=None, data_find = None, data_trough = None, data_restrict = None,
-                 save_is_excluded = False, **kwargs):
+                 save_is_excluded = False,ex_step = 0, **kwargs):
     """
     replace mw, rfi or others by near ripple section
 
@@ -188,7 +222,14 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=
     else:
         RESTRICT = False if data_restrict.shape != data.shape else True
     
-    is_excluded = np.zeros_like(data,dtype=bool) if save_is_excluded else np.array([None])
+    if save_is_excluded:
+        is_excluded = np.zeros_like(data,dtype=bool)        
+        Lfreq = len(freq)
+        freq_d = int(Lfreq * 0.1)
+        freq_u = int(Lfreq * 0.9)
+        save_ex_step = int(np.around(ex_step / fdelta))
+    else:
+        is_excluded = np.array([None])
 
     from ..utils.misc import smooth1d
     MAX = np.nanmax(data)*20
@@ -199,22 +240,25 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=
             if np.sum(include) > 0:
                 spec[include] = MAX * 20
 
-            find = data_find[tn]
+            find = ex_sm = data_find[tn]
             # find used to define replace area
             RMS = rms(find, freq, rms_vrange=rms_frange)
             thr_s = RMS*times_s_thr2
             exceed_use = (np.abs(find) > thr_s) | time_rfi[tn]
             
-            if save_is_excluded:
-                is_excluded[tn,:] = save_rep(find, freq, exceed_use, rfi_width_lim, 
-                                             ext_sec, ext, thr_s,)
-
             if RESTRICT:
-                restrict = data_restrict[tn]
+                restrict = ex_sm = data_restrict[tn]
                 # restrict used to restrict replace area in one spectra
                 restrict_use = (restrict > thr_s) | time_rfi[tn]
             else:
                 restrict_use = np.full(freq.shape, True)
+            
+            if save_is_excluded:
+                # save sources or RFI positions
+                is_excluded[tn,:] = save_rep_fixed(ex_sm, freq, exceed_use, rfi_width_lim, 
+                                             ext_sec, save_ex_step, freq_d,freq_u)
+#                 is_excluded[tn,:] = save_rep_2sides(ex_sm, freq, exceed_use, rfi_width_lim, 
+#                                              ext_sec, ext, thr_s, freq_d,freq_u)
 
             # trough used to find ripples valleys
             trough = data_trough[tn]
@@ -228,6 +272,11 @@ def repalce_near(data, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=
 
             data_rep[tn, :] = newspec
 
+    if save_is_excluded:
+        # two edges do not mask 
+        is_excluded[:,:freq_d] = False
+        is_excluded[:,freq_u:] = False
+        
     return data_rep, is_excluded
 
 # Cell
