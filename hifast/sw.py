@@ -21,7 +21,7 @@ parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_f
                     help="if set, don't check or add ra dec")
 parser.add_argument('--nproc', '-n', type=int, default=1,
                     help='number of process used in fitting baseline')
-parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True',
+parser.add_argument('--show_prog', type=bool_fun, choices=[True, False],
                     help='')
 
 # smooth
@@ -500,11 +500,6 @@ if __name__ == '__main__':
     # print(parser.format_help())
     # print("----------")
     # print(parser.format_values())  # useful for logging where different settings came from
-    
-    from tqdm import tqdm
-    from functools import partialmethod
-    if not args_.show_prog:
-        tqdm.__init__ = partialmethod(tqdm.__init__, disable=True)
     
     if args_.interact:
         interact(args_)

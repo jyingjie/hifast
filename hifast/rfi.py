@@ -17,6 +17,8 @@ parser.add_argument('fpath',
                     help='input baselined spectra file path.')
 parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
                     help="don't check or add ra dec")
+parser.add_argument('--show_prog', type=bool_fun, choices=[True, False],
+                    help='')
 
 #################### Time domain continuous RFI ######################
 group = parser.add_argument_group(f'*Time domain continuous RFI\n{sep_line}')
