@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
 import numpy as np
 from scipy import special
 from astropy.coordinates import SkyCoord
@@ -44,7 +41,7 @@ def conv_fun(dis, beamsize=2.9/60, kernel='bessel_gaussian'):
     return wei
 
 
-def pixel_spec(spec, dis, method='reweight', sigma=1.275088/60, beamsize=2.9/60, statistic='median'):
+def pixel_spec(spec, dis, method='bessel_gaussian', sigma=1.275088/60, beamsize=2.9/60, statistic='median', frac_finite_min=1):
     """
     -----------------
     spec: flux
@@ -52,24 +49,46 @@ def pixel_spec(spec, dis, method='reweight', sigma=1.275088/60, beamsize=2.9/60,
     method: str; 'bessel_gaussian', 'gaussian', 'sinc_gaussian', 'reweight', 'mean', 'median'
     sigma: degree, used in 'reweight'
     statistic: str; median or mean, default is median; used in 'reweight'
+    frac_finite_min: if the number of ``finite value`` in a channel is zero or smaller than ``frac_finite_min*len(spec)``, 
+                     the output value in it will be set as np.nan
     """
+    if frac_finite_min < 1:
+        _MEAN = np.nanmean
+        _MEDIAN = np.nanmedian
+        _SUM = np.nansum
+        is_finite = np.isfinite(spec)
+    else:
+        _MEAN = np.mean
+        _MEDIAN = np.median
+        _SUM = np.sum
+    
     if method == 'bessel_gaussian' or method == 'gaussian' or method =='sinc_gaussian':
         wei = conv_fun(dis, beamsize, kernel=method)
-        return np.nansum(spec*wei.reshape((-1,)+(1,)*(spec.ndim-1)),axis=0)/np.nansum(wei)
+        wei = wei.reshape((-1,)+(1,)*(spec.ndim-1))
+        if frac_finite_min < 1:
+            s = _SUM(spec*wei, axis=0)/_SUM(wei*is_finite, axis=0)
+        else:
+            s = _SUM(spec*wei, axis=0)/_SUM(wei)
+            
     elif method == "reweight":
         #Barnes el. al. 2001, MNRAS 322, 486 https://ui.adsabs.harvard.edu/abs/2001MNRAS.322..486B/abstract
-        if statistic=='median':
-            wei_m= np.nanmedian(np.exp(- (dis/sigma)**2/2))
-            return np.nanmedian(spec,axis=0)/wei_m
-        elif statistic=='mean':
-            wei_m= np.nanmean(np.exp(- (dis/sigma)**2/2))
-            return np.nanmean(spec,axis=0)/wei_m
-    elif method=='mean':
-        return np.nanmean(spec,axis=0)
-    elif method=='median':
-        return np.nanmedian(spec,axis=0)
+        if statistic == 'median':
+            wei_m = _MEDIAN(np.exp(- (dis/sigma)**2/2))
+            s = _MEDIAN(spec, axis=0)/wei_m
+        elif statistic == 'mean':
+            wei_m= _MEAN(np.exp(- (dis/sigma)**2/2))
+            s = _MEAN(spec, axis=0)/wei_m
+    elif method == 'mean':
+        s = _MEAN(spec, axis=0)
+    elif method == 'median':
+        s = _MEDIAN(spec, axis=0)
     else:
         raise(ValueError('method'))
+        
+    if frac_finite_min < 1:
+        s[np.sum(is_finite, axis=0) < len(spec)*frac_finite_min] = np.nan
+    
+    return s
 
 def gridding(ra, dec, spectra, ra_grid, dec_grid, r=1.5/60, **kwargs):
     """
@@ -107,6 +126,8 @@ def gridding(ra, dec, spectra, ra_grid, dec_grid, r=1.5/60, **kwargs):
         dis= d2d[start_ : stop_ ] #distance of spec from the center of grid
         ind_use_= ind_cata[start_ : stop_ ] # index in cata, ra, dec, spectra
         spec_= spectra[ind_use_]
+        if len(spec_) == 0:
+            continue
         m,n=i//grid.shape[1], i%grid.shape[1] #index in grid before flatten
         nums[m,n]=len(dis)
         out[:,m,n]= pixel_spec(spec_, dis.degree, **kwargs)

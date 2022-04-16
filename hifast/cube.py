@@ -201,6 +201,8 @@ if __name__ == '__main__':
                        help='spectra inside r_cut from the grid point will be considered; unit: arc second')
     parser.add_argument('-m','--method', default='bessel_gaussian', choices=['reweight', 'mean', 'median', 'gaussian', 'bessel_gaussian', 'sinc_gaussian'],
                        help='method to process the spec in r_cut')
+    parser.add_argument('--frac_finite_min', '--frac-finite-min', type=float, default=1,
+                       help='For a grid point having ``n``` spectra in ``r_cut``, if the number of ``finite value`` in a channel is zero or smaller than ``frac_finite_min*n``, the output value in the channel will be set as ``nan``')
     parser.add_argument('-t','--threshold', type=float,
                        help='vals less than threshold will be masked as nan')
 
@@ -321,7 +323,8 @@ if __name__ == '__main__':
     ra_grid, dec_grid = gen_grid_radec(header)
     #print('ra range in generated cube fits file', np.min(ra_grid), np.max(ra_grid))
     #print('dec range in generated cube fits file', np.min(dec_grid), np.max(dec_grid))
-    out, nums= grid.gridding(ra, dec, Ta, ra_grid, dec_grid, r=r_cut, method=method) 
+    out, nums= grid.gridding(ra, dec, Ta, ra_grid, dec_grid, r=r_cut, method=method, 
+                            frac_finite_min=args.frac_finite_min) 
     hdu = fits.PrimaryHDU(out.astype('float32'), header=header)
     print(f'Saving to {outname}.')
     overwrite = True if args.force else False
