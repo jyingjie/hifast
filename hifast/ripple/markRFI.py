@@ -2,7 +2,7 @@
 
 __all__ = ['rms', 'get_rms_frange', 'real_rms', 'std', 'real_std', 'find_local_peak', 'fit_line', 'get_startend',
            'find_center', 'check_repeat_center', 'polyfit1order', 'mask_RFI', 'find_edge_2sides', 'mask_RFI_2sides',
-           'center_theory', 'find_RFI', 'find_t', 'mask_sf', 'mask_time_rfi', 'mask_freq_rfi']
+           'center_theory', 'find_RFI', 'find_t', 'mask_sf','mask_lf','mask_nr', 'mask_time_rfi', 'mask_freq_rfi']
 
 # Cell
 # author: Xu Chen 2021.06
@@ -815,10 +815,46 @@ def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,mask_rms_times
     print("Found :D")
     return ret
 
+def mask_lf(data,freq, frange = None, rms_frange = None, mask_rms_times = -1,**kwargs):
+    """
+    Other parameters are the same as previous.
+    """
+    ret = np.zeros_like(data,dtype = 'bool')
+    
+    is_timerfi = find_t(data,freq,frange =frange, **kwargs)
+    if is_timerfi.any() == False:
+        print("No long-freq time rfi is found.")
+        return ret
+    log.info(f"Looking for long-freq time RFI ...")
+    
+    if mask_rms_times == -1:
+        ret[is_timerfi,:] = True
+        print("Mask the whole spec with rfi :(")
+    elif mask_rms_times == 0:
+        mask_use = (freq>frange[0])&(freq<frange[1])
+        ret[is_timerfi,:] = True
+        ret[:,~mask_use] = False
+        print(f"Mask spec with rfi in input freq range {frange}")
+    elif mask_rms_times > 0:
+        spec = data[~is_timerfi][0]
+        rms_thresh = rms(spec,freq,rms_frange) * mask_rms_times
+        mask_use = data[is_timerfi,:] > rms_thresh
+        ret[is_timerfi,:] = mask_use
+        print(f"Mask spec with rfi above rms thr {rms_thresh}")
+    else:
+        raise ValueError("mask_rms_times should be -1, 0, or >0 !")
+    
+    ext_add = kwargs['ext_add']
+    if ext_add is not None:
+        from ..utils.misc import extend_Trues
+        ret = extend_Trues(ret,axis = -1,ext_frac = 0,ext_add = ext_add)
+        
+    print("Found :D")
+    return ret
+
 # Cell
 def mask_time_rfi(data,freq,rtype = 'short-freq',frange = None, file=None,
-                  rms_frange = None,frange_step = None,lf_mask_whole=True,
-                  plot_norfi = False, **kwargs):
+                  frange_step = None, plot_norfi = False, **kwargs):
     """
     rtype: 'short-freq','long-freq'
     frange: freq range
@@ -843,10 +879,10 @@ def mask_time_rfi(data,freq,rtype = 'short-freq',frange = None, file=None,
                 franges = np.vstack((frq1,frq2)).T
 
             for nf in tqdm(range(franges.shape[0])):
-                ret |= mask_sf(data,freq,frange = franges[nf],rms_frange = rms_frange,**kwargs)
+                ret |= mask_sf(data,freq,frange = franges[nf],**kwargs)
 
         elif len(frange) == 2 and (frange[1] - frange[0]) > 0:
-            ret = mask_sf(data,freq,frange,rms_frange = rms_frange,**kwargs)
+            ret = mask_sf(data,freq,frange,**kwargs)
         else:
             raise ValueError("frange should like [fmin,fmax] or a string (RFI npy filepath) or a certain frange_step.")
 
@@ -854,39 +890,49 @@ def mask_time_rfi(data,freq,rtype = 'short-freq',frange = None, file=None,
             print("No short-freq time rfi is found.")
 
     elif rtype == 'long-freq':
-        log.info(f"Looking for long-freq time RFI ...")
         if len(frange) == 2:
-            is_timerfi = find_t(data,freq,frange =frange,plot_norfi = plot_norfi, **kwargs)
-            if is_timerfi.any() == False:
-                print("No long-freq time rfi is found.")
-                return ret
-            ret[is_timerfi,:] = True
-            if lf_mask_whole:
-                print("Mask the whole spec with rfi :(")
-            else:
-                mask_use = (freq>frange[0])&(freq<frange[1])
-                print(f"Mask spec with rfi in freq range {frange}")
-                ret[:,~mask_use] = False
-
-            print("Found :D")
+            ret = mask_lf(data,freq, frange,  **kwargs)
         else:
             raise ValueError("frange should like [fmin,fmax].")
 
     print("Finish")
     return ret
 
-# Cell
-def mask_freq_rfi(data,freq,rtype = 'long-time',RMS = None,**kwargs):
-
+def mask_nr(data,freq, rms_frange = None, mask_rms_times = 0, **kwargs):
+    """
+    Other parameters are the same as previous.
+    """
     ret = np.zeros_like(data,dtype = 'bool')
-    if rtype == 'long-time':
-        log.info(f"Looking for long-time narrowband freq RFI ...")
-        is_freqrfi = find_t(data,freq,axis = 'freq', **kwargs)
-        if is_freqrfi.any() == False:
-            print("No long-time freq rfi is found.")
-            return ret
+    
+    log.info(f"Looking for long-time narrowband freq RFI ...")
+    is_freqrfi = find_t(data,freq,axis = 'freq', **kwargs)
+    if is_freqrfi.any() == False:
+        print("No long-time freq rfi is found.")
+        return ret
+    
+    if mask_rms_times == 0:
         ret[:,is_freqrfi] = True
-        print("Found :D")
+        print("Mask the whole chanels with rfi :P")
+    elif mask_rms_times > 0:
+        tmin = np.argmin(np.nanmean(data, axis = 0))
+        spec = data[tmin]
+        rms_thresh = rms(spec,freq,rms_frange) * mask_rms_times
+        mask_use = data[:,is_freqrfi] > rms_thresh
+        ret[:,is_freqrfi] = mask_use
+        print(f"Mask channels with rfi above rms thr {rms_thresh}")
+        
+    ext_add = kwargs['ext_add']
+    if ext_add is not None:
+        from ..utils.misc import extend_Trues
+        ret = extend_Trues(ret,axis = 0,ext_frac = 0,ext_add = ext_add)
+        
+    print("Found :D")
+    return ret
+
+# Cell
+def mask_freq_rfi(data,freq,rtype = 'long-time',**kwargs):
+    if rtype == 'long-time':
+        ret = mask_nr(data,freq, **kwargs)
 
     print("Finish")
     return ret

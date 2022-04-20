@@ -53,6 +53,8 @@ group.add_argument('--nr_mean_times', type=float, default=100,
 group.add_argument('--nr_diff_times', type=float, default=30,
                    help="second threhold, sharp edge on time axis. diff above this times of median will be recognized; \
                    if --lsn_thr_type == 'input_thr', input diff_thr here.")
+group.add_argument('--nr_mask_rms_times',type = float, default=0,
+                   help='if == 0, mask whole channel; if > 0, mask RMS above ~ times of RMS. ')
 
 ####################### Polarized RFI #######################################
 group = parser.add_argument_group(f'*Polarized RFI\n{sep_line}')
@@ -83,10 +85,13 @@ group.add_argument('--lf_mean_times', type=float, default=2,
                    if --lsn_thr_type == 'input_thr', input mean_thr here.")
 group.add_argument('--lf_diff_times', type=float, default=0,
                    help='set 0 and do not change this parameter')
-group.add_argument('--lf_rfi_last',type=float, default=50,
-                   help='rfi lasts at least 20 spec numbers')
+group.add_argument('--lf_rfi_last',type=float, nargs=2, default= [50, float("INF")],
+                   help='rfi lasts at least ~ spec numbers')
 group.add_argument('--lf_ext_add',type = int,default=50,
                    help='extend edge')
+group.add_argument('--lf_mask_rms_times',type = float, default=-1,
+                   help='if == -1, mask whole spec; if == 0, only mask region in frange; \
+                   if > 0, mask RMS above ~ times of RMS. ')
 ## short freq time rfi
 group = parser.add_argument_group(f'*Short freq \n{sep_line}')
 group.add_argument('--sf', '--short_freq', type=bool_fun, choices=[True, False], default='False',
@@ -103,7 +108,7 @@ group.add_argument('--sf_mean_times', type=float, default=3,
 group.add_argument('--sf_diff_times', type=float, default=1,
                    help="second threhold, sharp edge on time axis. diff above this times of median will be recognized; \
                    if --lsn_thr_type == 'input_thr', input diff_thr here.")
-group.add_argument('--sf_rfi_last',type=float, default=10,
+group.add_argument('--sf_rfi_last',type=float, nargs=2, default=[10,float("INF")],
                    help='rfi lasts at least 10 spec numbers')
 group.add_argument('--sf_ext_add',type = int,default=0,
                    help='extend edge')
@@ -229,11 +234,13 @@ class IO(BaseIO):
 
         narr_args = {}
         keys = ['nr_mean_times',
-                'nr_diff_times',]
+                'nr_diff_times',
+                'nr_mask_rms_times',]
         for key in keys:
             narr_args[key[3:]] = getattr(args, key)
         narr_args['frange'] = None
         narr_args['rfi_width_lim'] = [0,2]
+        narr_args['rms_frange'] = args.rms_frange
         narr_args['ext_add'] = 1
         narr_args['thr_type'] = args.lsn_thr_type
 
@@ -251,10 +258,12 @@ class IO(BaseIO):
         keys = ['lf_frange',
                 'lf_mean_times',
                 'lf_diff_times',
-                'lf_ext_add']
+                'lf_ext_add',
+                'lf_mask_rms_times',]
         for key in keys:
             longf_args[key[3:]] = getattr(args, key)
         longf_args['rfi_width_lim'] = args.lf_rfi_last
+        longf_args['rms_frange'] = args.rms_frange
         longf_args['thr_type'] = args.lsn_thr_type
 
         return mask_time_rfi(T, self.freq, rtype = 'long-freq',plot = False,
@@ -293,7 +302,7 @@ class IO(BaseIO):
 
         t_rfi = np.isnan(T)
         Tt = deepcopy(T)
-        Tt[:,self.protect_use] = 0
+        Tt[:,self.protect_use] = np.nan
 
         if args.lf:
             print('finding lf')
