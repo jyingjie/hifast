@@ -460,7 +460,7 @@ class BaseIO(Path_IO):
         self.mjd = fs['mjd'][:]
         self.freq = fs['freq'][:]
         self.freq_ori = self.freq
-        if getattr(args, 'frange', False) and (args.frange[0] > 0. or args.frange[0] < float('inf')):
+        if getattr(args, 'frange', False) and (args.frange[0] > 0. or args.frange[1] < float('inf')):
             self.is_use_freq = (self.freq >= args.frange[0]) & (self.freq <= args.frange[1])
             self.freq = self.freq[self.is_use_freq]
         else:
@@ -534,9 +534,17 @@ class BaseIO(Path_IO):
         for field in self.add_fields:
             if field in self.fs.keys():
                 dict_out[field] = self.fs[field][:]
-        # process vel if set frange
-        if 'vel' in dict_out.keys() and self.is_use_freq is not None:
-            dict_out['vel'] = dict_out['vel'][self.is_use_freq]
+        # process if set frange
+        if self.is_use_freq is not None:
+            if 'vel' in dict_out.keys():
+                dict_out['vel'] = dict_out['vel'][self.is_use_freq]
+            if 'is_rfi' in dict_out.keys():
+                dict_out['is_rfi'] = dict_out['is_rfi'][:, self.is_use_freq]
+            if 'Tcal' in dict_out.keys():
+                try:
+                    dict_out['Tcal'] = dict_out['Tcal'][:, self.is_use_freq]
+                except IndexError as IE:
+                    print(IE)
         # add ra dec
         for key in ['ra', 'dec', 'is_extrapo']:
             if hasattr(self, key):

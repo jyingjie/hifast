@@ -640,6 +640,12 @@ def minmed(data, nsection = None, nspec = None, npart = 1, method = 'MedMed'):
     bn = check_bottleneck()
     
     N = data.shape[0]
+    print(f"Divided the data into {npart} part(s).")
+    if nsection is None: 
+        print(f"Each part has {N//npart//nspec} sections. Each section has {nspec} specs.")
+    elif nspec is None:
+        print(f"Each part has {nsection} sections. Each section has {N//npart//nsection} specs.")
+    
     p1s, p2s = get_trange(N, npart)
     
     bsl = np.zeros_like(data)

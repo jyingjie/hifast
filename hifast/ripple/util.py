@@ -106,8 +106,26 @@ class Args(object):
 class Read_hdf5(BaseIO):
     ver = 'old'
     
-    def load_and_add_Header(self,):
-        pass
+    def __init__(self, args, dict_in=None, inplace_args=False):
+        """
+        args: class
+              including attributes: fpath, outdir, frange
+        dict_in: if None, load data from args.fpath, if set, omit data in args.fpath
+        """
+        self.args = args if inplace_args else deepcopy(args)
+        self.dict_in = dict_in
+        self._gen_fpath_out()
+        if self.dict_in is None:
+            self._check_fout()
+        self.nB = self.get_nB(self.args.fpath)
+        self._import_m()
+        self.open_fpath()
+        self.load_specs()
+        self.load_radec()
+        try:
+            self.load_and_add_Header()
+        except TypeError:
+            pass
     
     def get_data(self, polar = 'none'):
         data = deepcopy(self.s2p)

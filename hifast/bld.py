@@ -64,9 +64,9 @@ group.add_argument('--niter', type=int, default=100,
 group = parser.add_argument_group(f'*MinMed or MedMed\n{sep_line}')
 group.add_argument('--nsection', type=int, 
                    help='divide each part into n sections. Same with nspec')
-group.add_argument('--nspec', type=int, default=300,
+group.add_argument('--nspec', type=int,
                    help='divide each part into n sections. One section has n specs.')
-group.add_argument('--npart', type=int, default=1,
+group.add_argument('--npart', type=int,
                    help='divide data into n parts') 
 
 # interaction
@@ -118,6 +118,10 @@ class IO(BaseIO):
         fs = self.fs
         if 'is_excluded' in fs.keys():
             is_excluded = fs['is_excluded'][:]
+            
+            whole_rfi = np.all(is_excluded, axis=1)
+            is_excluded[whole_rfi] = False
+            
             if is_excluded.ndim != self.s2p.ndim:
                 is_excluded = np.full(is_excluded.shape + (2,), is_excluded[...,None])
             self.is_excluded = is_excluded
