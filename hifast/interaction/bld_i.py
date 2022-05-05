@@ -116,9 +116,10 @@ def main():
     sliders = {}
     sliders.update(_BoundedIntText(
         start=(0, 0, tes.T2p.shape[1]-length, 1), polar=(0, 0, tes.T2p.shape[0], 1)))
-    sliders.update(_IntSlider(njoin=(0, 1, length, 1)))
+    sliders.update(_IntSlider(njoin=(0, 1, length, 1),
+                              average_every_freq=(0, 1, 40, 1)))
     sliders.update(_Dropdown(method=method,
-                             s_method_freq=('gaussian', 'boxcar', 'none'),
+                             s_method_freq=('none', 'gaussian', 'boxcar',),
                              s_method_t=('none', 'gaussian', 'boxcar'),
                              exclude_type=('none', 'always', 'end', 'auto', 'auto1', 'auto2'),
                              ))
@@ -178,7 +179,7 @@ def main():
                           controls=controls, xlim=xlim, ylim=ylim2, ax=ax3)
 
     plt.axhline(y=0, )
-    ax1.set_title('origial spectra', fontsize=8)
+    ax1.set_title('orange line: gaussian smoothed for better view. \n origial spectra', fontsize=8)
     ax2.set_title('spectra after baseline removed', fontsize=8)
 
     def return_v(*args, **kwargs): return tes.frange_excluded[0]
@@ -190,16 +191,30 @@ def main():
 
     w = controls.controls
     hbs = [
-        widgets.HBox([widgets.Label(value=f"1. Select spectra from $start$(max:{controls.controls['start'].max}) to $start+{length}$ to fit:"),
-                      w['start'], w['polar']]),
-        widgets.HBox([widgets.Label(value=f"2. Fitting:"), w['njoin'], w['offset'],w['ratio'],w['exclude_type']]),
-        widgets.HBox([w['s_method_t'], w['s_sigma_t'],
-                     w['s_method_freq'], w['s_sigma_freq']]),
-        widgets.HBox([w['method'], w['lam'], w['deg'], w['niter']]),
+        widgets.HBox([widgets.Label(value=rf"$Select$ spectra from $start$(max:{controls.controls['start'].max}) to $start+{length}$ to fit:"),
+                      w['start'], w['polar'],
+                      widgets.Label('.'),
+                      w['ratio']]),
         widgets.HBox(
-            [widgets.Label(value=f"3. Show one spectra in top and middle panels:"), w['i']]),
-        widgets.HBox([widgets.Label(
-            value=f"4. Show the stack spectra of in the range in the bottom panel:"), w['start_stop']]),
+            [widgets.Label(value=r"$One$ spectrum in top & middle:"),
+             w['i'],
+             widgets.Label(value=r"$Stacked$ spectra in bottom:"),
+             w['start_stop']]),
+        widgets.HBox([w['njoin'],
+                      w['s_method_t'],
+                      w['s_sigma_t'],
+                      w['niter'],
+                     ]),
+
+
+
+
+        widgets.HBox([w['average_every_freq'],
+                      w['s_method_freq'],
+                      w['s_sigma_freq'],
+                      w['offset']]),
+        widgets.HBox([w['method'], w['lam'], w['deg'],
+                      w['exclude_type']]),
         widgets.HBox([w['frange_excluded'], ]),
     ]
 
