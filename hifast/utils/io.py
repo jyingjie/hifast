@@ -179,9 +179,9 @@ def gen_carta_group(f, data_shape, wcs_data_name, axis1=None, axis2=None):
            'CRVAL1': 1420.,
            'CRVAL2': 1.,
            'CRVAL3': 1.,
-           'CTYPE1': np.bytes_('FREQ'),
-           'CTYPE2': np.bytes_('LINEAR'),
-           'CTYPE3': np.bytes_('LINEAR'),
+           'CTYPE1': np.bytes_('OFFSET'),
+           'CTYPE2': np.bytes_('MJD-OBS'),
+           'CTYPE3': np.bytes_('POLAR'),
            'CUNIT1': np.bytes_('MHz'),
            'CUNIT2': np.bytes_('d'),
            'CUNIT3': np.bytes_('s'),
@@ -491,7 +491,8 @@ class BaseIO(Path_IO):
                 raise(ValueError('please check --frange'))
             s2p = s2p[..., inds[0]:inds[-1]+1]  # freq axis is at end; inds is continuous
         if self.ver == 'old':
-            self.s2p = PolarMjdChan_to_MjdChanPolar(s2p[:])
+            s2p = PolarMjdChan_to_MjdChanPolar(s2p[:])
+        self.s2p = s2p
         self.outfield = outfield
         self.infield = infield
 
@@ -533,13 +534,17 @@ class BaseIO(Path_IO):
         self.add_fields += args
         for field in self.add_fields:
             if field in self.fs.keys():
-                dict_out[field] = self.fs[field][:]
+                dict_out[field] = self.fs[field][()]
         # process if set frange
         if self.is_use_freq is not None:
             if 'vel' in dict_out.keys():
                 dict_out['vel'] = dict_out['vel'][self.is_use_freq]
             if 'Tcal' in dict_out.keys():
-                dict_out['Tcal'] = dict_out['Tcal'][:, self.is_use_freq]
+                # use ``try`` for backwards compatible
+                try:
+                    dict_out['Tcal'] = dict_out['Tcal'][:, self.is_use_freq]
+                except:
+                    pass
         # add ra dec
         for key in ['ra', 'dec', 'is_extrapo']:
             if hasattr(self, key):
