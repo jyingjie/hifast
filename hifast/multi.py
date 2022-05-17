@@ -18,7 +18,7 @@ group = parser.add_argument_group(f'*frame correction\n{sep_line}')
 # frame correct
 group.add_argument('--fc', type=bool_fun, choices=[True, False], default='True', not_in_write_out_config_file=True,
                    help='frame correct')
-group.add_argument('--frame', choices=['HELIOCEN', 'LSRK'], default='LSRK',
+group.add_argument('--frame', choices=['BARYCENT', 'HELIOCEN', 'LSRK', 'LSRD'], default='LSRK',
                    help='Velocity Rest Frames, HELIOCEN or LSRK')
 group = parser.add_argument_group(f'*after\n{sep_line}')
 group.add_argument('--replace_rfi', type=bool_fun, choices=[True, False], default='True',
@@ -60,7 +60,7 @@ class IO(BaseIO):
             s2p = np.mean(s2p, axis=2, keepdims=True)
         # frame
         if args.fc:
-            from .core.corr_vel import freq2vel, frame_correct
+            from .core.corr_vel import freq2vel, correct_spec
             if 'frame' in self.Header.keys():
                 raise(ValueError(f'rest frame already corrected... please set --fc as False'))
                 sys.exit()
@@ -69,11 +69,11 @@ class IO(BaseIO):
                 self.Header['vel_type'] = 'VRAD'
             # correct is_rfi
             if is_rfi is not None and not args.replace_rfi:
-                is_rfi, _ = frame_correct(is_rfi, self.freq, self.mjd,
-                                          self.ra, self.dec, frame=args.frame, interp_kind='nearest')
+                is_rfi, _ = correct_spec(is_rfi, self.freq, self.ra, self.dec, self.mjd,
+                                           frame=args.frame, method='interp', interp_kind='nearest')
                 is_rfi = np.array(is_rfi, dtype=bool)
             print('frame correcting...')
-            s2p, freq = frame_correct(s2p, self.freq, self.mjd, self.ra, self.dec, frame=args.frame)
+            s2p, freq = correct_spec(s2p, self.freq, self.ra, self.dec, self.mjd, frame=args.frame, method='interp')
             vel = freq2vel(freq)
             self.s2p_out = s2p
             self.gen_dict_out(freq=freq, vel=vel)  # replace freq, add vel
