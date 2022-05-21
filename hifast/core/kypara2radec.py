@@ -77,7 +77,8 @@ def kypara2radec(obstime, multibeamAngle, nB, globalCenterX,  globalCenterY, glo
         print(f"relative humidity: {humidity}")
         if backend == 'erfa':
             print(f"dUT1: {dUT1}")
-    return AzZD2radec(obstime, Az, ZD, backend=backend)
+    ra, dec = AzZD2radec(obstime, Az, ZD, backend=backend)
+    return ra, dec, Az, ZD
     
     
     

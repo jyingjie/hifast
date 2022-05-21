@@ -214,13 +214,17 @@ def kydata2radec(ky_data, mjd, nBs='All', ky_fixed=False, nproc=1, backend='astr
         for i, nB in enumerate(nBs):
             radec['ra'+str(nB)]= res[i][0]
             radec['dec'+str(nB)]= res[i][1]
+            radec['Az'+str(nB)]= res[i][2]
+            radec['ZD'+str(nB)]= res[i][3]
     else:
         for ii, nB in enumerate(nBs):
             verbose = True if ii == 0 else False
-            ra_, dec_ = kypara2radec.kypara2radec(obstime, multibeamAngle, nB,
+            ra_, dec_, Az_, ZD_ = kypara2radec.kypara2radec(obstime, multibeamAngle, nB,
                                           globalCenterX,  globalCenterY, globalCenterZ, globalYaw, globalPitch, globalRoll, backend=backend, verbose=verbose)
             radec['ra'+str(nB)]= ra_
             radec['dec'+str(nB)]= dec_
+            radec['Az'+str(nB)]= Az_
+            radec['ZD'+str(nB)]= ZD_
             print(f'beam {nB}')
     return radec
 
@@ -235,7 +239,7 @@ def radec_interp(radec_ky, mjds_src):
     print('interpolating...')
     radec_src['is_extrapo']= (mjds_src < np.nanmin(mjds_ky)) | (mjds_src > np.nanmax(mjds_ky))
     for key in radec_ky:
-        if 'ra' in key or 'dec' in key or 'angle' in key:
+        if 'ra' in key or 'dec' in key or 'angle' in key or 'Az' in key or 'ZD' in key:
             value = radec_ky[key]
             if 'ra' in key:
                 value = _tight_ra(value)

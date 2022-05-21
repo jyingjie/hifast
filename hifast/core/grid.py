@@ -6,6 +6,18 @@ from scipy import special
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 
+try:
+    import bottleneck as bn
+    MEDIAN = bn.median
+    NANMEDIAN = bn.nanmedian
+    MEAN = bn.nanmean
+    STD = bn.nanstd
+except ImportError:
+    MEDIAN = np.median
+    NANMEDIAN = np.nanmedian
+    MEAN = np.mean
+    STD = np.std
+
 def _get_start_stop(arr,arr_in):
     """
     arr_in: array
@@ -68,6 +80,9 @@ def pixel_spec(spec, dis, method='reweight', sigma=1.275088/60, beamsize=2.9/60,
         return np.nanmean(spec,axis=0)
     elif method=='median':
         return np.nanmedian(spec,axis=0)
+    elif method=='wmedian':
+        wei = np.exp(- (dis/sigma)**2/2)
+        return NANMEDIAN(spec*wei[:,None], axis=0)/NANMEDIAN(wei)
     else:
         raise(ValueError('method'))
 
