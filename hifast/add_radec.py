@@ -38,7 +38,7 @@ def get_radec(file_spec, mjd, nB_radec=1, file_radec = None):
 
     """
     nB = get_nB(file_spec)
-    if file_radec is None: 
+    if file_radec is None:
         # ra dec file
         file_radec = file_spec.rsplit('specs_T', 1)[0] + 'specs_T-radec.hdf5'
         #file_radec = re.findall(r'.*-specs_T', file_radec)+'-radec.hdf5'
