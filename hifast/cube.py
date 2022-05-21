@@ -81,6 +81,7 @@ def gen_header(ra_range, dec_range, x_delta, y_delta, z, proj, vel_type, frame, 
     header["BMAJ"] = 2.9/60
     header["BMIN"] = 2.9/60
     header["BPA"] = 0.0
+    header["BUNIT"] = 'Jy/beam'
     
     #add history
     if histories is not None:

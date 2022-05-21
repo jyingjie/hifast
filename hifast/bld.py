@@ -37,6 +37,7 @@ method += ['poly-'+r for r in rew_type]
 method += ['masPLS-'+r for r in rew_type]
 method += ['asPLS',]
 method += ['original']
+method += ['MedMed', 'MinMed']
 
 group.add_argument('--method', default='arPLS', choices=method,
                    help='method used to fit baseline, if set as none, skip this')
@@ -70,6 +71,15 @@ group.add_argument('--niter', type=int, default=100,
                    help='baseline fit parameters')
 group.add_argument('--exclude_type',
                    help='baseline fit parameters')
+
+# MinMed or MedMed
+group = parser.add_argument_group(f'*MinMed or MedMed\n{sep_line}')
+group.add_argument('--nsection', type=int, 
+                   help='divide each part into n sections. Same with nspec')
+group.add_argument('--nspec', type=int,
+                   help='divide each part into n sections. One section has n specs.')
+group.add_argument('--npart', type=int,
+                   help='divide data into n parts') 
 
 # interaction
 group = parser.add_argument_group(f'*Interaction\n{sep_line}')
@@ -120,10 +130,33 @@ class IO(BaseIO):
         fs = self.fs
         if 'is_excluded' in fs.keys():
             is_excluded = fs['is_excluded'][:]
+            
+            whole_rfi = np.all(is_excluded, axis=1)
+            is_excluded[whole_rfi] = False
+            
             if is_excluded.ndim != self.s2p.ndim:
                 is_excluded = np.full(is_excluded.shape + (2,), is_excluded[...,None])
             self.is_excluded = is_excluded
-
+    
+    def med_fit_baseline(self,):
+        args = self.args
+        # gen self.s2p_out
+        s2p = self.s2p[:]
+        from copy import deepcopy
+        s2p_ori = deepcopy(s2p)
+        import numpy as np
+        if 'is_rfi' in self.fs.keys():
+            is_rfi = self.fs['is_rfi'][:]
+            s2p[is_rfi,:] = np.nan
+        
+        from .ripple.sw_fft import minmed
+        kwargs = {}
+        keys = ['nsection', 'nspec', 'npart', 'method']
+        for key in keys:
+            kwargs[key] = getattr(args, key)
+        s2p = s2p_ori - minmed(s2p, **kwargs)
+        return s2p
+    
     def gen_s2p_out(self,):
         args = self.args
         if args.interact:
@@ -132,10 +165,13 @@ class IO(BaseIO):
 
         # gen self.s2p_out
         s2p = self.s2p[:]
-        # is_excluded
-        self._load_is_excluded()
         # fit baseline:
-        if args.method is not None and args.method != 'none':
+        if 'Med' in args.method:
+            print(f'Use {args.method} to substract baseline. Remember another linear substraction.')
+            s2p = self.med_fit_baseline()
+        elif args.method is not None and args.method != 'none':
+            # is_excluded
+            self._load_is_excluded()
             print('fit and substract baseline')
             s2p = self.fit_baseline(s2p, self.freq, self.mjd, args, getattr(self, 'is_excluded', None))
         else:
