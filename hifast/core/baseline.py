@@ -283,7 +283,9 @@ def _reweight_sym1(self, d):
     """
     dn = d if self.exclude is None else d[~self.exclude]
     mean, median, stddev = sigma_clipped_stats(dn)
-    wt = 1.0/(np.exp(2 * (abs(d)-(self.offset*stddev-median))/stddev))
+    m = median
+    s = stddev/2.
+    wt = 1./(1 + np.exp(2 * (abs(d)-(self.offset*s-m))/s))
     return wt
 
 _rew_fun_dict['sym1'] = _reweight_sym1
