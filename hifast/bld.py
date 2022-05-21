@@ -29,7 +29,17 @@ parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default
 
 # baseline fitting
 group = parser.add_argument_group(f'*BaseLine (set --method as none to skip this) \n{sep_line}')
-group.add_argument('--method', default='arPLS', choices=['none', 'arPLS', 'srPLS', 'asPLS', 'masPLS', 'Chebyshev', 'poly', 'original', 'MedMed', 'MinMed'],
+
+rew_type = ['asym1', 'asym2', 'asym3', 'sym1',]
+method = ['none']
+method += ['PLS-'+r for r in rew_type]
+method += ['poly-'+r for r in rew_type]
+method += ['masPLS-'+r for r in rew_type]
+method += ['asPLS',]
+method += ['original']
+method += ['MedMed', 'MinMed']
+
+group.add_argument('--method', default='arPLS', choices=method,
                    help='method used to fit baseline, if set as none, skip this')
 group.add_argument('--nproc', '-n', type=int, default=1,
                    help='number of process used in fitting baseline')
@@ -58,6 +68,8 @@ group.add_argument('--offset', type=float, default=2,
 group.add_argument('--ratio', type=float, default=0.01,
                    help='baseline fit parameters')
 group.add_argument('--niter', type=int, default=100,
+                   help='baseline fit parameters')
+group.add_argument('--exclude_type',
                    help='baseline fit parameters')
 
 # MinMed or MedMed
@@ -103,7 +115,7 @@ class IO(BaseIO):
         fit_kwargs = {}
         keys = ['method', 'nproc',
                 'njoin', 's_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',
-                'lam', 'deg', 'offset', 'ratio', 'niter']
+                'lam', 'deg', 'offset', 'ratio', 'niter', 'exclude_type']
         for key in keys:
             fit_kwargs[key] = getattr(args, key)
         fit_kwargs['verbose'] = args.show_prog
@@ -147,6 +159,10 @@ class IO(BaseIO):
     
     def gen_s2p_out(self,):
         args = self.args
+        if args.interact:
+            self.s2p_out = interact_spec.bld
+            return
+
         # gen self.s2p_out
         s2p = self.s2p[:]
         # fit baseline:
@@ -191,10 +207,10 @@ def interact(args):
     interact.freq = fs['freq'][:]
     interact.frange = args.frange
     interact.nproc = args.nproc
-    interact.length = args.length
+    interact.length = min(args.length, interact.T2p.shape[1])
     interact.figsize = args.figsize
     interact.ylim = args.ylim[0] if len(args.ylim) == 1 else args.ylim
-    interact.main()
+    return interact.main()
     # sys.exit()
 
 # Cell
@@ -205,7 +221,9 @@ if __name__ == '__main__':
     # print("----------")
     # print(parser.format_values())  # useful for logging where different settings came from
     if args_.interact:
-        interact(args_)
+        interact_spec = interact(args_)[0]
+        save = IO(args_)
+        print('Please run \'save()\' in the notebook cell to save your results')
     else:
         print('#'*35+'Args'+'#'*35)
         print(parser.format_values())  # useful for logging where different settings came from

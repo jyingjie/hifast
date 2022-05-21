@@ -151,15 +151,15 @@ def save_rep_2sides(sm, freq, exceed_use, rfi_width_lim, ext_sec, ext, thr, freq
     save the extended replaced area, from peak to 2 sides
     """
     from .markRFI import get_startend, find_edge_2sides
-    
-    is_excluded = np.zeros_like(sm, dtype='bool') 
+
+    is_excluded = np.zeros_like(sm, dtype='bool')
     if np.sum(exceed_use) == 0:
         return is_excluded
 
     start, end = get_startend(exceed_use, rfi_width_lim, ext_sec,)
     if len(start) == 0:
         return is_excluded
-    
+
     N = len(freq)
     for s, e in zip(start, end):
         if e > freq_d and s < freq_u:
@@ -211,8 +211,8 @@ def repalce_near(data_in, freq, time_rfi, mw_use=None, times_thr=None, times_s_t
 
     if mw_use is None:
         mw_use = np.full(freq.shape, False)
-        
-    save_is_excluded = True if save_is_excluded and (times_s_thr2 is not None) else False 
+
+    save_is_excluded = True if save_is_excluded and (times_s_thr2 is not None) else False
 
     data_rep = deepcopy(data)
     if data_find is None: data_find = data
