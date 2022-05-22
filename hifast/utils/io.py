@@ -531,6 +531,7 @@ class BaseIO(Path_IO):
         # add field in add_fields and args from self.fs
         if not hasattr(self, 'add_fields'):
             self.add_fields = ['is_on', 'next_to_cal', 'is_delay', 'Tcal', 'is_extrapo', 'vel', 'is_rfi']
+            self.add_fields += ['is_excluded']
         self.add_fields += args
         for field in self.add_fields:
             if field in self.fs.keys():

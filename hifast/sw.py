@@ -354,7 +354,7 @@ class IO(BaseIO):
         for key in keys:
             fit_args[key] = getattr(args, key)
         fit_args['method'] = args.method[8:]
-        
+
         sw_on = running_median(s1p[is_on], **fit_args)
         sw_off = running_median(s1p[~is_on], **fit_args)
 
@@ -452,13 +452,13 @@ class IO(BaseIO):
                     for i in range(s2p.shape[2]):
                         sw2[..., i], is_excluded[..., i] = self.fft_fit_sw(s2p[..., i], is_rfi, is_on, iter_twice = True,
                                sm_find = sm_find[..., i], sm_trough = sm_trough[..., i], sm_res = sm_res[..., i])
-                        s2p_out[..., i] = s2p_in[..., i] - sw2[..., i]    
-                        
-                    if args.save_is_excluded: 
+                        s2p_out[..., i] = s2p_in[..., i] - sw2[..., i]
+
+                    if args.save_is_excluded:
                         self.is_excluded = np.any(is_excluded,axis = -1)
                         if is_rfi is not None:
-                            self.is_excluded |= is_rfi 
-                        
+                            self.is_excluded |= is_rfi
+
 
             elif (args.method == 'running_median') or (args.method == 'running_mean'):
                 s2p_out -= self.med_fit_sw(s2p_out, is_on)

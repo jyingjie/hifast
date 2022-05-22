@@ -357,7 +357,7 @@ class IO(BaseIO):
 #                     import traceback
 #                     traceback.print_exc()
         print("Finish finding period RFI...")
-        
+
         time_coherent_per = args.time_coherent_per
         if (time_coherent_per > 0)&(time_coherent_per <1):
             per_use = (np.sum(pd_rfi,axis = 0)/pd_rfi.shape[0] > time_coherent_per)
