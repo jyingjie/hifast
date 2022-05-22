@@ -33,12 +33,12 @@ def get_K_Jy_cali(cali_fname, nB, freq, ra=None, dec=None, mjd=None, tcal_spec=N
     with h5py.File(cali_fname,'r') as fs:
         freq_c= fs['freq'][()]
         if f'M{nB:02d}' in fs.keys():
-            K_Jy = fs[f'M{nB:02d}'][()] # K/Jy
+            K_Jy = fs[f'M{nB:02d}'][0] # K/Jy
             if tcal_spec is not None:
                 K_Jy /= fs[f'Tcal{nB}'][0] # to count of tcal
             need_ratio = False
         else:
-            K_Jy = fs[f'M01'][()] # K/Jy
+            K_Jy = fs[f'M01'][()][0] # K/Jy
             if tcal_spec is not None:
                 K_Jy /= fs[f'Tcal1'][0] # to count of tcal
             need_ratio = True 
