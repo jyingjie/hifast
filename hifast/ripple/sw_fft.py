@@ -1,4 +1,4 @@
-__all__ = ['replace_spec', 'repalce_near', 'replace_margin_side', 'get_margin_num', 'replace_rfi_lower', 'replace_rfi',
+__all__ = ['replace_spec', 'save_rep_fixed', 'repalce_near', 'replace_margin_side', 'get_margin_num', 'replace_rfi_lower', 'replace_rfi',
            'find_loc', 'SW_FFT', 'get_sw_conf', 'fit_sw_fft', 'running_median', 'minmed']
 
 # author: Xu Chen, Li Fujia, 2021.06
@@ -179,7 +179,7 @@ def save_rep_2sides(sm, freq, exceed_use, rfi_width_lim, ext_sec, ext, thr, freq
 def repalce_near(data_in, freq, time_rfi, mw_use=None, times_thr=None, times_s_thr=None, times_s_thr2=None,
                  rms_sigma=None,  ext_freq=None, rms_frange=None, rfi_width_lim=None,
                  ext_sec=None, data_find = None, data_trough = None, data_restrict = None,
-                 save_is_excluded = False,ex_step = 0, **kwargs):
+                 save_is_excluded = False,ex_step = 0, verbose = True, **kwargs):
     """
     replace mw, rfi or others by near ripple section
 
@@ -233,8 +233,13 @@ def repalce_near(data_in, freq, time_rfi, mw_use=None, times_thr=None, times_s_t
     
     if np.sum(np.isnan(data)) > 0:
         data[np.isnan(data)] = MAX
+        
+    if verbose:
+        iter_ = tqdm(range(data.shape[0]), desc='CPU 0: ', mininterval=2)
+    else:
+        iter_ = range(data.shape[0])
     
-    for tn in tqdm(range(data.shape[0])):
+    for tn in iter_:
         if tn in not_rfi_num:
             spec = deepcopy(data[tn, :])
             include = mw_use #| time_rfi[tn]
