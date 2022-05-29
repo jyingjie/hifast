@@ -96,6 +96,39 @@ def do_smooth_onoff(s1p, is_on = None,is_rfi = None, **kwargs):
         T[~is_on] = do_smooth(T[~is_on],is_rfi = is_rfi[~is_on], **kwargs)
     return T
 
+def line_set(ax,xlabel,ylabel,direction='in',xlim=None,ylim=None,legend=True,title=None,loc='best', size = None):
+    """
+    plot settings
+    """
+    if size is None:
+        size = {'mz': 1,   # Set thickness of the tick marks
+                'lz': 3,   # Set length of the tick marks
+                'lbz': 14,  # Set label size
+                'tkz': 12,  # Set tick size
+                }
+    mz = size['mz']; lz = size['lz']
+    lbz = size['lbz']; tkz = size['tkz']
+    # Make tick lines thicker
+    for l in ax.get_xticklines():
+        l.set_markersize(lz)
+        l.set_markeredgewidth(mz)
+    for l in ax.get_yticklines():
+        l.set_markersize(lz)
+        l.set_markeredgewidth(mz)
+
+    # Make figure box thicker
+    for s in ax.spines.values():
+        s.set_linewidth(mz)
+    ax.minorticks_on()
+    ax.tick_params("both",which = 'both',direction=direction,labelsize=tkz,
+                  bottom=True, top=True,left=True,right=True)
+    if xlim is not None: ax.set_xlim(xlim)
+    if ylim is not None: ax.set_ylim(ylim)
+    ax.set_xlabel(xlabel,fontsize=lbz)
+    ax.set_ylabel(ylabel,fontsize=lbz)
+    if legend: ax.legend(loc = loc,fontsize=tkz)
+    if title is not None: ax.set_title(title,fontsize=lbz)
+
     
 class Args(object):
     def __init__(self, fpath, frange = None, outdir = None,):
@@ -130,6 +163,7 @@ class Read_hdf5(BaseIO):
     def get_data(self, polar = 'none'):
         data = deepcopy(self.s2p)
         if data.shape[0] == 2 or data.shape[0] == 1:
+            from .io import PolarMjdChan_to_MjdChanPolar
             data = PolarMjdChan_to_MjdChanPolar(data)
         if len(data.shape) == 3:
             if polar == 'xx':

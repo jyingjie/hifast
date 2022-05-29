@@ -11,7 +11,7 @@ from copy import deepcopy
 sep_line = '##'+'#'*70+'##'
 parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}",
                         formatter_class=formatter_class, allow_abbrev=False,
-                        description='rfi', )
+                        description='rfi_multi', )
 add_common_argument(parser)
 parser.add_argument('fpath',
                     help='input baselined spectra file path.')
@@ -19,7 +19,7 @@ parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
                     help='Limit frequence range')
 parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
                     help="don't check or add ra dec")
-parser.add_argument('--all_beams', type=bool_fun, choices=[True, False], default='False',
+parser.add_argument('--all_beams', type=bool_fun, choices=[True, False], default='True',
                    help='find time rfi after averaging all 19 beams')
 
 #################### Time domain continuous RFI ######################
@@ -180,7 +180,7 @@ group.add_argument('--time_coherent_per', type=float, default = 1,
 class IO(BaseIO):
     ver = 'old'
     def _get_fpart(self,):
-        return '-rfi'
+        return '-19rfi'
 
     def _import_m(self,):
         """
@@ -277,7 +277,7 @@ class IO(BaseIO):
         return mask_time_rfi(T, self.freq, rtype = 'long-freq',plot = False,
                               **longf_args)
 
-    def get_sf(self,T,is_rfi = None):
+    def get_sf(self,T):
         """
         Time domain uncontinuous RFI: short freq time RFI
         """
@@ -297,15 +297,11 @@ class IO(BaseIO):
         shortf_args['rfi_width_lim'] = args.sf_rfi_last
         shortf_args['rms_frange'] = args.rms_frange
         shortf_args['thr_type'] = args.lsn_thr_type
-        
-        if args.sf_use_time_only:
-            is_timerfi = np.any(is_rfi, axis = 1)
-            shortf_args['is_timerfi'] = is_timerfi
 
         return mask_time_rfi(T, self.freq, rtype = 'short-freq',plot = False,
                                **shortf_args)
 
-    def get_time_rfi(self,is_rfi = None):
+    def get_time_rfi(self,):
         """
         lf & sf
         """
@@ -322,7 +318,7 @@ class IO(BaseIO):
         Tt[t_rfi] = 0
         if args.sf:
             print('finding sf')
-            t_rfi |= self.get_sf(Tt,is_rfi)
+            t_rfi |= self.get_sf(Tt)
 
         return t_rfi
 
@@ -405,7 +401,7 @@ class IO(BaseIO):
             if (rms_frange[0] < freq[0]) or (rms_frange[1] > freq[-1]):
                 raise ValueError(f"rms frange {rms_frange} is not in freq range {[freq[0],freq[-1]]}.")
 
-    def _guess_19rfi(self,):
+    def _glob_names(self,):
         args = self.args
         
         from glob import glob
@@ -413,88 +409,61 @@ class IO(BaseIO):
         subname = args.fpath
         key = re.findall(r'-M[0-1][0-9]', os.path.basename(subname))[0]
         namelist = os.path.basename(subname).split(key)
-        name = os.path.join(args.outdir, namelist[0]+'-M*'+namelist[1][:-5]+'-19rfi.hdf5')
-#         print(name)
-        _19names = glob(name)
-        return _19names
+        name = os.path.join(os.path.dirname(subname), namelist[0]+'-M*'+namelist[1])
+        names = glob(name)
+        names.sort()
+        return  names
     
-    def load_19rfi(self):
-        import h5py
-        rfi_ = h5py.File(self._19name, 'r')
-        _is_rfi = rfi_['S']['is_rfi'][:]
-        rfi_.close()
-        return _is_rfi
+    def _write_mean(self, names):
+        args = self.args
+        if getattr(args, 'frange', False):
+            frange = [0, np.inf]
+        else:
+            frange = args.frange
+        from .ripple.mark_timeRFI import load_hdf5_spec
+        data_mean = load_hdf5_spec(names[0], frange)
+        
+        import re
+        print(re.findall(r'-M[0-1][0-9]', os.path.basename(names[0]))[0])
+#         from tqdm import tqdm
+        k = 1
+        for name in names[1:]:
+            print(re.findall(r'-M[0-1][0-9]', os.path.basename(name))[0])
+            sys.stdout.flush()
+            data = load_hdf5_spec(name, frange)
+            data_mean += data
+            k += 1
+        data_mean /= k
+        return data_mean
     
-    @staticmethod 
-    def gen_19rfi_file(paras=[]):
-        """
-        run hifast.rfi_multi
-        """
-        import subprocess
-        command = [sys.executable, '-m', 'hifast.rfi_multi'] + paras
-        print('run:')
-        print(' '.join(command))
-        sys.stdout.flush()
-        process = subprocess.Popen(
-            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        # process.wait()
-        print(*process.communicate())
-        if process.returncode != 0:
-            raise(ValueError(f'fail to generate the 19 beams rfi file!'))
     
     def gen_s2p_out(self,):
         args = self.args
         
         if args.all_beams:
-            _19names = self._guess_19rfi()
-            if len(_19names) == 0:
-                print(f"Try to generate 19 beams rfi file ...")
-                argv = ' '.join(sys.argv)
-                paras = argv.split()
-                paras.pop(0) # delete the first one '... hifast.rfi '
-                for s in paras:
-                    if s in ['tr', 'pr', 'nr', 'lf', 'pdr']: # except sf
-                        s = False
-             
-                self.gen_19rfi_file(paras)
-                sys.stdout.flush()
-                self._19name = os.path.join(args.outdir, os.path.basename(args.fpath).split('.hdf5')[0] + '-19rfi.hdf5')
-
-            elif len(_19names) == 1:
-                self._19name = _19names[0]
-                print(f"{self._19name} exists. Use it!")
-            else:
-                raise ValueError("Master Skywalker, there are too many of them. What should we do?")
-                
-        self.s2p_out = self.s2p[:]
+            names = self._glob_names()
+            print(f"Creating 19 beams rfi file  ...")
+            self.s2p_out = self._write_mean(names)
+        else:
+            raise TypeError("all_beams = True!")
             
     def gen_is_rfi(self):
         args = self.args
         self.gen_s2p_out()
-        self.s2p = self.s2p[:]
+
+        print("############ find RFI for all beams #############")
+        self.s2p = self.s2p_out[:]
         self.s2p_mean = np.mean(self.s2p,axis = 2)
-        
-        if args.all_beams:
-            if os.path.exists(self._19name):
-                is_19rfi = self.load_19rfi()
-            else:
-                raise FileNotFoundError(f"Can't find {self._19name}. Did it run hifast.rfi_multi?")
-
         is_rfi = np.full(self.s2p.shape[:2], False, dtype=bool)
-
+        
         self.protect_use = self.protect_mw()
         self.check_rms_range()
+        
+        for key in ['tr', 'pr', 'nr', 'lf', 'pdr']:
+            setattr(args, key, False)
 
         if args.lf or args.sf:
-            if args.all_beams and args.sf_use_time_only:
-                    is_rfi |= self.get_time_rfi(is_19rfi)
-                    print("Use is_timerfi(sf) in 19 beams rfi :P")
-            else:
-                if args.all_beams:
-                    is_rfi |= is_19rfi
-                    args.sf = False
-                    print("Use is_rfi(sf) in 19 beams rfi :P")
-                is_rfi |= self.get_time_rfi(is_rfi = None)
+            is_rfi |= self.get_time_rfi()
 
         whole_rfi = np.all(is_rfi,axis = 1)
         self.not_rfi_num = np.arange(is_rfi.shape[0])[~whole_rfi]
@@ -531,10 +500,11 @@ class IO(BaseIO):
         args = self.args
         is_rfi = self.gen_is_rfi()
         self.gen_dict_out(is_rfi = is_rfi)
-        # replace outfield as h5py.ExternalLink
-        if self.dict_in is None:
-            self.dict_out[self.outfield] = h5py.ExternalLink(os.path.relpath(
-                args.fpath, os.path.dirname(self.fpath_out)), f'/S/{self.infield}')
+        if not args.all_beams:
+            # replace outfield as h5py.ExternalLink
+            if self.dict_in is None:
+                self.dict_out[self.outfield] = h5py.ExternalLink(os.path.relpath(
+                    args.fpath, os.path.dirname(self.fpath_out)), f'/S/{self.infield}')
         if save:
             self.save()
 
