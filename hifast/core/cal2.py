@@ -35,16 +35,15 @@ def write_header(f, header):
 # Cell
 class CalOnOffAA(CalOnOffA):
 
-    def ls_fields(self,):
-        """
-        list fields in fits hdu1.data
-        """
-        print(self.hduls[0][1].data.dtype)
-
-    def merge_pcals(self, pcals, method_merge='median', exclued_franges=[]):
+    def merge_pcals(self, pcals, method_merge='median', pre_process=False, exclued_franges=[]):
         """
         merging pcals at all time and smoothing it
         """
+
+        if pre_process:
+            amp = np.median(pcals, axis=1)
+            pcals = pcals*(np.mean(amp, axis=0)/amp)[:,None,:]
+
         if method_merge == 'median':
             pcals_merged = np.median(pcals, axis=0, keepdims=True)
         elif method_merge == 'mean':
@@ -75,6 +74,7 @@ class CalOnOffAA(CalOnOffA):
                 is_not |= ((self.freq_use > start) & (self.freq_use < end))
             pcals_diff = pcals_diff[:, ~is_not]
             self.freq_use_amp_interp = self.freq_use[~is_not]
+
         if squeeze_diff_freq == 'median':
             pcals_diff_m = np.nanmedian(pcals_diff, axis=1)
         elif squeeze_diff_freq == 'mean':
@@ -122,7 +122,8 @@ class CalOnOffAA(CalOnOffA):
 
         return c_on, c_off
 
-    def set_para_pcals(self, calc_diff_method='div', squeeze_diff_freq='median', method_interp='gaussian', sigma_t=600):
+    def set_para_pcals(self, calc_diff_method='div', squeeze_diff_freq='median', method_interp='gaussian', sigma_t=600,
+                       merge_cal_pre_process=False):
         """
         para used in self.prepare_pcals
 
@@ -133,11 +134,12 @@ class CalOnOffAA(CalOnOffA):
         self.squeeze_diff_freq = squeeze_diff_freq
         self.method_interp = method_interp
         self.sigma_t = sigma_t
+        self.merge_cal_pre_process = merge_cal_pre_process
 
     def prepare_pcals(self,):
         is_ = self.check_cal(self.inds_ton)
         pcals_use = self._get_cal_power(self.inds_ton[is_], self.inds_toff_bef[is_], self.inds_toff_aft[is_])
-        self.merge_pcals(pcals_use)
+        self.merge_pcals(pcals_use, pre_process=self.merge_cal_pre_process)
         self.pcals_amp_interp(np.mean(self.inds_ton[is_], axis=1), pcals_use,
                               squeeze_diff_freq=self.squeeze_diff_freq,
                               method_interp=self.method_interp, sigma_t=self.sigma_t)
@@ -172,6 +174,9 @@ class CalOnOffAA(CalOnOffA):
         if hasattr(self, 'tcal_file'):
             header.update({'tcal_file': self.tcal_file})
         # prepare for self.get_count_tcal
+
+        self.plot = True
+
         if cali:
             pcals_use, inds_ton_use = self.prepare_pcals()
             if save_p_cal:
@@ -187,7 +192,6 @@ class CalOnOffAA(CalOnOffA):
                 save_specs_hdf5(outname, p_cal_s_res)
                 del pcals_use
 
-        self.plot = True
         for i in range(len(inds_range)-1):
             print('part', i)
             b, e = inds_range[i:i+2]
