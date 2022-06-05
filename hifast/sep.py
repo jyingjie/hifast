@@ -106,8 +106,8 @@ if __name__ == '__main__':
     print(f'outdir: {args.outdir}')
     if args.outdir is not None:
         if not os.path.exists(args.outdir):
-            print(f'outdir {args.outdir} not exists, and create it now')
-        os.makedirs(args.outdir, exist_ok=True)
+            print(f'outdir {args.outdir} not exists. Create it now')
+            os.makedirs(args.outdir, exist_ok=True)
 
     ## check out file
     fname_add = date

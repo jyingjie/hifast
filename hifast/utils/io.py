@@ -406,10 +406,15 @@ class Path_IO(object):
         project = get_project(args.fpath)
         date = get_date_from_path(args.fpath)
         args.outdir = sub_patten(args.outdir, date=date, nB=f'{nB:02d}', project=project)
-        print(f'outdir: {args.outdir}')
 
         if args.outdir is None or args.outdir == 'default':
             args.outdir = os.path.dirname(args.fpath)
+
+        print(f'outdir: {args.outdir}')
+        if not os.path.exists(args.outdir):
+            print(f'outdir {args.outdir} not exists. Create it now')
+            os.makedirs(args.outdir, exist_ok=True)
+
         self.fpath_out = os.path.join(args.outdir, self._get_out_basename())
 
     def _get_out_basename(self):
