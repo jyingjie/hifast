@@ -84,6 +84,9 @@ class IO(BaseIO):
         # save is_rfi only if replace_rfi is False
         if not args.replace_rfi and is_rfi is not None:
             self.dict_out['is_rfi'] = is_rfi
+        else:
+            if 'is_rfi' in self.dict_out.keys():
+                self.dict_out.pop('is_rfi')
         if save:
             self.save()
 
