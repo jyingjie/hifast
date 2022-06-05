@@ -469,7 +469,7 @@ class BaseIO(Path_IO):
         self.mjd = fs['mjd'][:]
         self.freq = fs['freq'][:]
         self.freq_ori = self.freq
-        if getattr(args, 'frange', False) and (args.frange[0] > 0. or args.frange[0] < float('inf')):
+        if getattr(args, 'frange', False) and (args.frange[0] > 0. or args.frange[1] < float('inf')):
             self.is_use_freq = (self.freq >= args.frange[0]) & (self.freq <= args.frange[1])
             self.freq = self.freq[self.is_use_freq]
         else:
@@ -500,7 +500,8 @@ class BaseIO(Path_IO):
                 raise(ValueError('please check --frange'))
             s2p = s2p[..., inds[0]:inds[-1]+1]  # freq axis is at end; inds is continuous
         if self.ver == 'old':
-            self.s2p = PolarMjdChan_to_MjdChanPolar(s2p[:])
+            s2p = PolarMjdChan_to_MjdChanPolar(s2p[:])
+        self.s2p = s2p
         self.outfield = outfield
         self.infield = infield
 
