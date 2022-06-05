@@ -41,11 +41,12 @@ def conv_fun(dis, beamsize=2.9/60, kernel='bessel_gaussian'):
     return wei
 
 
-def pixel_spec(spec, dis, method='bessel_gaussian', sigma=1.275088/60, beamsize=2.9/60, statistic='median', frac_finite_min=1):
+def pixel_spec(spec, dis, *, wi=None, method='bessel_gaussian', sigma=1.275088/60, beamsize=2.9/60, statistic='median', frac_finite_min=1):
     """
     -----------------
     spec: flux
     dis: degree
+    wi: initial weight, only some method support it.
     method: str; 'bessel_gaussian', 'gaussian', 'sinc_gaussian', 'reweight', 'mean', 'median'
     sigma: degree, used in 'reweight'
     statistic: str; median or mean, default is median; used in 'reweight'
@@ -64,6 +65,8 @@ def pixel_spec(spec, dis, method='bessel_gaussian', sigma=1.275088/60, beamsize=
     
     if method == 'bessel_gaussian' or method == 'gaussian' or method =='sinc_gaussian':
         wei = conv_fun(dis, beamsize, kernel=method)
+        if wi is not None:
+            wei *= wi
         wei = wei.reshape((-1,)+(1,)*(spec.ndim-1))
         if frac_finite_min < 1:
             s = _SUM(spec*wei, axis=0)/_SUM(wei*is_finite, axis=0)
@@ -74,9 +77,13 @@ def pixel_spec(spec, dis, method='bessel_gaussian', sigma=1.275088/60, beamsize=
         #Barnes el. al. 2001, MNRAS 322, 486 https://ui.adsabs.harvard.edu/abs/2001MNRAS.322..486B/abstract
         if statistic == 'median':
             wei_m = _MEDIAN(np.exp(- (dis/sigma)**2/2))
+            if wi is not None:
+                wei_m *= wi
             s = _MEDIAN(spec, axis=0)/wei_m
         elif statistic == 'mean':
             wei_m= _MEAN(np.exp(- (dis/sigma)**2/2))
+            if wi is not None:
+                wei_m *= wi
             s = _MEAN(spec, axis=0)/wei_m
     elif method == 'mean':
         s = _MEAN(spec, axis=0)
@@ -90,7 +97,7 @@ def pixel_spec(spec, dis, method='bessel_gaussian', sigma=1.275088/60, beamsize=
     
     return s
 
-def gridding(ra, dec, spectra, ra_grid, dec_grid, r=1.5/60, **kwargs):
+def gridding(ra, dec, spectra, ra_grid, dec_grid, *, wi=None, r=1.5/60, **kwargs):
     """
     ra, dec: array, shape (m,); degree
         The ra dec of observed spectra; degree
@@ -126,11 +133,12 @@ def gridding(ra, dec, spectra, ra_grid, dec_grid, r=1.5/60, **kwargs):
         dis= d2d[start_ : stop_ ] #distance of spec from the center of grid
         ind_use_= ind_cata[start_ : stop_ ] # index in cata, ra, dec, spectra
         spec_= spectra[ind_use_]
+        wi_ = wi[ind_use_] if wi is not None else None
         if len(spec_) == 0:
             continue
         m,n=i//grid.shape[1], i%grid.shape[1] #index in grid before flatten
         nums[m,n]=len(dis)
-        out[:,m,n]= pixel_spec(spec_, dis.degree, **kwargs)
+        out[:,m,n]= pixel_spec(spec_, dis.degree, wi=wi_, **kwargs)
     
     if grid_ori_ndim==1:
         out= out[:,:,0]
