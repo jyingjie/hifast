@@ -47,7 +47,7 @@ class IO(BaseIO):
         if n <= 1:
             return arr
         else:
-            return average_every_n(arr, n, axis=axis, drop=drop)
+            return average_every_n(arr, n, axis=axis, drop=drop).astype(arr.dtype)
 
     def __call__(self, save=True):
 
