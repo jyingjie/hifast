@@ -4,6 +4,7 @@ __all__ = ['IO']
 
 # Cell
 from .utils.io import *
+import copy
 
 # Internal Cell
 sep_line = '##'+'#'*70+'##'
@@ -17,7 +18,7 @@ parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
 group = parser.add_argument_group(f'*downsample\n{sep_line}')
 group.add_argument('--chan_factor', type=int, default = 0,
                     help='down sample on channel')
-group.add_argument('--spec_factor', '--t_factor',type=int, default = 0,
+group.add_argument('--spec_factor', '--t_factor',type=int, default=0,
                     help='down sample on spec')
 
 # Cell
@@ -42,14 +43,14 @@ class IO(BaseIO):
         return fpart
 
     def down(self, arr, n, axis=-1, drop=True):
+        from .utils.misc import average_every_n
         if n <= 1:
             return arr
         else:
-            return average_every_n(arr, n, axis=axis, drop=drop)
+            return average_every_n(arr, n, axis=axis, drop=drop).astype(arr.dtype)
 
     def __call__(self, save=True):
 
-        from .utils.misc import average_every_n
         from .core.radec import _tight_ra
         import scipy.interpolate as interp
 
@@ -64,15 +65,15 @@ class IO(BaseIO):
                 dict_out[key] = self.down(self.fs[key][()], args.spec_factor, axis=0)
             elif key in type2:
                 if self.is_use_freq is not None:
-                    dict_out[key] = self.fs[key][self.is_use_freq]
+                    dict_out[key] = self.fs[key][()][self.is_use_freq]
                 else:
-                    dict_out[key] = self.fs[key]
+                    dict_out[key] = self.fs[key][()]
                 dict_out[key] = self.down(dict_out[key], args.chan_factor, axis=0)
             elif key == 'Tcal':
                 if self.is_use_freq is not None:
-                    dict_out[key] = self.fs[key][:, self.is_use_freq]
+                    dict_out[key] = self.fs[key][()][:, self.is_use_freq]
                 else:
-                    dict_out[key] = self.fs[key]
+                    dict_out[key] = self.fs[key][()]
                 dict_out[key] = self.down(dict_out[key], args.chan_factor, axis=1)
             elif key == self.infield:
                 dict_out[key] = self.down(self.down(self.s2p, args.spec_factor, axis=1), args.chan_factor, axis=2)
@@ -93,3 +94,12 @@ class IO(BaseIO):
         self.dict_out = dict_out
         if save:
             self.save()
+
+# Cell
+if __name__ == '__main__':
+    args_ = parser.parse_args()
+    print('#'*35+'Args'+'#'*35)
+    print(parser.format_values())
+    print('#'*35+'####'+'#'*35)
+    io = IO(args_)
+    io()
