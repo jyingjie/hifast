@@ -439,14 +439,16 @@ class BaseIO(Path_IO):
     # set ver as 'new' or 'old', if old, PolarMjdChan_to_MjdChanPolar() when reading, MjdChanPolar_to_PolarMjdChan() when saving
     ver = 'new'
 
-    def __init__(self, args, dict_in=None, inplace_args=False):
+    def __init__(self, args, dict_in=None, inplace_args=False, HistoryAdd=None):
         """
         args: class
               including attributes: fpath, outdir, frange
         dict_in: if None, load data from args.fpath, if set, omit data in args.fpath
+        History_Add: dict, {'key': str}
         """
         self.args = args if inplace_args else copy.deepcopy(args)
         self.dict_in = dict_in
+        self.HistoryAdd = HistoryAdd
         self._gen_fpath_out()
         if self.dict_in is None:
             self._check_fout()
@@ -553,7 +555,11 @@ class BaseIO(Path_IO):
             if 'Header' in self.dict_in.keys():
                 Header.update(self.dict_in['Header'])
         import json
-        Header.update(rec_his(args=json.dumps(self.args.__dict__)))
+        if self.HistoryAdd is not None:
+            his = rec_his(args=json.dumps(self.args.__dict__), **self.HistoryAdd)
+        else:
+            his = rec_his(args=json.dumps(self.args.__dict__))
+        Header.update(his)
         self.Header = Header
 
     def gen_dict_out(self, *args, **kwargs):

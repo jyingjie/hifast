@@ -226,7 +226,10 @@ if __name__ == '__main__':
         print('Please run \'save()\' in the notebook cell to save your results')
     else:
         print('#'*35+'Args'+'#'*35)
-        print(parser.format_values())  # useful for logging where different settings came from
+        args_from = parser.format_values()
+        print(args_from)
         print('#'*35+'####'+'#'*35)
-        io = IO(args_)
+
+        HistoryAdd = {'args_from': args_from} if args_.my_config is not None else None
+        io = IO(args_, HistoryAdd=HistoryAdd)
         io()
