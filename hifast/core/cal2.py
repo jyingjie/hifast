@@ -13,6 +13,8 @@ from ..utils.io import MjdChanPolar_to_PolarMjdChan, gen_carta_group, save_specs
 
 from astropy.stats import sigma_clip
 
+import warnings
+
 # Cell
 import h5py
 import os
@@ -143,7 +145,7 @@ class CalOnOffAA(CalOnOffA):
         self.pcals_amp_interp(np.mean(self.inds_ton[is_], axis=1), pcals_use,
                               squeeze_diff_freq=self.squeeze_diff_freq,
                               method_interp=self.method_interp, sigma_t=self.sigma_t)
-        return pcals_use, self.inds_ton[is_]
+        return pcals_use, self.inds_ton[is_], self.inds_ton[~is_]
 
     def __call__(self, outdir='./', step=None, header=None, sep_save=False, save_p_cal=False, cali=True):
         """
@@ -178,10 +180,13 @@ class CalOnOffAA(CalOnOffA):
         self.plot = True
 
         if cali:
-            pcals_use, inds_ton_use = self.prepare_pcals()
+            pcals_use, inds_ton_use, inds_ton_not_use = self.prepare_pcals()
+            if len(inds_ton_not_use)/(len(inds_ton_use) + len(inds_ton_not_use)) > 1/3.:
+                warnings.warn('More than one-third of the Cals are abandoned. Please check your data and ``--pcal_vary_frac``.')
             if save_p_cal:
                 p_cal_s_res = {}
-                p_cal_s_res['inds_ton'] = inds_ton_use
+                p_cal_s_res['inds_ton_use'] = inds_ton_use
+                p_cal_s_res['inds_ton_not_use'] = inds_ton_not_use
                 p_cal_s_res['pcals'] = pcals_use
                 p_cal_s_res['pcals_merged'] = self.pcals_merged
                 p_cal_s_res['pcals_merged_s'] = self.pcals_merged_s
@@ -221,6 +226,8 @@ class CalOnOffAA(CalOnOffA):
                 res['freq'] = self.freq_use
                 res['Ta'] = MjdChanPolar_to_PolarMjdChan(T)
                 res['Tcal'] = tc_inter
+                res['inds_ton_use'] = inds_ton_use
+                res['inds_ton_not_use'] = inds_ton_not_use
                 res['pcals_merged'] = self.pcals_merged
                 res['pcals_merged_s'] = self.pcals_merged_s
                 res['pcals_amp_interp_values'] = self.pcals_amp_interp_values[inds[sort]]
@@ -255,6 +262,8 @@ class CalOnOffAA(CalOnOffA):
             g['mjd'] = np.hstack(mjds)
             g['freq'] = self.freq_use
             g['Tcal'] = tc_inter
+            g['inds_ton_use'] = inds_ton_use
+            g['inds_ton_not_use'] = inds_ton_not_use
             g['pcals_merged'] = self.pcals_merged
             g['pcals_merged_s'] = self.pcals_merged_s
             g['pcals_amp_interp_values'] = self.pcals_amp_interp_values
