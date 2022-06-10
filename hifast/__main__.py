@@ -71,6 +71,11 @@ for subcomand in subcomands_type2:
 
 ## RUN
 args, remain = parser.parse_known_args()
+
+if '--outdir' in remain:
+    ind = remain.index('--outdir') + 1
+    remain[ind] = f"'{remain[ind]}'"
+
 if args.subcomand is None:
     command = f"{sys.executable} -m hifast -h"
 elif args.subcomand in subcomands_type1:
