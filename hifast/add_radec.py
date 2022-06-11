@@ -29,7 +29,7 @@ def gen_radec_file(file_spec, paras=[]):
 import h5py
 
 
-def get_radec(file_spec, mjd, nB_radec=1):
+def get_radec(file_spec, mjd, nB_radec=1, file_radec = None):
     """
     load the ra dec of spectra in file_spec (*specs_T.hdf5)
 
@@ -38,10 +38,11 @@ def get_radec(file_spec, mjd, nB_radec=1):
 
     """
     nB = get_nB(file_spec)
-    # ra dec file
-    file_radec = file_spec.rsplit('specs_T', 1)[0] + 'specs_T-radec.hdf5'
-    #file_radec = re.findall(r'.*-specs_T', file_radec)+'-radec.hdf5'
-    file_radec = replace_nB(file_radec, nB_radec)
+    if file_radec is None:
+        # ra dec file
+        file_radec = file_spec.rsplit('specs_T', 1)[0] + 'specs_T-radec.hdf5'
+        #file_radec = re.findall(r'.*-specs_T', file_radec)+'-radec.hdf5'
+        file_radec = replace_nB(file_radec, nB_radec)
     if not os.path.exists(file_radec):
         raise(OSError("can not find the RA DEC file, please generate it by using 'python -m hifast.radec'"))
     f = h5py.File(file_radec, 'r')
@@ -100,10 +101,15 @@ if __name__ == '__main__':
 #                         help='overwriting file if out file exists')
     parser.add_argument('--nB_radec', type=int, default=1,
                         help='Beam number of the radec file name')
+    parser.add_argument('--file_radec',
+                        help='file radec name if it exists')
 #     parser.add_argument('--outdir',
 #                         help='default is same with the input file')
     args = parser.parse_args()
     f = h5py.File(args.fname, 'r+')
     g = f['S']
-    g['ra'], g['dec'], g['is_extrapo'] = get_radec(args.fname, g['mjd'], args.nB_radec)
+    if 'ra' not in g.keys():
+        g['ra'], g['dec'], g['is_extrapo'] = get_radec(args.fname, g['mjd'][:], args.nB_radec, args.file_radec)
+    else:
+        g['ra'][:], g['dec'][:], g['is_extrapo'][:] = get_radec(args.fname, g['mjd'][:], args.nB_radec, args.file_radec)
     f.close()

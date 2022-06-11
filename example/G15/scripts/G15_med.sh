@@ -14,10 +14,10 @@ fi
 commands=$(cat <<EOF
 python -m hifast.sw | -c ../conf/G15-med_1_sw.ini -f --outdir $outdir 
 python -m hifast.bld | -c ../conf/G15-med_2_bld.ini -f
-python -m hifast.rfi | -c ../conf/G15-2_rfi_d6.ini -f  
-python -m hifast.sw | -c ../conf/G15-3_fft_sw2.ini -f
-python -m hifast.multi | -c ../conf/G15-4_multi.ini -f 
-python -m hifast.flux | -c ../conf/G15-5_flux.ini -f
+python -m hifast.rfi | -c ../conf/G15-2_rfi_d7.ini -f --outdir $outdir
+python -m hifast.sw | -c ../conf/G15-3_fft_sw2.ini -f 
+python -m hifast.flux | -c ../conf/G15-4_flux.ini -f 
+python -m hifast.multi | -c ../conf/G15-5_multi.ini -f
 python -m hifast.downsample | -c ../conf/G15-6_down.ini -f
 EOF
 )

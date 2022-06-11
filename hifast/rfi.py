@@ -49,10 +49,14 @@ group.add_argument('--ext_frac', type=float, default=0.,
 group = parser.add_argument_group(f'*Narrowband single channel RFI\n{sep_line}')
 group.add_argument('--nr', '--narr_rfi', type=bool_fun, choices=[True, False], default='True',
                    help='find long time narrow single channel rfi')
-group.add_argument('--nr_times', type=float, default=100,
-                   help='first threhold, rfi is this times of median value')
-group.add_argument('--nr_thr', type=float, default=30,
-                   help='sharp edge on time axis. diff above this times of next point will be recognized.')
+group.add_argument('--nr_mean_times', type=float, default=100,
+                   help="first threhold, rfi is this times of median value after mean along time axis; \
+                   if --lsn_thr_type == 'input_thr', input mean_thr here.")
+group.add_argument('--nr_diff_times', type=float, default=30,
+                   help="second threhold, sharp edge on time axis. diff above this times of median will be recognized; \
+                   if --lsn_thr_type == 'input_thr', input diff_thr here.")
+group.add_argument('--nr_mask_rms_times',type = float, default=0,
+                   help='if == 0, mask whole channel; if > 0, mask RMS above ~ times of RMS. ')
 
 ####################### Polarized RFI #######################################
 group = parser.add_argument_group(f'*Polarized RFI\n{sep_line}')
@@ -74,36 +78,44 @@ parser.add_argument('--mw_frange', type=float, nargs=2,
 group = parser.add_argument_group(f'*Long freq \n{sep_line}')
 group.add_argument('--lf', '--long_freq', type=bool_fun, choices=[True, False], default='False',
                    help='find time rfi')
-# group.add_argument('--lf_beams',
-#                    help='beam numbers which has long-freq time rfi')
-group.add_argument('--lf_frange', type=float, nargs=2, default=[1300, 1500],
+group.add_argument('--lsn_thr_type', default='input_med_times', choices=['input_med_times','input_thr'],
+                   help='input times of median value or threshold directly. used for lf, sf, nr')
+group.add_argument('--lf_frange', type=float, nargs=2, default = [1400, 1500],
                    help='freq range exists long-freq time rfi')
-group.add_argument('--lf_times', type=float, default=2,
-                   help='first threhold, rfi is this times of median value')
-group.add_argument('--lf_thr', type=float, default=0,
+group.add_argument('--lf_mean_times', type=float, default=2,
+                   help="first threhold, rfi is this times of median value after mean along time axis; \
+                   if --lsn_thr_type == 'input_thr', input mean_thr here.")
+group.add_argument('--lf_diff_times', type=float, default=0,
                    help='set 0 and do not change this parameter')
-group.add_argument('--lf_rfi_last',type=float, default=50,
-                   help='rfi lasts at least 20 spec numbers')
+group.add_argument('--lf_rfi_last',type=float, nargs=2, default= [50, float("INF")],
+                   help='rfi lasts at least ~ spec numbers')
 group.add_argument('--lf_ext_add',type = int,default=50,
                    help='extend edge')
+group.add_argument('--lf_mask_rms_times',type = float, default=-1,
+                   help='if == -1, mask whole spec; if == 0, only mask region in frange; \
+                   if > 0, mask RMS above ~ times of RMS. ')
 ## short freq time rfi
 group = parser.add_argument_group(f'*Short freq \n{sep_line}')
 group.add_argument('--sf', '--short_freq', type=bool_fun, choices=[True, False], default='False',
                    help='find time rfi')
-group.add_argument('--sf_frange', type=float, nargs=2, default=[1300, 1500],
+group.add_argument('--sf_frange', type=float, nargs=2, default = [1370, 1390],
                    help='freq range exists short-freq time rfi')
-group.add_argument('--sf_frange_step',type = int,default=30,
+group.add_argument('--sf_frange_step',type = int,
                    help='if sf_frange is None and sf_file is None, cycle in whole freq band.')
 group.add_argument('--sf_file',
                    help='freq range exists short-freq time rfi npy filename')
-group.add_argument('--sf_times', type=float, default=3,
-                   help='first threhold, rfi is this times of median value')
-group.add_argument('--sf_thr', type=float, default=1,
-                   help='sharp edge on time axis. diff above this times of next point will be recognized.')
-group.add_argument('--sf_rfi_last',type=float, default=10,
+group.add_argument('--sf_mean_times', type=float, default=3,
+                   help="first threhold, rfi is this times of median value after mean along time axis; \
+                   if --lsn_thr_type == 'input_thr', input mean_thr here.")
+group.add_argument('--sf_diff_times', type=float, default=1,
+                   help="second threhold, sharp edge on time axis. diff above this times of median will be recognized; \
+                   if --lsn_thr_type == 'input_thr', input diff_thr here.")
+group.add_argument('--sf_rfi_last',type=float, nargs=2, default=[10,float("INF")],
                    help='rfi lasts at least 10 spec numbers')
 group.add_argument('--sf_ext_add',type = int,default=0,
                    help='extend edge')
+group.add_argument('--sf_mask_rms_times',type = float, default=3,
+                   help='mask from peak to 2 sides, until RMS drops to 3 times of RMS')
 
 ################## Period 8 MHZ RFI #######################
 parser.add_argument('--rms_sigma', type=float, default =6,
@@ -223,13 +235,16 @@ class IO(BaseIO):
         from .ripple.markRFI import mask_freq_rfi
 
         narr_args = {}
-        keys = ['nr_times',
-                'nr_thr',]
+        keys = ['nr_mean_times',
+                'nr_diff_times',
+                'nr_mask_rms_times',]
         for key in keys:
             narr_args[key[3:]] = getattr(args, key)
         narr_args['frange'] = None
         narr_args['rfi_width_lim'] = [0,2]
-#         narr_args['ext_add'] = 0
+        narr_args['rms_frange'] = args.rms_frange
+        narr_args['ext_add'] = 1
+        narr_args['thr_type'] = args.lsn_thr_type
 
         return mask_freq_rfi(T, self.freq, rtype = 'long-time',plot = False,
                               **narr_args)
@@ -243,12 +258,15 @@ class IO(BaseIO):
 
         longf_args = {}
         keys = ['lf_frange',
-                'lf_times',
-                'lf_thr',
-                'lf_ext_add']
+                'lf_mean_times',
+                'lf_diff_times',
+                'lf_ext_add',
+                'lf_mask_rms_times',]
         for key in keys:
             longf_args[key[3:]] = getattr(args, key)
         longf_args['rfi_width_lim'] = args.lf_rfi_last
+        longf_args['rms_frange'] = args.rms_frange
+        longf_args['thr_type'] = args.lsn_thr_type
 
         return mask_time_rfi(T, self.freq, rtype = 'long-freq',plot = False,
                               **longf_args)
@@ -264,13 +282,15 @@ class IO(BaseIO):
         keys = ['sf_file',
                 'sf_frange',
                 'sf_frange_step',
-                'sf_times',
-                'sf_thr',
-                'sf_ext_add',]
+                'sf_mean_times',
+                'sf_diff_times',
+                'sf_ext_add',
+                'sf_mask_rms_times',]
         for key in keys:
             shortf_args[key[3:]] = getattr(args, key)
         shortf_args['rfi_width_lim'] = args.sf_rfi_last
         shortf_args['rms_frange'] = args.rms_frange
+        shortf_args['thr_type'] = args.lsn_thr_type
 
         return mask_time_rfi(T, self.freq, rtype = 'short-freq',plot = False,
                                **shortf_args)
@@ -284,11 +304,12 @@ class IO(BaseIO):
 
         t_rfi = np.isnan(T)
         Tt = deepcopy(T)
-        Tt[:,self.protect_use] = 0
+        Tt[:,self.protect_use] = np.nan
 
         if args.lf:
             print('finding lf')
             t_rfi |= self.get_lf(Tt)
+        Tt[t_rfi] = 0
         if args.sf:
             print('finding sf')
             t_rfi |= self.get_sf(Tt)
@@ -300,11 +321,12 @@ class IO(BaseIO):
         Period 8 MHZ RFI
         """
         args = self.args
-        T = deepcopy(self.s2p_mean)
+        T = np.nanmean(self.s2p_mask, axis = 2)
         sm_kwargs = {}
         keys = ['s_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',]
         for key in keys:
             sm_kwargs[key] = getattr(args, key)
+        sm_kwargs['is_rfi'] = np.isnan(T)
         from .ripple.util import do_smooth
         T = do_smooth(T, **sm_kwargs)
 
@@ -326,7 +348,7 @@ class IO(BaseIO):
             if tn in self.not_rfi_num:
                 spec = deepcopy(T[tn,:])
                 RMS = real_rms(spec, self.freq, args.rms_sigma, args.rms_frange)
-                is_rfi_mw = (spec > RMS * rfi_thr)
+#                 is_rfi_mw = (spec > RMS * rfi_thr)
                 is_rfi = (spec > RMS * rfi_thr) & (~self.protect_use)
                 try:
                     pd_rfi[tn,:],_ = find_RFI(spec,self.freq,is_rfi,RMS = RMS,
@@ -334,9 +356,14 @@ class IO(BaseIO):
                 except ValueError:
                     pd_rfi[tn,:] = True
                     print(f"tn={tn} has a ValueError !")
-                    #import traceback
-                    #traceback.print_exc()
+#                     import traceback
+#                     traceback.print_exc()
         print("Finish finding period RFI...")
+
+        time_coherent_per = args.time_coherent_per
+        if (time_coherent_per > 0)&(time_coherent_per <1):
+            per_use = (np.sum(pd_rfi,axis = 0)/pd_rfi.shape[0] > time_coherent_per)
+            pd_rfi[:,per_use] = True
 
         return pd_rfi
 
@@ -452,7 +479,11 @@ if __name__ == '__main__':
     # print(parser.format_help())
     # print("----------")
     print('#'*35+'Args'+'#'*35)
-    print(del_paras_in_string(parser.format_values(), dests_hide))  # useful for logging where different settings came from
+    args_from = parser.format_values()
+    args_from = del_paras_in_string(args_from, dests_hide)
+    print(args_from)
     print('#'*35+'####'+'#'*35)
-    io = IO(args_)
+
+    HistoryAdd = {'args_from': args_from} if args_.my_config is not None else None
+    io = IO(args_, HistoryAdd=HistoryAdd)
     io()

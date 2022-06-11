@@ -3,6 +3,18 @@ from scipy import special
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 
+try:
+    import bottleneck as bn
+    MEDIAN = bn.median
+    NANMEDIAN = bn.nanmedian
+    MEAN = bn.nanmean
+    STD = bn.nanstd
+except ImportError:
+    MEDIAN = np.median
+    NANMEDIAN = np.nanmedian
+    MEAN = np.mean
+    STD = np.std
+
 def _get_start_stop(arr,arr_in):
     """
     arr_in: array

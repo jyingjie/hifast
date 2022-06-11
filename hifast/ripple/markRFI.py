@@ -2,7 +2,7 @@
 
 __all__ = ['rms', 'get_rms_frange', 'real_rms', 'std', 'real_std', 'find_local_peak', 'fit_line', 'get_startend',
            'find_center', 'check_repeat_center', 'polyfit1order', 'mask_RFI', 'find_edge_2sides', 'mask_RFI_2sides',
-           'center_theory', 'find_RFI', 'find_t', 'mask_sf', 'mask_time_rfi', 'mask_freq_rfi']
+           'center_theory', 'find_RFI', 'find_t', 'mask_sf', 'mask_lf', 'mask_time_rfi', 'mask_nr', 'mask_freq_rfi']
 
 # Cell
 # author: Xu Chen 2021.06
@@ -133,7 +133,7 @@ def find_local_peak(rfi1,freq1,RMS,distance=5,):
     elif loc_shape > 1:
         loc = loc_max[np.argmax(rfi1[loc_max])]
     elif loc_shape == 0:
-        print("No local peak is found")
+#         print("No local peak is found")
         return np.nan,np.nan
 
     freq_max = np.float(freq1[loc])
@@ -244,12 +244,9 @@ def find_center(spec,freq,is_rfi,RMS,freq_thr = .5,freq_step = 8.1,check = True,
         rfi1 = spec[s:e]
         freq1 = freq[s:e]
         freq_peak,flux_peak = find_local_peak(rfi1,freq1,RMS=RMS)
-        #half_v_left, half_v_righ = fit_line(rfi1,freq1,half_factor =.5,RMS=RMS)
-        #if np.sum(np.isnan([half_v_left, half_v_righ])) == 0:
-            #vc = np.float((half_v_left + half_v_righ)/2)
-            #if (vc > freq1[0])&(vc < freq1[-1]):
-        vc = freq_peak
-        fc0 += [vc,]; peaks += [flux_peak,]
+        if not np.isnan(freq_peak):
+            vc = freq_peak
+            fc0 += [vc,]; peaks += [flux_peak,]
 
     peaks = np.array(peaks)
     # from the biggest one to guess rfi set 1
@@ -461,9 +458,10 @@ def find_edge_2sides(spec,vel,peak_position,step,rms_thresh,Print=False,small_rf
     """
     start = deepcopy(peak_position)
     part_rms = rms(spec,vel,rms_vrange=[start-step/2,start+step/2])
+    if Print: print("peak in ",start,"initial rms:", part_rms, "rms_thresh:", rms_thresh)
 
     if part_rms < rms_thresh * small_rfi_times:
-        #print("theory peak rms < rms_thresh")
+        if Print: print(f"initial rms {part_rms} < rms_thresh {rms_thresh} * {small_rfi_times}")
         edge = np.array([np.nan,np.nan])
         return edge
 
@@ -472,7 +470,7 @@ def find_edge_2sides(spec,vel,peak_position,step,rms_thresh,Print=False,small_rf
         if start < min(vel):
             break
         part_rms = rms(spec,vel,rms_vrange=[start-step/2,start+step/2])
-        if Print:print(part_rms)
+        if Print: print("left step rms:", part_rms)
 
     end = deepcopy(peak_position)
     part_rms = rms(spec,vel,rms_vrange=[end-step/2,start+end/2])
@@ -481,14 +479,14 @@ def find_edge_2sides(spec,vel,peak_position,step,rms_thresh,Print=False,small_rf
         if end > max(vel):
             break
         part_rms = rms(spec,vel,rms_vrange=[end-step/2,end+step/2])
-        if Print:print(part_rms)
+        if Print: print("right step rms:", part_rms)
 
     edge = np.array([start,end]) + np.array([-1,1]) * ext_times * step
     edge[edge < min(vel)] = min(vel)
     edge[edge > max(vel)] = max(vel)
     if Print:
-        print(start,end)
-        print(peak_position,edge)
+        print("start, end ",[start,end])
+        print("final edge:", edge)
     return edge
 
 def mask_RFI_2sides(spec,freq,is_rfi,theory0,mark_rfi_width,small_rfi_times,RMS,
@@ -618,7 +616,7 @@ def find_RFI(spec,freq,is_rfi,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge 
         ax.vlines(fc0,ymin=ymin,ymax=ymax,linestyles='--',colors='k',label = 'all')
         ax.vlines(fcenter1,ymin=ymin,ymax=ymax,linestyles='--',colors='r',label = '1')
         ax.vlines(fcenter2,ymin=ymin,ymax=ymax,linestyles='--',colors='g',label = '2')
-        if (rfi_groups == 'three groups') & (fcenter3.size>0):
+        if (rfi_groups == 'three_groups') & (fcenter3.size>0):
             ax.vlines(fcenter3,ymin=ymin,ymax=ymax,linestyles='--',colors='b',label = '3')
         if ylim is not None:
             ax.set_ylim(ylim[0],ylim[1])
@@ -632,10 +630,10 @@ def find_RFI(spec,freq,is_rfi,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge 
         spec_ = np.full(spec.shape[0],np.nan)
         spec_[bigrfi2] = spec[bigrfi2]
         ax.plot(freq,spec_)
-        if (rfi_groups == 'two groups')|(rfi_groups == 'three groups'):
+        if (rfi_groups == 'two_groups')|(rfi_groups == 'three_groups'):
             ax.vlines(theory1,ymin=ymin,ymax=ymax,linestyles='--',colors='r',label = 'theory1')
             ax.vlines(theory2,ymin=ymin,ymax=ymax,linestyles='--',colors='g',label = 'theory2')
-            if (rfi_groups == 'three groups') & (theory3.size>0):
+            if (rfi_groups == 'three_groups') & (theory3.size>0):
                 ax.vlines(theory3,ymin=ymin,ymax=ymax,linestyles='--',colors='b',label = 'theory3')
         elif rfi_groups == 'all':
             ax.vlines(theory0,ymin=ymin,ymax=ymax,linestyles='--',colors='k',label = 'theory0')
@@ -654,12 +652,14 @@ def find_RFI(spec,freq,is_rfi,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge 
 # Cell
 ####################### time rfi ########################
 
-def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
-           ext_add = 0,plot = False,pdf = None,xylim = None,plot_norfi=False,axis = 'time'):
+def find_t(data,freq,frange,thr_type = 'input_med_times',
+           mean_times = 10,diff_times = 20,rfi_width_lim = 20,ext_add = 0,plot = False,
+           pdf = None,xylim = None,plot_norfi=False,axis = 'time'):
     """
     data: 2D arrays
     frange: like [a,b]
-    times: thr = median value * times
+    mean_times: mean_thr = median value * mean_times
+    diff_times: diff_thr = median value * diff_times
     rfi_width_lim: width limit
     ext_add: extend edge
     """
@@ -687,22 +687,34 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
     is_timerfi = np.zeros_like(t,dtype = 'bool')
 
     pat_med = np.nanmedian(pat_mean)
-    pat_mean[np.isnan(pat_mean)] = 0
 
-    is_pat = pat_mean > pat_med * times
+    if pat_med <= 0 and thr_type == 'input_med_times':
+        raise ValueError(f"Median value <= 0. You should switch to thr_type = 'input_thr'")
+
+    if thr_type == 'input_med_times':
+        mean_thr = pat_med * mean_times
+        diff_thr = pat_med * diff_times
+    elif thr_type == 'input_thr':
+        pat_mean -= pat_med # make it near zeros
+        mean_thr = mean_times
+        diff_thr = diff_times
+
+    pat_mean[np.isnan(pat_mean)] = 0
+    is_pat = pat_mean > mean_thr
     if (is_pat.any() == False) and (plot_norfi == True):
         if pdf is not None:
             plt.switch_backend('agg')
         fig,ax = plt.subplots(figsize = (15,3))
         ax.plot(t,pat_mean)
-        ax.axhline(pat_med*times,c = 'k',linestyle = '--',label='median')
+        ax.axhline(mean_thr,c = 'k',linestyle = '--',label='mean_thr')
         ax.grid()
         ax.set_ylabel(ylabel)
         ax.set_xlabel(xlabel)
         if frange is not None:
             ax.set_title(f'freq in {frange} MHz')
-        if ylim is not None:
-            ax.set_ylim(ylim[0],ylim[1])
+        if xylim is not None:
+            ax.set_xlim(xylim[0],xylim[1])
+            ax.set_ylim(xylim[2],xylim[3])
         if pdf is not None:
             pdf.savefig();plt.close()
         return  is_timerfi
@@ -718,18 +730,17 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
     pat_diff = np.abs(np.diff(pat_mean, prepend=0, append=0))
     s,e = get_startend(is_timerfi, exclude = False)
     if len(start) > 0:
-        print(f"rfis start at tn = {start}, end in tn = {end}")
+        print(f"rfi starts at tn = {start}, ends in tn = {end}")
         for s,e in zip(start,end):
-            #cond = ((pat_diff[s] - pat_diff[s-1])/pat_med > thr) & ((pat_diff[e] - pat_diff[e+1])/pat_med > thr)
-            cond = (pat_diff[s]/pat_med > thr) & (pat_diff[e]/pat_med > thr)
+            cond = (pat_diff[s] > diff_thr) & (pat_diff[e] > diff_thr)
             if cond:
                 is_timerfi[s:e] = True
 
         if ext_add > 0 and is_timerfi.any():
             from ..utils.misc import extend_Trues
-            is_timerfi = extend_Trues(is_timerfi,axis = 0,ext_add = ext_add)
+            is_timerfi = extend_Trues(is_timerfi,axis = 0,ext_frac = 0,ext_add = ext_add)
             s,e = get_startend(is_timerfi, exclude = False)
-            print(f"After extension, rfis start at tn = {s}, end in tn = {e}")
+            print(f"After extension, rfi starts at tn = {s}, ends in tn = {e}")
 #     else:
 #         print("No True meets width condition.")
     if axis == 'time':
@@ -739,11 +750,16 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
     if plot:
         if pdf is not None:
             plt.switch_backend('agg')
+        print(f"Median value is {pat_med}. mean_thr = {mean_thr}. diff_thr = {diff_thr}")
         fig,ax = plt.subplots(figsize = (15,3))
         ax.plot(t,pat_mean)
-        ax.axhline(pat_med*times,c = 'k',linestyle = '--',label='thr')
+        ax.axhline(mean_thr,c = 'k',linestyle = '--',label='mean_thr')
         ax.plot(t,is_timerfi*np.max(pat_mean),label='is_timeRFI')
-        ax.plot(t,pat_diff[:-1]-np.max(pat_mean),label='abs(diff)')
+        offset = np.max(pat_mean)
+        ax.axhline( - offset,c = 'k',linestyle = '-')
+        ax.plot(t,pat_diff[:-1] - offset,label='abs(diff)')
+        ax.axhline(diff_thr - offset,c = 'k',linestyle = '--',label='diff_thr')
+
         ax.grid()
         ax.plot(t[s],pat_mean[s],'r.',label = 'start')
         ax.plot(t[e],pat_mean[e],'g.',label = 'end')
@@ -759,7 +775,7 @@ def find_t(data,freq,frange,times = 10,thr = 20,rfi_width_lim = 20,
             pdf.savefig();plt.close()
     return  is_timerfi
 
-def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,rms_thr_times=3,**kwargs):
+def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,mask_rms_times=3,**kwargs):
     """
     Other parameters are the same as previous.
     """
@@ -782,11 +798,11 @@ def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,rms_thr_times=
         fmax = freq[f_use][np.argmax(sm)]
         f50 = freq[f_use][sm > MAX / 2]
         w50 = f50[-1] - f50[0]
-        rms_thresh = rms(mspec,freq,rms_frange) * rms_thr_times
+        rms_thresh = rms(mspec,freq,rms_frange) * mask_rms_times
 
         mask_frange = find_edge_2sides(mspec[f_use],freq[f_use],peak_position=fmax-w50/2,step=w50,
                  rms_thresh=rms_thresh,Print=False,ext_times=ext_times,small_rfi_times=0)
-        print(f"mask frange:",mask_frange)
+        print(f"tn = {[s,e]} mask frange:",mask_frange)
 
         mask_use =  (freq>mask_frange[0])&(freq<mask_frange[1])
         ret[s:e,mask_use] = True
@@ -794,15 +810,51 @@ def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,rms_thr_times=
     ext_add = kwargs['ext_add']
     if ext_add is not None:
         from ..utils.misc import extend_Trues
-        ret = extend_Trues(ret,axis = -1,ext_add = ext_add)
+        ret = extend_Trues(ret,axis = -1,ext_frac = 0,ext_add = ext_add)
+
+    print("Found :D")
+    return ret
+
+def mask_lf(data,freq, frange = None, rms_frange = None, mask_rms_times = -1,**kwargs):
+    """
+    Other parameters are the same as previous.
+    """
+    ret = np.zeros_like(data,dtype = 'bool')
+
+    is_timerfi = find_t(data,freq,frange =frange, **kwargs)
+    if is_timerfi.any() == False:
+        print("No long-freq time rfi is found.")
+        return ret
+    log.info(f"Looking for long-freq time RFI ...")
+
+    if mask_rms_times == -1:
+        ret[is_timerfi,:] = True
+        print("Mask the whole spec with rfi :(")
+    elif mask_rms_times == 0:
+        mask_use = (freq>frange[0])&(freq<frange[1])
+        ret[is_timerfi,:] = True
+        ret[:,~mask_use] = False
+        print(f"Mask spec with rfi in input freq range {frange}")
+    elif mask_rms_times > 0:
+        spec = data[~is_timerfi][0]
+        rms_thresh = rms(spec,freq,rms_frange) * mask_rms_times
+        mask_use = data[is_timerfi,:] > rms_thresh
+        ret[is_timerfi,:] = mask_use
+        print(f"Mask spec with rfi above rms thr {rms_thresh}")
+    else:
+        raise ValueError("mask_rms_times should be -1, 0, or >0 !")
+
+    ext_add = kwargs['ext_add']
+    if ext_add is not None:
+        from ..utils.misc import extend_Trues
+        ret = extend_Trues(ret,axis = -1,ext_frac = 0,ext_add = ext_add)
 
     print("Found :D")
     return ret
 
 # Cell
 def mask_time_rfi(data,freq,rtype = 'short-freq',frange = None, file=None,
-                  rms_frange = None,frange_step = None,lf_mask_whole=True,
-                  plot_norfi = False, **kwargs):
+                  frange_step = None, plot_norfi = False, **kwargs):
     """
     rtype: 'short-freq','long-freq'
     frange: freq range
@@ -827,10 +879,10 @@ def mask_time_rfi(data,freq,rtype = 'short-freq',frange = None, file=None,
                 franges = np.vstack((frq1,frq2)).T
 
             for nf in tqdm(range(franges.shape[0])):
-                ret |= mask_sf(data,freq,frange = franges[nf],rms_frange = rms_frange,**kwargs)
+                ret |= mask_sf(data,freq,frange = franges[nf],**kwargs)
 
         elif len(frange) == 2 and (frange[1] - frange[0]) > 0:
-            ret = mask_sf(data,freq,frange,rms_frange = rms_frange,**kwargs)
+            ret = mask_sf(data,freq,frange,**kwargs)
         else:
             raise ValueError("frange should like [fmin,fmax] or a string (RFI npy filepath) or a certain frange_step.")
 
@@ -838,39 +890,49 @@ def mask_time_rfi(data,freq,rtype = 'short-freq',frange = None, file=None,
             print("No short-freq time rfi is found.")
 
     elif rtype == 'long-freq':
-        log.info(f"Looking for long-freq time RFI ...")
         if len(frange) == 2:
-            is_timerfi = find_t(data,freq,frange =frange,plot_norfi = plot_norfi, **kwargs)
-            if is_timerfi.any() == False:
-                print("No long-freq time rfi is found.")
-                return ret
-            ret[is_timerfi,:] = True
-            if lf_mask_whole:
-                print("Mask the whole spec with rfi :(")
-            else:
-                mask_use = (freq>frange[0])&(freq<frange[1])
-                print(f"Mask spec with rfi in freq range {frange}")
-                ret[:,~mask_use] = False
-
-            print("Found :D")
+            ret = mask_lf(data,freq, frange,  **kwargs)
         else:
             raise ValueError("frange should like [fmin,fmax].")
 
     print("Finish")
     return ret
 
-# Cell
-def mask_freq_rfi(data,freq,rtype = 'long-time',RMS = None,**kwargs):
-
+def mask_nr(data,freq, rms_frange = None, mask_rms_times = 0, **kwargs):
+    """
+    Other parameters are the same as previous.
+    """
     ret = np.zeros_like(data,dtype = 'bool')
-    if rtype == 'long-time':
-        log.info(f"Looking for long-time narrowband freq RFI ...")
-        is_freqrfi = find_t(data,freq,axis = 'freq', **kwargs)
-        if is_freqrfi.any() == False:
-            print("No long-time freq rfi is found.")
-            return ret
+
+    log.info(f"Looking for long-time narrowband freq RFI ...")
+    is_freqrfi = find_t(data,freq,axis = 'freq', **kwargs)
+    if is_freqrfi.any() == False:
+        print("No long-time freq rfi is found.")
+        return ret
+
+    if mask_rms_times == 0:
         ret[:,is_freqrfi] = True
-        print("Found :D")
+        print("Mask the whole chanels with rfi :P")
+    elif mask_rms_times > 0:
+        tmin = np.argmin(np.nanmean(data, axis = 0))
+        spec = data[tmin]
+        rms_thresh = rms(spec,freq,rms_frange) * mask_rms_times
+        mask_use = data[:,is_freqrfi] > rms_thresh
+        ret[:,is_freqrfi] = mask_use
+        print(f"Mask channels with rfi above rms thr {rms_thresh}")
+
+    ext_add = kwargs['ext_add']
+    if ext_add is not None:
+        from ..utils.misc import extend_Trues
+        ret = extend_Trues(ret,axis = 0,ext_frac = 0,ext_add = ext_add)
+
+    print("Found :D")
+    return ret
+
+# Cell
+def mask_freq_rfi(data,freq,rtype = 'long-time',**kwargs):
+    if rtype == 'long-time':
+        ret = mask_nr(data,freq, **kwargs)
 
     print("Finish")
     return ret

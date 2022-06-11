@@ -12,11 +12,14 @@ import re
 from glob import glob
 
 import numpy as np
-from matplotlib import pyplot as plt
-plt.switch_backend('agg')
 import scipy.interpolate as interp
 import h5py
 from astropy.io import fits
+
+from matplotlib import pyplot as plt
+import __main__
+if hasattr(__main__, '__file__'):
+    plt.switch_backend('agg')
 
 # Cell
 from ..utils.tcal import read_tcal
@@ -92,6 +95,12 @@ class FastRawData(object):
             self.freq_use= self.freq
         if self.dfactor is not None:
             self.freq_use = down_sample(self.freq_use[None,:,None], self.dfactor)[0,:,0]
+
+    def ls_fields(self,):
+        """
+        list fields in fits hdu1.data
+        """
+        print(self.hduls[0][1].data.dtype)
 
     def get_mjds(self):
         mjds = np.hstack([hdul[1].data['UTOBS'] for hdul in self.hduls])
@@ -289,6 +298,8 @@ class FastRawSpec(FastRawData):
             stop = len(glob(fname_part+'*.fits'))
         self.fname_part = fname_part
         filenames = [fname_part+'%04d.fits'%i for i in range(start,stop+1)]
+        if len(filenames) == 0:
+            raise(OSError(f"can not find file, please check fname_part:{fname_part}"))
         super().__init__(filenames, frange=frange, dfactor=dfactor, med_filter_size=med_filter_size, verbose=verbose)
 
         self.nB= int(re.findall(r'-M[0-1][0-9]', fname_part)[-1][2:])
@@ -380,6 +391,8 @@ class CalOnOff(FastRawSpec):
         else:
             self.p_cal_f = None
         self.sep_on_off_inds()
+        # set init plot as False
+        # self.plot = False
 
     def get_extra(self,):
         """
@@ -487,16 +500,16 @@ class CalOnOff(FastRawSpec):
         p_toff_aft = self.get_field(inds_toff_aft, field='DATA')
         p_toff_bef = self.get_field(inds_toff_bef, field='DATA')
         try:
-            if self.plot:
+            if getattr(self, 'plot', False):
                 new_shape= (-1,)+p_ton.shape[-2:]
                 figname = self.out_name_base + "-cal.pdf"
                 plot_sep(inds_ton.flatten(), np.hstack([inds_toff_bef.reshape(-1),inds_toff_aft.reshape(-1)]),
                          p_ton.reshape(new_shape),
                          np.vstack([p_toff_bef.reshape(new_shape),p_toff_aft.reshape(new_shape)]),
                          figname=figname, n_max=80, re_tick=True)
-
-        except AttributeError:
+        except:
             pass
+
         if self.tcal_offset and inds_ton.shape[1] <4:
             n = p_ton.shape[-2]
             p_ton = p_ton[range(len(p_ton)), np.argmax(np.mean(p_ton[:,:,n//20:n-n//20,:], axis=(2,3), dtype='float64'), axis=1)]
@@ -537,11 +550,12 @@ class CalOnOff(FastRawSpec):
         p_off = self.get_field(inds_off, 'DATA', close_file=True)
         #print(p_on.dtype, p_off.dtype, p_cal_s.dtype)
         try:
-            if self.plot:
+            if getattr(self, 'plot', False):
                 figname = self.out_name_base + "-sep.pdf"
                 plot_sep(inds_on, inds_off, p_on, p_off, figname=figname)
-        except AttributeError:
+        except:
             pass
+
         count_on = p_on.astype('float64') / p_cal_s[np.where(inds_in_tcal_on[:,None] - uni[None,:] ==0, )[1]] - 1 # have subtracted cal
         count_off = p_off.astype('float64') / p_cal_s[np.where(inds_in_tcal_off[:,None] - uni[None,:] ==0, )[1]]
         return count_on, count_off, p_cal_s, inds_ton[uni]
@@ -707,6 +721,9 @@ def mean_a(arr):
 class CalOnOffA(CalOnOff):
     """
     """
+    def __init__(self, *args, pcal_vary_frac=0.01, **kwargs):
+        self.pcal_vary_frac = pcal_vary_frac
+        super().__init__(*args, **kwargs)
 
     def squeeze_freq(self, arr, axis=-1, method='mean'):
         """
@@ -717,6 +734,17 @@ class CalOnOffA(CalOnOff):
             return np.apply_along_axis(mean_a, axis, arr)
         elif method == 'median':
             return np.median(arr.astype('float64'), axis=axis)
+
+    def _check_diff(self, inds):
+        """
+        check if max diff is not larger than self.pcal_vary_frac
+        """
+        p = self.get_field(inds)
+        ps = self.squeeze_freq(p, axis=2, method='mean_a')
+        ps_max, ps_min = np.max(ps, axis=1), np.min(ps, axis=1)
+        df = (ps_max - ps_min)/ps_min
+        is_use = df < self.pcal_vary_frac
+        return is_use[:,0] & is_use[:,1]
 
     def check_cal(self, inds_ton):
         """
@@ -750,17 +778,15 @@ class CalOnOffA(CalOnOff):
         inds_coff[-1].sort()
 
         # check off
-        def check(inds):
-            p = self.get_field(inds)
-            ps = self.squeeze_freq(p, axis=2, method='mean_a')
-            ps_max, ps_min = np.max(ps, axis=1), np.min(ps, axis=1)
-            df = (ps_max - ps_min)/ps_min
-            is_use = df < 0.05
-            return is_use[:,0] & is_use[:,1]
-        is_use = check(inds_coff)
+        is_use = self._check_diff(inds_coff)
         # check on
         if inds_ton.shape[1] >= 2:
-            is_use &= check(inds_ton)
+            is_use &= self._check_diff(inds_ton)
+        if self.verbose:
+            aba_inds_ton = inds_ton[~is_use]
+            if len(aba_inds_ton) > 0:
+                print("abandoned Pcal index:")
+                print(*aba_inds_ton[:, 0], sep=',')
         return is_use
 
     def do_check_cal(self, step=None):

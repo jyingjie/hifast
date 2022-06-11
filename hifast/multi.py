@@ -84,6 +84,9 @@ class IO(BaseIO):
         # save is_rfi only if replace_rfi is False
         if not args.replace_rfi and is_rfi is not None:
             self.dict_out['is_rfi'] = is_rfi
+        else:
+            if 'is_rfi' in self.dict_out.keys():
+                self.dict_out.pop('is_rfi')
         if save:
             self.save()
 
@@ -93,7 +96,10 @@ if __name__ == '__main__':
     # print(parser.format_help())
     # print("----------")
     print('#'*35+'Args'+'#'*35)
-    print(parser.format_values())  # useful for logging where different settings came from
+    args_from = parser.format_values()
+    print(args_from)
     print('#'*35+'####'+'#'*35)
-    io = IO(args_)
+
+    HistoryAdd = {'args_from': args_from} if args_.my_config is not None else None
+    io = IO(args_, HistoryAdd=HistoryAdd)
     io()
