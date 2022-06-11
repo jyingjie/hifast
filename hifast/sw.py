@@ -10,7 +10,7 @@ from copy import deepcopy
 sep_line = '##'+'#'*70+'##'
 parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}",
                         formatter_class=formatter_class, allow_abbrev=False,
-                        description='Fit and subtract standing wave', )
+                        description='Fit and subtract standing wave',)
 add_common_argument(parser)
 parser.add_argument('fpath',
                     help='input baselined spectra file path')
@@ -20,7 +20,7 @@ parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_f
                     help="if set, don't check or add ra dec")
 parser.add_argument('--nproc', '-n', type=int, default=1,
                     help='number of process used in fitting baseline')
-parser.add_argument('--show_prog', type=bool_fun, choices=[True, False],
+parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True', env_var='HIFAST_SHOW_PROG',
                     help='')
 
 # smooth

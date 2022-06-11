@@ -17,7 +17,7 @@ parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
                     help='Limit frequence range')
 parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
                     help="don't check or add ra dec")
-parser.add_argument('--show_prog', type=bool_fun, choices=[True, False],
+parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True', env_var='HIFAST_SHOW_PROG',
                     help='')
 
 # group = parser.add_argument_group(f'*Flux\n{sep_line}')
@@ -44,7 +44,7 @@ group.add_argument('--nproc', '-n', type=int, default=1,
                    help='number of process used in fitting baseline')
 group = parser.add_argument_group('preprocessing before baseline fitting')
 group.add_argument('-T', '--trans', type=bool_fun, choices=[True, False], default='False',
-                   help='')
+                   help='if set True, fitting the baseline along time instead of frequency.')
 group.add_argument('--njoin', type=int, default=0,
                    help='join spectra (average) to fit same baseline')
 group.add_argument('--s_method_t', default='none', choices=['none', 'gaussian', 'boxcar', 'median'],
