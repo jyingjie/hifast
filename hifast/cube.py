@@ -4,12 +4,13 @@
 import numpy as np
 from glob import glob
 import os
-import sys
 from astropy.io import fits
 from astropy.wcs import WCS
 from astropy import units as u
 import h5py
-from .core import grid
+from hifast.core import grid
+from hifast.core import conf
+from hifast.core.corr_vel import freq2vel, vel2freq
 
 def _adjust_header(header, ra_range, dec_range):
     """
@@ -45,39 +46,64 @@ def _adjust_header(header, ra_range, dec_range):
             header['NAXIS1'] += (pix_t_max[0] - header['NAXIS1'] - pix_t_min[0])
             header['NAXIS2'] += (pix_t_max[1] - header['NAXIS2'] - pix_t_min[1])
             #print('v2',end=':')
+        #print(header)
     return header
 
-def gen_header(ra_range, dec_range, x_delta, y_delta, z, proj, vel_type, frame, histories=None):
+def gen_header(ra_range, dec_range, x_delta, y_delta, z, proj, type3, frame, histories=None):
     
-    x= np.arange(ra_range[0],ra_range[1]+x_delta,x_delta)[::-1] # reverse ra
+    x= np.arange(ra_range[0],ra_range[1]+x_delta,x_delta)[::-1] 
     y= np.arange(dec_range[0],dec_range[1]+y_delta,y_delta)
     # Create a new WCS object.
     w = WCS(naxis=3)
+    print(type3)
+    if type3.upper() == 'FREQ':
+        ctype3 = 'FREQ'
+    elif type3.upper() == 'VOPT':
+        ctype3 = 'VOPT-F2W'
+    elif type3.upper() == 'VRAD':
+        ctype3 = 'VRAD'
+    else:
+        raise(ValueError('type3'))
+    
+    if proj.lower() == 'rcar':
+        w.wcs.ctype = [f"RA---CAR", f"DEC--CAR", ctype3]
+    else:
+        w.wcs.ctype = [f"RA---{proj}", f"DEC--{proj}", ctype3]
     # center pixel
-    w.wcs.crpix = list(map(lambda x:len(x)/2, [x,y,z]))
+    w.wcs.crpix = [len(x)/2,
+                   len(y)/2,
+                   1,]
     # coordinate and z value of that pixel.
-    w.wcs.crval = list(map(lambda x:(x[-1]+x[0])/2, [x,y,z]))
+    w.wcs.crval = [(x[-1]+x[0])/2,
+                   (x[-1]+x[0])/2,
+                   z[0]]
     # the pixel scale in (ra,dec, z)
-    w.wcs.cdelt = list(map(lambda x:(x[-1]-x[0])/(len(x)-1), [x,y,z]))
+    w.wcs.cdelt = list(map(lambda x:x[1]-x[0], [x,y,z]))
+    if type3.upper() == 'VOPT':
+        freq_r = vel2freq(z, 'optical')
+        cdelt3 = -conf.restfreq/(freq_r[0]**2)*(freq_r[1]-freq_r[0])*conf.vlight  
+        w.wcs.cdelt[2] = cdelt3
+    
+    w.wcs.cunit = ['deg', 'deg', 'km/s']
     # projection
-    w.wcs.ctype = [f"RA---{proj}", f"DEC--{proj}", vel_type]
-    w.wcs.specsys= frame # or HELIOCENT
+    w.wcs.specsys = frame # or HELIOCENT
+    w.wcs.restfrq = conf.restfreq*1e6 # Mhz to Hz # 1.420405752E+9 hz for HI
     
     header = w.to_header()
+    if proj.lower() == 'rcar':
+        header["LONPOLE"] = 0.0                                                  
+        header["LATPOLE"] = 90.0 
     
     header["NAXIS"] = 3
     header["NAXIS1"] = len(x)
     header["NAXIS2"] = len(y)
     header["NAXIS3"] = len(z)
     header = _adjust_header(header, ra_range, dec_range)
-    header["CUNIT1"] = 'deg'
-    header["CUNIT2"] = 'deg'
-    header["CUNIT3"] = 'km/s'
+    
     
     # additional
     header["EQUINOX"] = 2000.0                                                  
     header["LINE"]    = 'HI'
-    header["RESTFRQ"]  =   1.420405751E+9
     header["BMAJ"] = 2.9/60
     header["BMIN"] = 2.9/60
     header["BPA"] = 0.0
@@ -87,6 +113,7 @@ def gen_header(ra_range, dec_range, x_delta, y_delta, z, proj, vel_type, frame, 
     if histories is not None:
         for his in histories:
             header['HISTORY']= his
+    #print(header)
     return header
 
 def header_3to2(header_3d):
@@ -143,6 +170,7 @@ def _stack_spec(vel, Ta, vrange=None):
 
     vel= np.vstack([i[:len_use] for i in _vel])
     Ta= np.vstack([i[:,:len_use] for i in _Ta])
+    print(np.diff(vel))
     return vel,Ta
 
 def _preprocess(vals, threshold = None):
@@ -171,14 +199,15 @@ def get_ra_range(ra):
         is_c= ra>=ra_s[ind_max+1]
         ra[is_c]= ra[is_c]-360
     return [np.nanmin(ra), np.nanmax(ra)]
-    
+
 if __name__ == '__main__':
     import os
     import argparse
     from hifast.utils.io import PolarMjdChan_to_MjdChanPolar
     from hifast.utils.io import formatter_class
+    from hifast.utils.io import get_nB
     parser = argparse.ArgumentParser(allow_abbrev=False, formatter_class=formatter_class)
-    parser.add_argument('fname',nargs='+',
+    parser.add_argument('fname', nargs='+',
                         help='file name')
     parser.add_argument('--ra_range', type=float,nargs=2,
                        help='ra range; unit: deg')
@@ -186,8 +215,8 @@ if __name__ == '__main__':
                        help='dec_range; unit: deg')
     parser.add_argument('--range3', type=float,nargs=2,
                        help='freq or vel range')
-    parser.add_argument('--type3', choices=['vel', 'freq'], default='vel',
-                       help='third axis in cube,  freq or vel')
+    parser.add_argument('--type3', choices=['vopt', 'vrad', 'freq'], default='vrad',
+                       help='third axis in cube,  ``vopt, ``vrad`` or ``freq``')
     parser.add_argument('--bwidth', type=float, default=[60.],nargs='+',
                        help='unit: arc second')
     parser.add_argument('--outname', required=True,
@@ -200,14 +229,16 @@ if __name__ == '__main__':
                        help='fits wcs projection')
     parser.add_argument('--r_cut', type=float, default=90,
                        help='spectra inside r_cut from the grid point will be considered; unit: arc second')
-    parser.add_argument('-m','--method', default='bessel_gaussian', choices=['reweight', 'mean', 'median', 'gaussian', 'bessel_gaussian', 'sinc_gaussian'],
+    parser.add_argument('-m','--method', default='gaussian', choices=['mean','median', 'gaussian', 'bessel_gaussian', 'sinc_gaussian'],
                        help='method to process the spec in r_cut')
-    parser.add_argument('--frac_finite_min', '--frac-finite-min', type=float, default=1,
-                       help='For a grid point having ``n``` spectra in ``r_cut``, if the number of ``finite value`` in a channel is zero or smaller than ``frac_finite_min*n``, the output value in the channel will be set as ``nan``')
+    parser.add_argument('--frac_finite_min', '--frac-finite-min', type=float, default=1, help='For a grid point having ``n``` spectra in ``r_cut``, if the number of ``finite value`` in a channel is zero or smaller than ``frac_finite_min*n``, the output value in the channel will be set as ``nan``')
     parser.add_argument('-t','--threshold', type=float,
                        help='vals less than threshold will be masked as nan')
     parser.add_argument('--w_on_t', action='store_true',
                        help='weight on sample time')
+    parser.add_argument('--wcs_from',
+                       help='use the wcs parameters from input fits')
+    
 
     args = parser.parse_args()
     fname= args.fname
@@ -247,11 +278,10 @@ if __name__ == '__main__':
     
     with h5py.File(files[0],'r') as f:
         try:
-            vel_type= f['Header'].attrs['vel_type']
+            #vel_type= f['Header'].attrs['vel_type']
             frame= f['Header'].attrs['frame']
         except:
             print("No header found, using arbitrary value for velcity type and frame")
-            vel_type= 'VRAD'
             frame='LSRK'
         if key is None:
             if 'flux' in f['S'].keys():
@@ -266,10 +296,10 @@ if __name__ == '__main__':
     Ta=[]
     vel=[]
     fs=[]
-    
+    nBs = []
     if args.w_on_t:
         t_sample = []
-    
+
     for file in files:
         f = h5py.File(file,'r')
         S = f['S']
@@ -279,15 +309,22 @@ if __name__ == '__main__':
         # merge polar
         if Ta_.ndim == 3:
             Ta_ = np.mean(Ta_, axis=2, dtype='float64')
-        vel_ = S[type3]
+        _freq = S['freq'][()]
+        if type3.upper() == 'FREQ':
+            vel_ = _freq
+        elif type3.upper() == 'VOPT':
+            vel_ = freq2vel(_freq, vtype='optical')
+        elif type3.upper() == 'VRAD':
+            vel_ = freq2vel(_freq, vtype='radio')
         if range3 is not None:
             is_ = (vel_[:] >= range3[0]) & (vel_[:] <= range3[1])
             vel_ = vel_[:][is_]
             Ta_ = Ta_[:][:, is_]
         Ta += [Ta_, ]
         vel += [vel_,]
+        nBs += [np.full(len(S['ra'][:]), get_nB(file))]
         fs += [f,]
-        
+                
         if args.w_on_t:
             t_sample += [S['mjd'][1] - S['mjd'][0]]
     if args.w_on_t:
@@ -296,9 +333,9 @@ if __name__ == '__main__':
         wi = np.hstack([np.full(len(ra[i]), t_sample[i]) for i in range(len(t_sample))])
     else:
         wi = None
-        
     ra= np.hstack(ra)
     dec= np.hstack(dec)
+    nBs = np.hstack(nBs)
     #     Ta=np.vstack(Ta)
     #     vel=np.vstack(vel)
     vel, Ta= _stack_spec(vel, Ta) #vel are in descending order.
@@ -307,10 +344,9 @@ if __name__ == '__main__':
     Ta= _preprocess(Ta, threshold)
     # use some vel sample for each specta
     std_vel= np.std(vel,axis=0,dtype=np.float64) # single precision can be inaccurate
+    print(f'vel dispersion (std) at same Ta order is between {np.nanmin(std_vel)} and {np.nanmax(std_vel)}.')
     if np.nanmax(std_vel)>0.2:
         raise(ValueError('vel dispersion (std) at same Ta order is two large'))
-    else:
-        print(f'vel dispersion (std) at same Ta order is between {np.nanmin(std_vel)} and {np.nanmax(std_vel)}.')
     vel_refine= np.mean(vel,axis=0,dtype=np.float64) # single precision can be inaccurate
     vel_refine= np.append(vel_refine- (vel_refine[1]-vel_refine[0])/2, vel_refine[-1]+(vel_refine[1]-vel_refine[0])/2)
 
@@ -336,12 +372,28 @@ if __name__ == '__main__':
         pass
     histories += files
     
-    header= gen_header(ra_range,dec_range,*bwidth,vel[0],proj, vel_type, frame, histories=histories)
+    header = gen_header(ra_range, dec_range, *bwidth,vel[0], proj, type3, frame, histories=histories)
+    if key == 'flux':
+        header["BUNIT"] = 'Jy/beam'
+    elif key == 'Ta':
+        header["BUNIT"] = 'K'
+    
+    if arg.wcs_from is not None:
+        print(f'use the wcs sky coordinates parameters from {arg.wcs_from}')
+        fa = fits.open(arg.wcs_from)
+        header2 = fa[0].header
+        for key in header.keys():
+            if key[-1:] in ['1', '2'] or key == 'LONPOLE' or key == 'LATPOLE':
+                print(f'replacing {key}')
+                try:
+                    header[key] = header2[key]
+                except:
+                    print(f'replace {key} fail')
+    
     ra_grid, dec_grid = gen_grid_radec(header)
     #print('ra range in generated cube fits file', np.min(ra_grid), np.max(ra_grid))
     #print('dec range in generated cube fits file', np.min(dec_grid), np.max(dec_grid))
-    out, nums= grid.gridding(ra, dec, Ta, ra_grid, dec_grid, wi=wi, r=r_cut, method=method, 
-                            frac_finite_min=args.frac_finite_min) 
+    out, nums= grid.gridding(ra, dec, Ta, ra_grid, dec_grid, wi=wi, r=r_cut, method=method, frac_finite_min=args.frac_finite_min) 
     hdu = fits.PrimaryHDU(out.astype('float32'), header=header)
     print(f'Saving to {outname}.')
     overwrite = True if args.force else False
