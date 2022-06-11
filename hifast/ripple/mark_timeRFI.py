@@ -79,7 +79,7 @@ def find_t(data,freq,frange,thr_type = 'input_med_times',
     pat_med = np.nanmedian(pat_mean)
 
     if pat_med <= 0 and thr_type == 'input_med_times':
-        log.warning(f"Median value <= 0. Switch to thr_type = 'input_posimed_times'")
+        log.warning(f"Median value <= 0. Switch to thr_type = 'input_absmed_times'")
         thr_type = 'input_absmed_times'
 
     if thr_type == 'input_med_times':
