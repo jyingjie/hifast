@@ -18,7 +18,7 @@ parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
                     help='Limit frequence range')
 parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
                     help="don't check or add ra dec")
-parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True',
+parser.add_argument('--show_prog', type=bool_fun, choices=[True, False],
                     help='')
 
 # group = parser.add_argument_group(f'*Flux\n{sep_line}')
@@ -118,7 +118,6 @@ class IO(BaseIO):
                 'lam', 'deg', 'offset', 'ratio', 'niter', 'exclude_type']
         for key in keys:
             fit_kwargs[key] = getattr(args, key)
-        fit_kwargs['verbose'] = args.show_prog
         fit_kwargs['is_excluded'] = is_excluded
         if args.trans:
             return sub_baseline(mjd, s2p.transpose((1, 0, 2)), subtract=True, **fit_kwargs).transpose((1, 0, 2))

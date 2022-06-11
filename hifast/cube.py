@@ -202,8 +202,12 @@ if __name__ == '__main__':
                        help='spectra inside r_cut from the grid point will be considered; unit: arc second')
     parser.add_argument('-m','--method', default='bessel_gaussian', choices=['reweight', 'mean', 'median', 'gaussian', 'bessel_gaussian', 'sinc_gaussian'],
                        help='method to process the spec in r_cut')
+    parser.add_argument('--frac_finite_min', '--frac-finite-min', type=float, default=1,
+                       help='For a grid point having ``n``` spectra in ``r_cut``, if the number of ``finite value`` in a channel is zero or smaller than ``frac_finite_min*n``, the output value in the channel will be set as ``nan``')
     parser.add_argument('-t','--threshold', type=float,
                        help='vals less than threshold will be masked as nan')
+    parser.add_argument('--w_on_t', action='store_true',
+                       help='weight on sample time')
 
     args = parser.parse_args()
     fname= args.fname
@@ -262,6 +266,10 @@ if __name__ == '__main__':
     Ta=[]
     vel=[]
     fs=[]
+    
+    if args.w_on_t:
+        t_sample = []
+    
     for file in files:
         f = h5py.File(file,'r')
         S = f['S']
@@ -279,6 +287,16 @@ if __name__ == '__main__':
         Ta += [Ta_, ]
         vel += [vel_,]
         fs += [f,]
+        
+        if args.w_on_t:
+            t_sample += [S['mjd'][1] - S['mjd'][0]]
+    if args.w_on_t:
+        t_sample = np.array(t_sample)
+        t_sample /= np.max(t_sample)
+        wi = np.hstack([np.full(len(ra[i]), t_sample[i]) for i in range(len(t_sample))])
+    else:
+        wi = None
+        
     ra= np.hstack(ra)
     dec= np.hstack(dec)
     #     Ta=np.vstack(Ta)
@@ -322,7 +340,8 @@ if __name__ == '__main__':
     ra_grid, dec_grid = gen_grid_radec(header)
     #print('ra range in generated cube fits file', np.min(ra_grid), np.max(ra_grid))
     #print('dec range in generated cube fits file', np.min(dec_grid), np.max(dec_grid))
-    out, nums= grid.gridding(ra, dec, Ta, ra_grid, dec_grid, r=r_cut, method=method) 
+    out, nums= grid.gridding(ra, dec, Ta, ra_grid, dec_grid, wi=wi, r=r_cut, method=method, 
+                            frac_finite_min=args.frac_finite_min) 
     hdu = fits.PrimaryHDU(out.astype('float32'), header=header)
     print(f'Saving to {outname}.')
     overwrite = True if args.force else False

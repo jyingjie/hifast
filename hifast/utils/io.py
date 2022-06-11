@@ -430,6 +430,14 @@ class Path_IO(object):
         need modify this function
         """
         return '-example'
+    
+    def _set_show_prog(self,):
+        args = self.args
+        if hasattr(args, 'show_prog'):
+            from tqdm import tqdm
+            from functools import partialmethod
+            disable = not args.show_prog if args.show_prog is not None else None
+            tqdm.__init__ = partialmethod(tqdm.__init__, disable=disable)
 
 
 class BaseIO(Path_IO):
@@ -452,6 +460,7 @@ class BaseIO(Path_IO):
         self._gen_fpath_out()
         if self.dict_in is None:
             self._check_fout()
+        self._set_show_prog()
         self.nB = self.get_nB(self.args.fpath)
         self._import_m()
         self.open_fpath()
