@@ -5,7 +5,6 @@ __all__ = ['IO']
 # Cell
 from .utils.io import *
 from copy import deepcopy
-#nbdev_comment _all_ = ['parser']
 
 # Internal Cell
 sep_line = '##'+'#'*70+'##'
