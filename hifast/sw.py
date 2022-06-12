@@ -18,6 +18,8 @@ parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
                     help='Limit frequence range')
 parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
                     help="if set, don't check or add ra dec")
+parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True',
+                    help='show progress bar when replace RFI')
 parser.add_argument('--nproc', '-n', type=int, default=1,
                     help='number of process used in fitting baseline')
 parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True', env_var='HIFAST_SHOW_PROG',
@@ -303,7 +305,8 @@ class IO(BaseIO):
         if args.rfi_method == 'zero_ripple':
             rep_args['fill'] = 'zero'
             args.rfi_method = 'near_ripple'
-
+        rep_args['verbose'] = args.show_prog
+        
         save_is_excluded = args.save_is_excluded & iter_twice
 #         print("############ save_is_excluded", save_is_excluded)
         s1p, is_excluded = sw_fft.replace_rfi(s1p, self.freq, time_rfi=is_rfi, method=args.rfi_method,
