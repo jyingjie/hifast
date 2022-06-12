@@ -81,7 +81,7 @@ parser.add_argument('--mw_frange', type=float, nargs=2,
 group = parser.add_argument_group(f'*Long freq \n{sep_line}')
 group.add_argument('--lf', '--long_freq', type=bool_fun, choices=[True, False], default='False',
                    help='find time rfi')
-group.add_argument('--lsn_thr_type', default='input_med_times', 
+group.add_argument('--lsn_thr_type', default='input_med_times',
                    choices=['input_med_times','input_absmed_times','input_posimed_times'],
                    help='input times of median value, its absolute value, or add an offset to make it positive.\
                    used for lf, sf, nr')
@@ -298,7 +298,7 @@ class IO(BaseIO):
         shortf_args['rfi_width_lim'] = args.sf_rfi_last
         shortf_args['rms_frange'] = args.rms_frange
         shortf_args['thr_type'] = args.lsn_thr_type
-        
+
         if args.sf_use_time_only:
             is_timerfi = np.any(is_rfi, axis = 1)
             shortf_args['is_timerfi'] = is_timerfi
@@ -408,7 +408,7 @@ class IO(BaseIO):
 
     def _guess_19rfi(self,):
         args = self.args
-        
+
         from glob import glob
         import re
         subname = args.fpath
@@ -418,15 +418,15 @@ class IO(BaseIO):
 #         print(name)
         _19names = glob(name)
         return _19names
-    
+
     def load_19rfi(self):
         import h5py
         rfi_ = h5py.File(self._19name, 'r')
         _is_rfi = rfi_['S']['is_rfi'][:]
         rfi_.close()
         return _is_rfi
-    
-    @staticmethod 
+
+    @staticmethod
     def gen_19rfi_file(paras=[]):
         """
         run hifast.rfi_multi
@@ -442,10 +442,10 @@ class IO(BaseIO):
         print(*process.communicate())
         if process.returncode != 0:
             raise(ValueError(f'fail to generate the 19 beams rfi file!'))
-    
+
     def gen_s2p_out(self,):
         args = self.args
-        
+
         if args.all_beams:
             _19names = self._guess_19rfi()
             if len(_19names) == 0:
@@ -456,7 +456,7 @@ class IO(BaseIO):
                 for s in paras:
                     if s in ['tr', 'pr', 'nr', 'lf', 'pdr']: # except sf
                         s = False
-             
+
                 self.gen_19rfi_file(paras)
                 sys.stdout.flush()
                 self._19name = os.path.join(args.outdir, os.path.basename(args.fpath).split('.hdf5')[0] + '-19rfi.hdf5')
@@ -466,15 +466,15 @@ class IO(BaseIO):
                 print(f"{self._19name} exists. Use it!")
             else:
                 raise ValueError("Master Skywalker, there are too many of them. What should we do?")
-                
+
         self.s2p_out = self.s2p[:]
-            
+
     def gen_is_rfi(self):
         args = self.args
         self.gen_s2p_out()
         self.s2p = self.s2p[:]
         self.s2p_mean = np.mean(self.s2p,axis = 2)
-        
+
         if args.all_beams:
             if os.path.exists(self._19name):
                 is_19rfi = self.load_19rfi()
@@ -524,7 +524,7 @@ class IO(BaseIO):
 
         if 'is_rfi' in self.fs.keys():
             is_rfi |= self.fs['is_rfi'][:]
-            
+
         return is_rfi
 
 

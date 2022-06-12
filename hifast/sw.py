@@ -306,7 +306,7 @@ class IO(BaseIO):
             rep_args['fill'] = 'zero'
             args.rfi_method = 'near_ripple'
         rep_args['verbose'] = args.show_prog
-        
+
         save_is_excluded = args.save_is_excluded & iter_twice
 #         print("############ save_is_excluded", save_is_excluded)
         s1p, is_excluded = sw_fft.replace_rfi(s1p, self.freq, time_rfi=is_rfi, method=args.rfi_method,
