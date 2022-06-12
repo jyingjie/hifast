@@ -4,7 +4,6 @@ __all__ = ['IO']
 
 # Cell
 from .utils.io import *
-#nbdev_comment _all_ = ['parser']
 
 # Internal Cell
 sep_line = '##'+'#'*70+'##'
@@ -18,7 +17,7 @@ parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
                     help='Limit frequence range')
 parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
                     help="don't check or add ra dec")
-parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True',
+parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True', env_var='HIFAST_SHOW_PROG',
                     help='')
 
 # group = parser.add_argument_group(f'*Flux\n{sep_line}')
@@ -45,7 +44,7 @@ group.add_argument('--nproc', '-n', type=int, default=1,
                    help='number of process used in fitting baseline')
 group = parser.add_argument_group('preprocessing before baseline fitting')
 group.add_argument('-T', '--trans', type=bool_fun, choices=[True, False], default='False',
-                   help='')
+                   help='if set True, fitting the baseline along time instead of frequency.')
 group.add_argument('--njoin', type=int, default=0,
                    help='join spectra (average) to fit same baseline')
 group.add_argument('--s_method_t', default='none', choices=['none', 'gaussian', 'boxcar', 'median'],
@@ -118,7 +117,6 @@ class IO(BaseIO):
                 'lam', 'deg', 'offset', 'ratio', 'niter', 'exclude_type']
         for key in keys:
             fit_kwargs[key] = getattr(args, key)
-        fit_kwargs['verbose'] = args.show_prog
         fit_kwargs['is_excluded'] = is_excluded
         if args.trans:
             return sub_baseline(mjd, s2p.transpose((1, 0, 2)), subtract=True, **fit_kwargs).transpose((1, 0, 2))
@@ -226,7 +224,10 @@ if __name__ == '__main__':
         print('Please run \'save()\' in the notebook cell to save your results')
     else:
         print('#'*35+'Args'+'#'*35)
-        print(parser.format_values())  # useful for logging where different settings came from
+        args_from = parser.format_values()
+        print(args_from)
         print('#'*35+'####'+'#'*35)
-        io = IO(args_)
+
+        HistoryAdd = {'args_from': args_from} if args_.my_config is not None else None
+        io = IO(args_, HistoryAdd=HistoryAdd)
         io()

@@ -5,13 +5,12 @@ __all__ = ['IO']
 # Cell
 from .utils.io import *
 from copy import deepcopy
-#nbdev_comment _all_ = ['parser']
 
 # Internal Cell
 sep_line = '##'+'#'*70+'##'
 parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}",
                         formatter_class=formatter_class, allow_abbrev=False,
-                        description='Fit and subtract standing wave', )
+                        description='Fit and subtract standing wave',)
 add_common_argument(parser)
 parser.add_argument('fpath',
                     help='input baselined spectra file path')
@@ -23,6 +22,9 @@ parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default
                     help='show progress bar when replace RFI')
 parser.add_argument('--nproc', '-n', type=int, default=1,
                     help='number of process used in fitting baseline')
+parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True', env_var='HIFAST_SHOW_PROG',
+                    help='')
+
 # smooth
 group = parser.add_argument_group('For FFT, smooth to find where should be replaced; for sin-fitting, preprocess.')
 group.add_argument('--s_method_t', default='gaussian', choices=['none', 'gaussian', 'boxcar', 'median'],
@@ -516,11 +518,15 @@ if __name__ == '__main__':
     # print(parser.format_help())
     # print("----------")
     # print(parser.format_values())  # useful for logging where different settings came from
+
     if args_.interact:
         interact(args_)
     else:
         print('#'*35+'Args'+'#'*35)
-        print(parser.format_values())  # useful for logging where different settings came from
+        args_from = parser.format_values()
+        print(args_from)
         print('#'*35+'####'+'#'*35)
-        io = IO(args_)
+
+        HistoryAdd = {'args_from': args_from} if args_.my_config is not None else None
+        io = IO(args_, HistoryAdd=HistoryAdd)
         io()

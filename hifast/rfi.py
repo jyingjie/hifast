@@ -5,7 +5,6 @@ __all__ = ['IO']
 # Cell
 from .utils.io import *
 from copy import deepcopy
-#nbdev_comment _all_ = ['parser']
 
 # Internal Cell
 sep_line = '##'+'#'*70+'##'
@@ -19,6 +18,8 @@ parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
                     help='Limit frequence range')
 parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
                     help="don't check or add ra dec")
+parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True', env_var='HIFAST_SHOW_PROG',
+                    help='')
 parser.add_argument('--all_beams', type=bool_fun, choices=[True, False], default='False',
                    help='find time rfi after averaging all 19 beams')
 
@@ -569,7 +570,11 @@ if __name__ == '__main__':
     # print(parser.format_help())
     # print("----------")
     print('#'*35+'Args'+'#'*35)
-    print(del_paras_in_string(parser.format_values(), dests_hide))  # useful for logging where different settings came from
+    args_from = parser.format_values()
+    args_from = del_paras_in_string(args_from, dests_hide)
+    print(args_from)
     print('#'*35+'####'+'#'*35)
-    io = IO(args_)
+
+    HistoryAdd = {'args_from': args_from} if args_.my_config is not None else None
+    io = IO(args_, HistoryAdd=HistoryAdd)
     io()
