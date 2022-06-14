@@ -174,7 +174,7 @@ def correct_spec(Ta, freq, ra, dec, mjd, frame='LSRK', method='interp', interp_k
     tmp = np.hstack([np.arange(freq[0]-f_d, fcorr.min(),-f_d)[::-1], freq, np.arange(freq[-1]+f_d, fcorr.max(),f_d)])
     freq_new = tmp[(tmp> fcorr.min()) & (tmp< fcorr.max())]
 
-    Ta_new = np.zeros((Ta.shape[0], len(fcorr), Ta.shape[2]))
+    Ta_new = np.zeros((Ta.shape[0], len(freq_new), Ta.shape[2]))
     for i in range(Ta.shape[0]):
         for j in range(Ta.shape[2]):
             fcorr_i = _freq_vcorr(freq, vcorr[i])

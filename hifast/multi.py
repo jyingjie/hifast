@@ -77,6 +77,9 @@ class IO(BaseIO):
             vel = freq2vel(freq)
             self.s2p_out = s2p
             self.gen_dict_out(freq=freq, vel=vel)  # replace freq, add vel
+            if 'Tcal' in self.dict_out.keys():
+                values = self.dict_out['Tcal'] # self.is_use_freq has been applied
+                self.dict_out['Tcal'], _ = correct_spec(values, self.freq, self.ra, self.dec, self.mjd, frame=args.frame, method='interp')
         else:
             self.s2p_out = s2p
             self.gen_dict_out()

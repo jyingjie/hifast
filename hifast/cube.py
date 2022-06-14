@@ -378,9 +378,9 @@ if __name__ == '__main__':
     elif key == 'Ta':
         header["BUNIT"] = 'K'
     
-    if arg.wcs_from is not None:
-        print(f'use the wcs sky coordinates parameters from {arg.wcs_from}')
-        fa = fits.open(arg.wcs_from)
+    if args.wcs_from is not None:
+        print(f'use the wcs sky coordinates parameters from {args.wcs_from}')
+        fa = fits.open(args.wcs_from)
         header2 = fa[0].header
         for key in header.keys():
             if key[-1:] in ['1', '2'] or key == 'LONPOLE' or key == 'LATPOLE':

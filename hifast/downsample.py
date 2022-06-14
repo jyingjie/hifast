@@ -57,6 +57,7 @@ class IO(BaseIO):
         args = self.args
         type1 = ['is_delay', 'is_extrapo', 'is_on', 'mjd', 'next_to_cal']
         type2 = ['freq', 'vel']
+        ## to do: if vel is under optical
 
         dict_out = {}
         dict_out["Header"] = self.Header
@@ -82,14 +83,18 @@ class IO(BaseIO):
                 if self.is_use_freq is not None:
                     value = value[:, self.is_use_freq]
                 dict_out[key] = self.down(self.down(value, args.spec_factor, axis=0), args.chan_factor, axis=1)
-
         if 'ra' in self.fs.keys():
-            ra = _tight_ra(self.fs['ra'][()])
-            dict_out['ra'] = interp.interp1d(self.fs['mjd'], ra, kind='linear', fill_value ='extrapolate')(dict_out['mjd'])
-            dict_out['ra'][dict_out['ra']<0] += 360
+            if args.spec_factor > 1:
+                ra = _tight_ra(self.fs['ra'][()])
+                dict_out['ra'] = interp.interp1d(self.fs['mjd'], ra, kind='linear', fill_value ='extrapolate')(dict_out['mjd'])
+                dict_out['ra'][dict_out['ra']<0] += 360
+            else:
+                dict_out['ra'] = self.fs['ra'][()]
         if 'dec' in self.fs.keys():
-            dict_out['dec'] = interp.interp1d(self.fs['mjd'], self.fs['dec'], kind='linear', fill_value ='extrapolate')(dict_out['mjd'])
-
+            if args.spec_factor > 1:
+                dict_out['dec'] = interp.interp1d(self.fs['mjd'], self.fs['dec'], kind='linear', fill_value ='extrapolate')(dict_out['mjd'])
+            else:
+                dict_out['dec'] = self.fs['dec'][()]
 
         self.dict_out = dict_out
         if save:

@@ -18,12 +18,10 @@ parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
                     help='Limit frequence range')
 parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
                     help="if set, don't check or add ra dec")
-parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True',
-                    help='show progress bar when replace RFI')
 parser.add_argument('--nproc', '-n', type=int, default=1,
                     help='number of process used in fitting baseline')
 parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True', env_var='HIFAST_SHOW_PROG',
-                    help='')
+                    help='show progress bar')
 
 # smooth
 group = parser.add_argument_group('For FFT, smooth to find where should be replaced; for sin-fitting, preprocess.')
