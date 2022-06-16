@@ -10,6 +10,7 @@ from astropy.wcs import WCS
 from astropy import units as u
 import h5py
 from .core import grid
+from .core.radec import _tight_ra
 
 def _adjust_header(header, ra_range, dec_range):
     """
@@ -272,9 +273,22 @@ if __name__ == '__main__':
     for file in files:
         f = h5py.File(file,'r')
         S = f['S']
-        ra += [S['ra'],]
-        dec += [S['dec'],]
-        Ta_ = PolarMjdChan_to_MjdChanPolar(S[key][:])
+
+        ra_ = S['ra'][()]
+        if ra_range is not None:
+            ra_tmp = _tight_ra(ra_)
+            is_use_t = (ra_tmp >= (ra_range[0] - 2*r_cut)) & (ra_tmp <= (ra_range[1] + 2*r_cut))
+        else:
+            is_use_t = np.full(len(ra_tmp), True)
+        dec_ = S['dec'][()]
+        if dec_range is not None:
+            is_use_t &= (dec_ >= (dec_range[0] - 2*r_cut)) & (dec_ <= (dec_range[1] + 2*r_cut))
+        ra += [ra_[is_use_t],]
+        dec += [dec_[is_use_t],]
+        if np.all(is_use_t):
+            Ta_ = PolarMjdChan_to_MjdChanPolar(S[key][:])
+        else:
+            Ta_ = PolarMjdChan_to_MjdChanPolar(S[key][:, np.where(is_use_t)[0]])
         # merge polar
         if Ta_.ndim == 3:
             Ta_ = np.mean(Ta_, axis=2, dtype='float64')
@@ -289,6 +303,9 @@ if __name__ == '__main__':
         
         if args.w_on_t:
             t_sample += [S['mjd'][1] - S['mjd'][0]]
+            
+        #print(np.sum(is_use_t)/len(is_use_t), file)
+        
     if args.w_on_t:
         t_sample = np.array(t_sample)
         t_sample /= np.max(t_sample)
