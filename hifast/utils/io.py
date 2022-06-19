@@ -400,15 +400,13 @@ class Path_IO(object):
         add self.fpath_out
         """
         args = self.args
-
+        if args.outdir is None or args.outdir == 'default':
+            args.outdir = os.path.dirname(args.fpath)
         # replace patten in outdir
         nB = get_nB(args.fpath)
         project = get_project(args.fpath)
         date = get_date_from_path(args.fpath)
         args.outdir = sub_patten(args.outdir, date=date, nB=f'{nB:02d}', project=project)
-
-        if args.outdir is None or args.outdir == 'default':
-            args.outdir = os.path.dirname(args.fpath)
 
         print(f'outdir: {args.outdir}')
         if not os.path.exists(args.outdir):
@@ -564,7 +562,7 @@ class BaseIO(Path_IO):
             if 'Header' in self.dict_in.keys():
                 Header.update(self.dict_in['Header'])
         import json
-        if self.HistoryAdd is not None:
+        if hasattr(self, 'HistoryAdd') and self.HistoryAdd is not None:
             his = rec_his(args=json.dumps(self.args.__dict__), **self.HistoryAdd)
         else:
             his = rec_his(args=json.dumps(self.args.__dict__))
