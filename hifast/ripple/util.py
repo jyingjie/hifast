@@ -139,7 +139,7 @@ class Args(object):
 class Read_hdf5(BaseIO):
     ver = 'old'
     
-    def __init__(self, args, dict_in=None, inplace_args=False):
+    def __init__(self, args, dict_in=None, inplace_args=False, HistoryAdd=None):
         """
         args: class
               including attributes: fpath, outdir, frange
@@ -147,6 +147,7 @@ class Read_hdf5(BaseIO):
         """
         self.args = args if inplace_args else deepcopy(args)
         self.dict_in = dict_in
+        self.HistoryAdd = HistoryAdd
         self._gen_fpath_out()
         if self.dict_in is None:
             self._check_fout()
