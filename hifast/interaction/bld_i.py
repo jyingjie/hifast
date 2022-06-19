@@ -23,8 +23,12 @@ import matplotlib as mpl
 
 # Cell
 class Test(object):
-    def __init__(self, T2p, freq, frange=None, is_excluded=None):
+    def __init__(self, T2p, freq, frange=None, is_excluded=None, trans=False):
+        """
+        T2p: shape (Polar,Mjd,Chan)
 
+        """
+        self.trans = trans
         if T2p.ndim != 3:
             raise(ValueError('T2p should be 3 dim'))
         self.T2p = T2p
@@ -33,6 +37,8 @@ class Test(object):
         self.is_excluded = None
 
         freq = freq[:]
+        if self.trans:
+            freq = np.arange(T2p.shape[1])
         if frange is not None:
             self.is_use = (freq > frange[0]) & (freq < frange[1])
             self.freq = freq[self.is_use]
@@ -42,7 +48,13 @@ class Test(object):
         self.select()
 
     def select(self, start=0, length=20, polar=0):
-        self.T2p_t = PolarMjdChan_to_MjdChanPolar(self.T2p[polar:polar+1, start:start+length])
+        if self.trans:
+            self.T2p_t = self.T2p[polar:polar+1,:, start:start+length]
+            self.T2p_t = PolarMjdChan_to_MjdChanPolar(self.T2p_t)
+            self.T2p_t = self.T2p_t.transpose((1, 0, 2))
+        else:
+            self.T2p_t = PolarMjdChan_to_MjdChanPolar(self.T2p[polar:polar+1, start:start+length])
+
         if self.is_excluded is not None:
             if self.is_excluded.shape == self.T2p.shape:
                 self.is_excluded_t = PolarMjdChan_to_MjdChanPolar(self.is_excluded[polar:polar+1, start:start+length])
@@ -58,7 +70,7 @@ class Test(object):
             if self.is_excluded_t is not None:
                 self.is_excluded_t = self.is_excluded_t[:, self.is_use]
 
-    def sub(self, x, start=0, length=20, polar=0, frange_excluded=None, exclude_type='always', **kwargs):
+    def sub(self, x, start=0, length=20, polar=0, frange_excluded=None, exclude_add='none', **kwargs):
         self.select(start, length, polar)
         if frange_excluded is not None and frange_excluded[0] != frange_excluded[1]:
             is_ = (x > frange_excluded[0]) & (x < frange_excluded[1])
@@ -67,13 +79,12 @@ class Test(object):
             self.is_excluded_t = None
         self.frange_excluded = frange_excluded
 
-        if exclude_type == 'none':
-            # do not use is_excluded
-            self.is_excluded_t = None
-            exclude_type = 'always'
-
+#         if exclude_type == 'none':
+#             # do not use is_excluded
+#             self.is_excluded_t = None
+#             exclude_type = 'always'
         self.bld = sub_baseline(self.freq, self.T2p_t, is_excluded=self.is_excluded_t,
-                                exclude_type = exclude_type,
+                                exclude_add = exclude_add,
                                 verbose=False, **kwargs)
         return np.full(x.shape, np.nan)
 
@@ -105,26 +116,31 @@ def phrase_ylim(ylim, vals):
 def main():
     global ylim
 
-    tes = Test(T2p, freq, frange, is_excluded)
+    tes = Test(T2p, freq, frange, is_excluded, trans)
 
     rew_type = ['asym1', 'asym2', 'asym3', 'sym1',]
     method = ['PLS-'+r for r in rew_type]
     method += ['poly-'+r for r in rew_type]
+    method += ['spline-'+r for r in rew_type]
     method += ['masPLS-'+r for r in rew_type]
     method += ['asPLS',]
 
     sliders = {}
-    sliders.update(_BoundedIntText(
-        start=(0, 0, tes.T2p.shape[1]-length, 1), polar=(0, 0, tes.T2p.shape[0], 1)))
+    if trans:
+        sliders.update(_BoundedIntText(
+                       start=(0, 0, tes.T2p.shape[2]-length, 1), polar=(0, 0, tes.T2p.shape[0], 1)))
+    else:
+        sliders.update(_BoundedIntText(
+                       start=(0, 0, tes.T2p.shape[1]-length, 1), polar=(0, 0, tes.T2p.shape[0], 1)))
     sliders.update(_IntSlider(njoin=(0, 1, length, 1),
                               average_every_freq=(0, 1, 40, 1)))
     sliders.update(_Dropdown(method=method,
                              s_method_freq=('none', 'gaussian', 'boxcar',),
                              s_method_t=('none', 'gaussian', 'boxcar'),
-                             exclude_type=('none', 'always', 'end', 'auto', 'auto1', 'auto2'),
+                             exclude_add=('none', 'auto1', 'auto2'),
                              ))
     sliders.update(_IntSlider(s_sigma_freq=(3, 1, 20, 1), s_sigma_t=(3, 1, 20, 1)))
-    sliders.update(_FloatLog10Slider(lam=(1e8, 5, 13, 0.2), readout_format='.2e'))
+    sliders.update(_FloatLog10Slider(lam=(1e8, 0, 13, 0.2), readout_format='.2e'))
     sliders.update(_IntSlider(deg=(2, 1, 10, 1),
                               niter=(100, 1, 200, 1)))
     sliders.update(_FloatSlider(offset=(2, 0.1, 4, 0.1)))
@@ -214,7 +230,7 @@ def main():
                       w['s_sigma_freq'],
                       w['offset']]),
         widgets.HBox([w['method'], w['lam'], w['deg'],
-                      w['exclude_type']]),
+                      w['exclude_add']]),
         widgets.HBox([w['frange_excluded'], ]),
     ]
 
