@@ -96,7 +96,8 @@ def do_smooth_onoff(s1p, is_on = None,is_rfi = None, **kwargs):
         T[~is_on] = do_smooth(T[~is_on],is_rfi = is_rfi[~is_on], **kwargs)
     return T
 
-def line_set(ax,xlabel,ylabel,direction='in',xlim=None,ylim=None,legend=True,title=None,loc='best', size = None):
+def line_set(ax,xlabel,ylabel,direction='in',xlim=None,ylim=None,legend=True,
+             title=None,loc='best', size = None,frameon=True):
     """
     plot settings
     """
@@ -126,7 +127,7 @@ def line_set(ax,xlabel,ylabel,direction='in',xlim=None,ylim=None,legend=True,tit
     if ylim is not None: ax.set_ylim(ylim)
     ax.set_xlabel(xlabel,fontsize=lbz)
     ax.set_ylabel(ylabel,fontsize=lbz)
-    if legend: ax.legend(loc = loc,fontsize=tkz)
+    if legend: ax.legend(loc = loc,fontsize=tkz, frameon=frameon)
     if title is not None: ax.set_title(title,fontsize=lbz)
 
     

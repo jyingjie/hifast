@@ -195,7 +195,7 @@ def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,mask_rms_times
         w50 = f50[-1] - f50[0]
         rms_thresh = rms(mspec,freq,rms_frange) * mask_rms_times
 
-        mask_frange = find_edge_2sides(mspec[f_use],freq[f_use],peak_position=fmax-w50/2,step=w50,
+        mask_frange = find_edge_2sides(mspec,freq,peak_position=fmax-w50/2,step=w50,
                  rms_thresh=rms_thresh,Print=False,ext_times=ext_times,small_rfi_times=0)
         print(f"tn = {[s,e]} mask frange:",mask_frange)
 
