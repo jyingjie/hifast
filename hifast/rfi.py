@@ -14,14 +14,24 @@ parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:
 add_common_argument(parser)
 parser.add_argument('fpath',
                     help='input baselined spectra file path.')
-parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
-                    help='Limit frequence range')
+# not support --frange
+# parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
+#                     help='Limit frequence range')
 parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
                     help="don't check or add ra dec")
 parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True', env_var='HIFAST_SHOW_PROG',
                     help='')
 parser.add_argument('--all_beams', type=bool_fun, choices=[True, False], default='False',
                    help='find time rfi after averaging all 19 beams')
+
+parser.add_argument('--replace_rfi', type=bool_fun, choices=[True, False], default='False',
+                   help='If True, replace find rfi as np.nan')
+                    #, otherwise store ``is_rfi`` array in output file')
+
+group = parser.add_argument_group(f'*mark rfi from a DS9 regions file\n{sep_line}')
+group.add_argument('--reg_from', default='none',
+                   help='If not set as ``none``, mark rfi through regions from a DS9 format regions file. ' + \
+                        "If set as ``default``, will try to find the file:  the input spectra  fpath + '.reg'. If set as other string, will be treated as a file path")
 
 #################### Time domain continuous RFI ######################
 group = parser.add_argument_group(f'*Time domain continuous RFI\n{sep_line}')
@@ -193,6 +203,35 @@ class IO(BaseIO):
         import h5py
         from collections import OrderedDict
         import numpy as np
+
+    def get_from_regions(self,):
+
+        from .core.regions import read_regions, replace_region
+
+        args = self.args
+        if args.reg_from is None or args.reg_from == 'none':
+            return None
+        if args.reg_from == 'default':
+            print('try to find the default regions file')
+            fpath_reg = args.fpath + '.reg'
+            if not os.path.exists(fpath_reg):
+                print(f'can not find the default regions file {fpath_reg}, skipping')
+                return None
+        else:
+            nB = get_nB(args.fpath)
+            project = get_project(args.fpath)
+            date = get_date_from_path(args.fpath)
+            fpath_reg = sub_patten(args.reg_from, date=date, nB=f'{nB:02d}', project=project)
+            if not os.path.exists(fpath_reg):
+                print('can not find the specified regions file {fpath_reg}, skipping')
+                return None
+        print(f'read regions from {fpath_reg}')
+        regions = read_regions(fpath_reg)
+        if regions is None:
+            return None
+        is_rfi = np.full(self.s2p.shape[:2], False)
+        replace_region(is_rfi, regions, fill_value=True)
+        return is_rfi
 
     def get_tr(self,):
         """
@@ -522,6 +561,10 @@ class IO(BaseIO):
             print('finding pr')
             is_rfi |= self.get_pr()
 
+        is_rfi_tmp = self.get_from_regions()
+        if is_rfi_tmp is not None:
+            is_rfi |= is_rfi_tmp
+
         if 'is_rfi' in self.fs.keys():
             is_rfi |= self.fs['is_rfi'][:]
 
@@ -531,9 +574,11 @@ class IO(BaseIO):
     def __call__(self, save=True):
         args = self.args
         is_rfi = self.gen_is_rfi()
+        if args.replace_rfi:
+            self.s2p_out[is_rfi] = np.nan
         self.gen_dict_out(is_rfi = is_rfi)
         # replace outfield as h5py.ExternalLink
-        if self.dict_in is None:
+        if self.dict_in is None and (not args.replace_rfi):
             self.dict_out[self.outfield] = h5py.ExternalLink(os.path.relpath(
                 args.fpath, os.path.dirname(self.fpath_out)), f'/S/{self.infield}')
         if save:

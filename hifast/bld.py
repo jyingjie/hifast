@@ -68,7 +68,7 @@ group.add_argument('--ratio', type=float, default=0.01,
                    help='baseline fit parameters')
 group.add_argument('--niter', type=int, default=100,
                    help='baseline fit parameters')
-group.add_argument('--exclude_type',
+group.add_argument('--exclude_add', '--exclude_type', default='none', choices=['none', 'auto1', 'auto2'],
                    help='baseline fit parameters')
 
 # MinMed or MedMed
@@ -114,7 +114,7 @@ class IO(BaseIO):
         fit_kwargs = {}
         keys = ['method', 'nproc',
                 'njoin', 's_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',
-                'lam', 'deg', 'offset', 'ratio', 'niter', 'exclude_type']
+                'lam', 'deg', 'offset', 'ratio', 'niter', 'exclude_add']
         for key in keys:
             fit_kwargs[key] = getattr(args, key)
         fit_kwargs['is_excluded'] = is_excluded
@@ -208,6 +208,7 @@ def interact(args):
     interact.length = min(args.length, interact.T2p.shape[1])
     interact.figsize = args.figsize
     interact.ylim = args.ylim[0] if len(args.ylim) == 1 else args.ylim
+    interact.trans = args.trans
     return interact.main()
     # sys.exit()
 
