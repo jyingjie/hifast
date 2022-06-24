@@ -400,13 +400,15 @@ class Path_IO(object):
         add self.fpath_out
         """
         args = self.args
+        
         if args.outdir is None or args.outdir == 'default':
             args.outdir = os.path.dirname(args.fpath)
-        # replace patten in outdir
-        nB = get_nB(args.fpath)
-        project = get_project(args.fpath)
-        date = get_date_from_path(args.fpath)
-        args.outdir = sub_patten(args.outdir, date=date, nB=f'{nB:02d}', project=project)
+        else:
+            # replace patten in outdir
+            nB = get_nB(args.fpath)
+            project = get_project(args.fpath)
+            date = get_date_from_path(args.fpath)
+            args.outdir = sub_patten(args.outdir, date=date, nB=f'{nB:02d}', project=project)
 
         print(f'outdir: {args.outdir}')
         if not os.path.exists(args.outdir):
