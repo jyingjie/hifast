@@ -309,7 +309,7 @@ def mask_nr(data,freq, rms_frange = None, mask_rms_times = 0, **kwargs):
         ret[:,is_freqrfi] = True
         print("Mask the whole chanels with rfi :P")
     elif mask_rms_times > 0:
-        tmin = np.argmin(np.nanmean(data, axis = 0))
+        tmin = np.argmin(np.nanmean(data, axis = 1))
         spec = data[tmin]
         rms_thresh = rms(spec,freq,rms_frange) * mask_rms_times
         mask_use = data[:,is_freqrfi] > rms_thresh
