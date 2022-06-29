@@ -400,7 +400,7 @@ class Path_IO(object):
         add self.fpath_out
         """
         args = self.args
-        
+
         if args.outdir is None or args.outdir == 'default':
             args.outdir = os.path.dirname(args.fpath)
         else:
