@@ -65,6 +65,9 @@ def pixel_spec(spec, dis, *, wi=None, method='bessel_gaussian', sigma=1.275088/6
     frac_finite_min: if the number of ``finite value`` in a channel is zero or smaller than ``frac_finite_min*len(spec)``, 
                      the output value in it will be set as np.nan
     """
+    
+    spec = spec.astype('float64')
+    
     if frac_finite_min < 1:
         _MEAN = np.nanmean
         _MEDIAN = np.nanmedian
