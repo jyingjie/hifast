@@ -75,7 +75,7 @@ def gen_header(ra_range, dec_range, x_delta, y_delta, z, proj, type3, frame, his
                    1,]
     # coordinate and z value of that pixel.
     w.wcs.crval = [(x[-1]+x[0])/2,
-                   (x[-1]+x[0])/2,
+                   (y[-1]+y[0])/2,
                    z[0]]
     # the pixel scale in (ra,dec, z)
     w.wcs.cdelt = list(map(lambda x:x[1]-x[0], [x,y,z]))
