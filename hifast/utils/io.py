@@ -127,14 +127,14 @@ def add_extra(fin, _dict=None, fields_add=[]):
         _dict.update(out_add)
 
 # Cell
-def MjdChanPolar_to_PolarMjdChan(mcp):
-    if mcp.shape[2] != 2 and mcp.shape[2] != 1:
+def MjdChanPolar_to_PolarMjdChan(mcp, check_polar=True):
+    if check_polar and mcp.shape[2] != 2 and mcp.shape[2] != 1:
         raise(ValueError('need input (Mjd,Chan,Polar)'))
     return mcp.transpose((2, 0, 1))
 
 
-def PolarMjdChan_to_MjdChanPolar(pmc):
-    if pmc.shape[0] != 2 and pmc.shape[0] != 1:
+def PolarMjdChan_to_MjdChanPolar(pmc, check_polar=True):
+    if check_polar and pmc.shape[0] != 2 and pmc.shape[0] != 1:
         raise(ValueError('need input (Polar,Mjd,Chan)'))
     return pmc.transpose((1, 2, 0))
 

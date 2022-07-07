@@ -14,6 +14,7 @@ from glob import glob
 
 from ..core.baseline import get_baseline, sub_baseline
 from ..utils.io import PolarMjdChan_to_MjdChanPolar
+from ..utils.io import MjdChanPolar_to_PolarMjdChan
 from .widgets import *
 
 import warnings
@@ -70,7 +71,8 @@ class Test(object):
             if self.is_excluded_t is not None:
                 self.is_excluded_t = self.is_excluded_t[:, self.is_use]
 
-    def sub(self, x, start=0, length=20, polar=0, frange_excluded=None, exclude_add='none', **kwargs):
+    def sub(self, x, start=0, length=20, polar=0, frange_excluded=None,
+            exclude_add='none', verbose=False, **kwargs):
         self.select(start, length, polar)
         if frange_excluded is not None and frange_excluded[0] != frange_excluded[1]:
             is_ = (x > frange_excluded[0]) & (x < frange_excluded[1])
@@ -83,9 +85,12 @@ class Test(object):
 #             # do not use is_excluded
 #             self.is_excluded_t = None
 #             exclude_type = 'always'
-        self.bld = sub_baseline(self.freq, self.T2p_t, is_excluded=self.is_excluded_t,
-                                exclude_add = exclude_add,
-                                verbose=False, **kwargs)
+
+        self.sub_baseline_para = kwargs
+        self.sub_baseline_para['is_excluded'] = self.is_excluded_t
+        self.sub_baseline_para['exclude_add'] = exclude_add
+
+        self.bld = sub_baseline(self.freq, self.T2p_t, verbose=verbose, **self.sub_baseline_para)
         return np.full(x.shape, np.nan)
 
     def get_ori(self, x, i, **kwargs):
@@ -106,9 +111,9 @@ class Test(object):
 
 # Cell
 def phrase_ylim(ylim, vals):
-
+    is_ = np.isfinite(vals)
     ylim = list(map(lambda x: float(x) if 'per' != str(x)[:3] else
-                    np.nanpercentile(vals, float(str(x)[3:]), interpolation='nearest'), ylim))
+                    np.nanpercentile(vals[is_], float(str(x)[3:]), interpolation='nearest'), ylim))
     return ylim
 
 # Cell
@@ -127,11 +132,15 @@ def main():
 
     sliders = {}
     if trans:
-        sliders.update(_BoundedIntText(
-                       start=(0, 0, tes.T2p.shape[2]-length, 1), polar=(0, 0, tes.T2p.shape[0], 1)))
+        start_e = tes.T2p.shape[2]-length
     else:
-        sliders.update(_BoundedIntText(
-                       start=(0, 0, tes.T2p.shape[1]-length, 1), polar=(0, 0, tes.T2p.shape[0], 1)))
+        start_e = tes.T2p.shape[1]-length
+    if start_init is None:
+        start_i = start_e//2
+    else:
+        start_i = min(start_init, start_e)
+    sliders.update(_BoundedIntText(
+                       start=(start_i, 0, start_e, 1), polar=(0, 0, tes.T2p.shape[0], 1)))
     sliders.update(_IntSlider(njoin=(0, 1, length, 1),
                               average_every_freq=(0, 1, 40, 1)))
     sliders.update(_Dropdown(method=method,
@@ -157,6 +166,11 @@ def main():
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=figsize)
     fig.canvas.header_visible = False
 
+    # init
+    controls = iplt.plot(tes.freq, tes.sub, nproc=nproc, length=length,
+                         **sliders,
+                         color='r', ax=ax1, play_buttons=True, display_controls=False)
+    # ylim xlim in plot
     if isinstance(ylim, str):
         if ylim == 'auto':
             ylim = phrase_ylim(['per0.1', 'per99.5'], tes.T2p_t)
@@ -165,20 +179,12 @@ def main():
     else:
         ylim = phrase_ylim(ylim, tes.T2p_t)
 
+
     if isinstance(ylim, str):
         ylim2 = ylim
     else:
         ylim2 = [(ylim[0]-ylim[1])/2, (ylim[1]-ylim[0])/2]
     xlim = [tes.freq.min(), tes.freq.max()]
-
-    # bld parameter
-    # slider_formats = {'lam': "{:.2e}",
-    #                   'njoin': "{:d}",
-    #                   }
-
-    controls = iplt.plot(tes.freq, tes.sub, nproc=nproc, length=length,
-                         **sliders,
-                         color='r', linewidth=2, xlim=xlim, ylim=ylim, ax=ax1, play_buttons=True, display_controls=False)
 
     widget_i = _IntSlider(i=(0, 0, length-1, 1))['i'] if length ==1 else range(length)
 

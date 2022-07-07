@@ -5,6 +5,7 @@ __all__ = ['get_baseline', 'get_baseline_mp', 'BL_base', 'BL_PLS', 'BL_arPLS', '
 
 # Cell
 from functools import lru_cache
+import sys
 
 import scipy.sparse as sparse
 from scipy.sparse import linalg
@@ -139,7 +140,7 @@ def get_baseline(x, ys, axis=None, *,
     # or np.apply_along_axis
     bls = np.zeros_like(ys)
     if return_f:
-        weis = np.zeros_like(ys, dtype=np.float32)
+        weis = np.zeros_like(ys, dtype=np.float64)
     if verbose:
         from tqdm import tqdm
         iter_ = tqdm(np.ndindex(
@@ -160,7 +161,7 @@ def get_baseline(x, ys, axis=None, *,
                 y_finite = y[is_finite]
                 # if all nan
                 if 0 in y_finite.shape:
-                    bl = y
+                    bls[ii + np.s_[:, ]] = np.nan
                     continue
                 # replace nan
                 y = np.copy(y)
@@ -169,7 +170,14 @@ def get_baseline(x, ys, axis=None, *,
                     _exclude = _exclude | (~is_finite)
                 else:
                     _exclude = ~is_finite
-        bl = BL.fit(x=x, y=y, exclude=_exclude, exclude_add=exclude_add)
+        try:
+            bl = BL.fit(x=x, y=y, exclude=_exclude, exclude_add=exclude_add)
+        except Exception as err:
+            print('fit baseline fail, return zero array. Try other method, or there are bugs and ...')
+            print('Errors output:')
+            print(err)
+            sys.stdout.flush()
+            continue # bls initialized as zeros
         bls[ii + np.s_[:, ]] = bl
         if return_f:
             weis[ii + np.s_[:, ]] = BL.wei
