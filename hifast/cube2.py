@@ -31,6 +31,12 @@ parser.add_argument('--ra_range', type=float, nargs=2,
                    help='ra range; unit: deg')
 parser.add_argument('--dec_range', type=float, nargs=2,
                    help='dec_range; unit: deg')
+
+parser.add_argument('--wcs_ra_center', type=float,
+                   help='unit: deg')
+parser.add_argument('--wcs_dec_center', type=float,
+                   help='unit: deg')
+
 parser.add_argument('--range3', type=float, nargs=2,
                    help='freq or vel range')
 parser.add_argument('--type3', choices=['vopt', 'vrad', 'freq'], default='vrad',
@@ -39,23 +45,30 @@ parser.add_argument('--type3', choices=['vopt', 'vrad', 'freq'], default='vrad',
 parser.add_argument('--bwidth', type=float, default=[60.],nargs='+',
                    help='unit: arc second')
 parser.add_argument('-p', '--proj', default='AIT', #choices=['AIT', 'SIN', 'TAN'],
-                   help='wcs projection')
+                   help='wcs projection. See arXiv:astro-ph/0207413, Section 7.2. Choice of projection')
 parser.add_argument('-k', '--key', choices=['flux', 'Ta'],
                        help='')
-parser.add_argument('--r_cut', type=float, default=90,
-                   help='spectra inside r_cut from the grid point will be considered; unit: arc second')
+
 parser.add_argument('-m', '--method', default='gaussian', choices=['gaussian', 'bessel_gaussian', 'sinc_gaussian'],
                    help='method to process the spec in r_cut')
 
 parser.add_argument('--beam_fwhw', type=float, default=2.9,
                    help='beam Full width at half maximum; unit: arc minute')
 parser.add_argument('--gaussian_fwhw', type=float,
-                   help='unit: arc minute')
+                   help='unit: arc minute; default: ``beam_fwhw/2``')
 parser.add_argument('--bsize', type=float,
-                   help='for Bessel in bessel_gaussian or sin in sinc_gaussian; unit: arc minute')
+                   help='for Bessel in bessel_gaussian or sin in sinc_gaussian; unit: arc minute'+
+                        '; default: ``1.55*beam_fwhw/3``')
 parser.add_argument('--gsize', type=float,
-                   help='for gauss in bessel_gaussian or sinc_gaussian; unit: arc minute')
+                   help='for gauss in bessel_gaussian or sinc_gaussian; unit: arc minute' +
+                        '; default: ``2.52*beam_fwhw/3``')
 
+parser.add_argument('--r_cut', type=float,
+                   help="spectra inside r_cut from the grid point will be considered; unit: arc second. \n" +
+                        "Default: \n"+
+                        "``--method gaussian``: 3*gaussian_sigma, i.e. 3*(gaussian_fwhw/(sqrt(8ln(2))));\n" +
+                        "``--method bessel_gaussian``: 3.8317059702075*bsize/pi;\n"+
+                        "``--method sinc_gaussian``: bsize")
 
 parser.add_argument('--wcs_from',
                    help='use the wcs parameters from input fits')

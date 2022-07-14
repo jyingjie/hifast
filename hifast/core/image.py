@@ -255,7 +255,8 @@ class Imaging():
                                 args.bwidth[0]/3600, args.bwidth[1]/3600,
                                 self.specfiles[0].arr3, args.proj, args.type3, frame,
                                 histories=self.get_history(),
-                                beam_fwhw = args.beam_fwhw)
+                                beam_fwhw = args.beam_fwhw,
+                                ra_center=args.wcs_ra_center, dec_center=args.wcs_dec_center)
         if args.key == 'flux':
             self.header["BUNIT"] = 'Jy/beam'
         elif args.key == 'Ta':
@@ -278,6 +279,16 @@ class Imaging():
 #         self.ind_cata, self.ind_g, self.d2d, d3d = grid.ravel().search_around_sky(
 #                                                         cata.ravel(), args.r_cut*u.arcsec)
 
+    def set_r_cut(self,):
+        args = self.args
+        if args.r_cut is None:
+            cf = ConvFun(args.method, args.beam_fwhw,
+                         gaussian_fwhw=args.gaussian_fwhw,
+                         bsize=args.bsize, gsize=args.gsize)
+            args.r_cut = getattr(cf, 'dis_cut_suggest')*60 # to arcsec
+        print(f'r_cut: {args.r_cut} arcsec')
+
+
     def gen_conv_weis(self,):
         args = self.args
         cf = ConvFun(args.method, args.beam_fwhw,
@@ -297,6 +308,11 @@ class Imaging():
         outname_nums = '.'.join(args.outname.split('.')[:-1]) + '-count.fits'
         hdu = fits.PrimaryHDU(self.nums_cube, header=header_3to2(self.header))
         hdu.writeto(outname_nums, overwrite=True)
+        # save wei
+        self.pixel_weis_tot
+        outname_ = '.'.join(args.outname.split('.')[:-1]) + '-wei.fits'
+        hdu = fits.PrimaryHDU(self.weis_cube, header=header_3to2(self.header))
+        hdu.writeto(outname_, overwrite=True)
 
     def init_out(self, DataType='float64'):
         args = self.args
@@ -327,6 +343,7 @@ class Imaging():
         step = args.step
 
         self.gen_fpaths()
+        self.set_r_cut()
         self.gen_specfiles()
         self.check_spec_key()
         self.check_axis3()
@@ -535,6 +552,10 @@ args = Namespace()
 
 args.ra_range = [20.254, 27.25]
 args.dec_range = None
+
+args.wcs_ra_center = None
+args.wcs_dec_center = None
+
 args.range3 = [-2000, 1500]
 args.type3 = 'vrad'
 args.bwidth = [60,]
