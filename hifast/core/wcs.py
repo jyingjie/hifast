@@ -93,6 +93,8 @@ def gen_header(ra_range, dec_range, ra_delta, dec_delta, z, proj='SIN', type3='v
         w.wcs.crval[1] = dec_center
 
     w.wcs.cunit = ['deg', 'deg', 'km/s']
+    if type3.upper() == 'FREQ':
+        w.wcs.cunit[2] = 'MHz'
     # projection
     w.wcs.specsys = frame # or HELIOCENT
     w.wcs.restfrq = conf.restfreq*1e6 # Mhz to Hz # 1.420405752E+9 hz for HI
