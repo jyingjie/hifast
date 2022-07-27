@@ -15,8 +15,6 @@ add_common_argument(parser)
 parser.add_argument('fpath',
                     help='input baselined spectra file path.')
 # not support --frange
-# parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
-#                     help='Limit frequence range')
 parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
                     help="don't check or add ra dec")
 parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True', env_var='HIFAST_SHOW_PROG',

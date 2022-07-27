@@ -18,12 +18,14 @@ from tqdm import tqdm
 
 from .markRFI import rms, real_rms, std, real_std, get_startend, find_edge_2sides
 
-def load_hdf5_spec(name, frange):
+def load_hdf5_spec(name, frange = None):
     import h5py
     
     f = h5py.File(name,'r')
     fs = f['S']
     freq = fs['freq'][()]
+    if frange is None:
+        frange = [0, np.inf]
     use = (freq > frange[0]) & (freq < frange[1])
     if 'T' in fs.keys():
         infield = 'T'
@@ -231,7 +233,12 @@ def mask_lf(data,freq, frange = None, rms_frange = None, mask_rms_times = -1,**k
         ret[:,~mask_use] = False
         print(f"Mask spec with rfi in input freq range {frange}")
     elif mask_rms_times > 0:
-        spec = data[~is_timerfi][0]
+        # compute rms
+        data2 = deepcopy(data)
+        data[is_timerfi] = np.nan
+        tmin = np.nanargmin(np.nanmean(data2, axis = 1))
+        spec = data[tmin]
+        
         rms_thresh = rms(spec,freq,rms_frange) * mask_rms_times
         mask_use = data[is_timerfi,:] > rms_thresh
         ret[is_timerfi,:] = mask_use
@@ -309,7 +316,8 @@ def mask_nr(data,freq, rms_frange = None, mask_rms_times = 0, **kwargs):
         ret[:,is_freqrfi] = True
         print("Mask the whole chanels with rfi :P")
     elif mask_rms_times > 0:
-        tmin = np.argmin(np.nanmean(data, axis = 1))
+        # compute rms
+        tmin = np.nanargmin(np.nanmean(data, axis = 1))
         spec = data[tmin]
         rms_thresh = rms(spec,freq,rms_frange) * mask_rms_times
         mask_use = data[:,is_freqrfi] > rms_thresh
