@@ -4,7 +4,8 @@ __all__ = ['sep_line', 'parser', 'IO']
 
 # Cell
 
-# Internal Cell
+from .utils.io import *
+
 sep_line = '##'+'#'*70+'##'
 parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}",
                         formatter_class=formatter_class, allow_abbrev=False,
@@ -69,6 +70,18 @@ class IO(Path_IO):
         """
         """
         args = self.args
+
+        # replace patten in outdir
+        nB = self.get_nB(args.fpath)
+        project = get_project(args.fpath)
+        ## use the dirname of the fits file as "date"
+        date = os.path.basename(os.path.dirname(os.path.abspath(args.fpath)))
+        args.outdir = sub_patten(args.outdir, date=date, nB=f'{nB:02d}', project=project)
+        print(f'outdir: {args.outdir}')
+        if not os.path.exists(args.outdir):
+            print(f'outdir {args.outdir} not exists. Create it now')
+            os.makedirs(args.outdir, exist_ok=True)
+
         fname_part = re.sub('[0-9]{4}\.fits\Z', '', args.fpath)
         fname_add = os.path.basename(os.path.dirname(os.path.abspath(fname_part)))
         out_name_base = os.path.join(args.outdir, f"{os.path.basename(fname_part)[:-1]}-{fname_add}")
@@ -128,3 +141,17 @@ class IO(Path_IO):
         print("Saving...")
         save_specs_hdf5(self.fpath_out, self.dict_out, wcs_data_name=self.outfield)
         print(f"Saved to {self.fpath_out}")
+
+# Cell
+
+if __name__ == '__main__':
+    args_ = parser.parse_args()
+
+    # print(parser.format_help())
+    # print("----------")
+    # print(parser.format_values())  # useful for logging where different settings came from
+    print('#'*35+'Args'+'#'*35)
+    print(parser.format_values())  # useful for logging where different settings came from
+    print('#'*35+'####'+'#'*35)
+    io = IO(args_)
+    io()

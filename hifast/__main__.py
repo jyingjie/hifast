@@ -8,6 +8,7 @@ import argparse
 
 subcomands_type1 = [
     'sep',
+    'pos_swi',
     'radec',
     'bld',
     'flux',
