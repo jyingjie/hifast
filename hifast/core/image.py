@@ -18,6 +18,7 @@ from .beam import ConvFun
 from .radec import _tight_ra
 from . import conf
 from .corr_vel import freq2vel, vel2freq
+from ..utils.io import get_nB
 
 from multiprocessing import RawArray
 from multiprocessing import Process, Queue
@@ -31,6 +32,7 @@ class SpecFile():
 
         self.fpath = fpath
         self.type3 = type3
+        self.nB = get_nB(fpath)
         self.load_misc()
 
     def __repr__(self):
@@ -217,6 +219,9 @@ class Imaging():
         return histories
 
     def change_header(self,):
+        """
+        change header if args.wcs_from
+        """
         args = self.args
         if args.wcs_from is not None:
             print(f'use the wcs sky coordinates parameters from {args.wcs_from}')
@@ -278,6 +283,19 @@ class Imaging():
                                                         grid.ravel(), args.r_cut*u.arcsec)
 #         self.ind_cata, self.ind_g, self.d2d, d3d = grid.ravel().search_around_sky(
 #                                                         cata.ravel(), args.r_cut*u.arcsec)
+
+    def gen_scale_beams(self,):
+        args = self.args
+        import json
+        if args.scale_beams_file is not None:
+            beams_c = json.load(open(args.scale_beams_file))
+#             # two dim Volume = 2*pi*A*sigma^2
+#             self.scale_beams = (beams_c['beam_fwhw_synt'] / np.array(beams_c['beam_fwhw_19']))**2
+            self.scale_beams = np.array(beams_c['scale_beams_19'])
+            assert len(self.scale_beams) == 19
+            args.beam_fwhw = beams_c['beam_fwhw_synt'] # arcmin
+        else:
+            self.scale_beams = None
 
     def set_r_cut(self,):
         args = self.args
@@ -343,6 +361,7 @@ class Imaging():
         step = args.step
 
         self.gen_fpaths()
+        self.gen_scale_beams() # also change args.beam_fwhw
         self.set_r_cut()
         self.gen_specfiles()
         self.check_spec_key()
@@ -371,7 +390,7 @@ class Imaging():
             assert (self.ra_stack[self.ind_cata[is_]] == np.hstack([sf.ra for sf in sfs])[ind_cata_the_use]).all()
             assert (self.dec_stack[self.ind_cata[is_]] == np.hstack([sf.dec for sf in sfs])[ind_cata_the_use]).all()
 
-            csp = CalcSpecPixel(sfs, key=args.key, share_mem=args.share_mem)
+            csp = CalcSpecPixel(sfs, key=args.key, scale_beams=self.scale_beams, share_mem=args.share_mem)
             res = csp(ind_g_use, ind_cata_the_use, weis_use, n_worker=args.nproc)
             ii = res[0]
             self.pixel_data[ii] += res[1]
@@ -403,8 +422,9 @@ def _get_start_stop(arr,arr_in):
 
 # Cell
 class CalcSpecPixel():
-    def __init__(self, sfs, key='flux', share_mem=False):
+    def __init__(self, sfs, *, key='flux', scale_beams=None, share_mem=False):
         # init shared specs
+        self.scale_beams = scale_beams
         self.share_mem = share_mem
         self.ns = ns = [len(sf.ra) for sf in sfs]
 
@@ -454,6 +474,9 @@ class CalcSpecPixel():
                 _specs = _specs[0]
             else:
                 _specs = np.mean(_specs, axis=0) # only two float32 to average
+            if self.scale_beams is not None:
+                _specs *= self.scale_beams[sf.nB-1]
+                print(self.scale_beams[sf.nB-1])
             self.specs[s:s+len(_specs)] = _specs.astype(self.DataType)
             f.close()
 

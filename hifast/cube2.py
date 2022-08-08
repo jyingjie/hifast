@@ -73,6 +73,9 @@ parser.add_argument('--r_cut', type=float,
 parser.add_argument('--wcs_from',
                    help='use the wcs parameters from input fits')
 
+parser.add_argument('--scale_beams_file',
+                   help='testing')
+
 # Cell
 if __name__ == '__main__':
     import os
