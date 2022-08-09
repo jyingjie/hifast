@@ -20,6 +20,8 @@ group.add_argument('--fc', type=bool_fun, choices=[True, False], default='True',
                    help='frame correct')
 group.add_argument('--frame', choices=['BARYCENT', 'HELIOCEN', 'LSRK', 'LSRD'], default='LSRK',
                    help='Velocity Rest Frames, HELIOCEN or LSRK')
+group.add_argument('--vtype', choices=['radio', 'optical'], default='optical',
+                   help='velocity type')
 group = parser.add_argument_group(f'*after\n{sep_line}')
 group.add_argument('--replace_rfi', type=bool_fun, choices=[True, False], default='True',
                    help='if True, replace spectra contaminated by rfi as np.nan')
@@ -66,7 +68,7 @@ class IO(BaseIO):
                 sys.exit()
             else:
                 self.Header['frame'] = args.frame
-                self.Header['vel_type'] = 'VRAD'
+                self.Header['vel_type'] = args.vtype
             # correct is_rfi
             if is_rfi is not None and not args.replace_rfi:
                 is_rfi, _ = correct_spec(is_rfi, self.freq, self.ra, self.dec, self.mjd,
@@ -74,7 +76,7 @@ class IO(BaseIO):
                 is_rfi = np.array(is_rfi, dtype=bool)
             print('frame correcting...')
             s2p, freq = correct_spec(s2p, self.freq, self.ra, self.dec, self.mjd, frame=args.frame, method='interp')
-            vel = freq2vel(freq)
+            vel = freq2vel(freq, vtype=args.vtype)
             self.s2p_out = s2p
             self.gen_dict_out(freq=freq, vel=vel)  # replace freq, add vel
             if 'Tcal' in self.dict_out.keys():
