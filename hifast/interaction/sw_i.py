@@ -14,10 +14,13 @@ from glob import glob
 
 from ..core.baseline import get_baseline, sub_baseline, get_exclude_fun
 from ..utils.io import PolarMjdChan_to_MjdChanPolar
+from ..utils.io import MjdChanPolar_to_PolarMjdChan
 from .widgets import *
 
 import warnings
 warnings.filterwarnings("ignore", r'overflow encountered in exp')
+
+import matplotlib as mpl
 
 # Internal Cell
 T2p = None
@@ -29,48 +32,42 @@ length = 20
 figsize = (10, 7)
 ylim = 'auto'
 
+trans = False
+start_init = None
+
 # Cell
-class Test(object):
-    def __init__(self, T2p, freq, frange=None):
 
-        self.T2p = T2p
-        freq = freq[:]
-        if frange is not None:
-            self.is_use = (freq > frange[0]) & (freq < frange[1])
-            self.freq = freq[self.is_use]
-        else:
-            self.is_use = None
-            self.freq = freq
-        self.select()
+from .bld_i import Test as Test_bld
 
-    def select(self, start=0, length=20, polar=0):
-        self.T2p_t = PolarMjdChan_to_MjdChanPolar(self.T2p[polar:polar+1, start:start+length])
-        if self.is_use is not None:
-            self.T2p_t = self.T2p_t[:, self.is_use]
+class Test(Test_bld):
 
-    def sub(self, x, start=0, length=20, polar=0, bound_f=None, exclude_m=0, **kwargs):
+
+    def sub(self, x, start=0, length=20, polar=0, frange_excluded=None,
+            exclude_add='none', verbose=False,
+            bound_f=None, exclude_m=0, **kwargs):
         self.select(start, length, polar)
+        if frange_excluded is not None and frange_excluded[0] != frange_excluded[1]:
+            is_ = (x > frange_excluded[0]) & (x < frange_excluded[1])
+            self.is_excluded_t = np.full(self.T2p_t.shape, is_[None,...,None])
+        else:
+            self.is_excluded_t = None
+        self.frange_excluded = frange_excluded
+
+        self.sub_baseline_para = kwargs
+        self.sub_baseline_para['is_excluded'] = self.is_excluded_t
+        self.sub_baseline_para['exclude_add'] = exclude_add
+        self.sub_baseline_para['method'] = 'sin_poly'
+        self.sub_baseline_para['niter'] = 1
+        if exclude_m >= 0:
+            self.sub_baseline_para['exclude_fun'] = get_exclude_fun(exclude_m)
+        else:
+            self.sub_baseline_para['exclude_fun'] = None
+
         bounds = [(0., 1.), bound_f, (0, 2*np.pi), (-1, 1)] + [(-np.inf, np.inf), ]*kwargs['deg']  # optimize.minimize
-        opt_para = {'bounds': bounds, }
-        self.bld = sub_baseline(self.freq, self.T2p_t, opt_para=opt_para, method='sin_poly', rew=False, niter=1,
-                                verbose=False, exclude_fun=get_exclude_fun(exclude_m), **kwargs)
+        self.sub_baseline_para['opt_para'] = {'bounds': bounds, }
+        self.bld = sub_baseline(self.freq, self.T2p_t, verbose=verbose, **self.sub_baseline_para)
+
         return np.full(x.shape, np.nan)
-
-    def get_ori(self, x, i, **kwargs):
-        res = self.T2p_t[i, :, 0]
-        return np.vstack([res, ndimage.gaussian_filter1d(res, 3)]).T
-
-    def get_bld(self, x, i, **kwargs):
-        res = self.bld[i, :, 0]
-        return np.vstack([res, ndimage.gaussian_filter1d(res, 3)]).T
-
-    def get_bl(self, x, i,  **kwargs):
-        return self.T2p_t[i, :, 0] - self.bld[i, :, 0]
-
-    def get_bld_mean(self, x, start_stop,  **kwargs):
-        start, stop = start_stop
-        res = np.mean(self.bld[int(start):int(stop)+1, :, 0], axis=0)
-        return np.vstack([res, ndimage.gaussian_filter1d(res, 3)]).T
 
 # Cell
 def phrase_ylim(ylim, vals):
@@ -86,18 +83,31 @@ def main():
     tes = Test(T2p, freq, frange)
 
     sliders = {}
+
+    start_e = tes.T2p.shape[1]-length
+    if start_init is None:
+        start_i = start_e//2
+    else:
+        start_i = min(start_init, start_e)
     sliders.update(_BoundedIntText(
-        start=(0, 0, tes.T2p.shape[1]-length, 1), polar=(0, 0, 1, 1)))
-    sliders.update(_IntSlider(njoin=(0, 1, length, 1)))
+                       start=(start_i, 0, start_e, 1), polar=(0, 0, tes.T2p.shape[0], 1)))
+    sliders.update(_IntSlider(njoin=(0, 1, length, 1),
+                              average_every_freq=(0, 1, 40, 1)))
     sliders.update(_Dropdown(s_method_freq=('none', 'gaussian', 'boxcar'),
                              s_method_t=('none', 'gaussian', 'boxcar'),
                              ))
     sliders.update(_IntSlider(s_sigma_freq=(3, 1, 20, 1), s_sigma_t=(3, 1, 20, 1)))
     sliders.update(_FloatSlider(sin_f=(0.929, 0.910, 0.940, 0.002), readout_format='.3f'))
     sliders.update(_IntSlider(deg=(0, 0, 5, 1),
-                              exclude_m=(0, 0, 1, 1)))
+                              exclude_m=(0, -1, 1, 1)))
     sliders.update(_FloatRangeSlider(bound_f=([.90, .95], 0.8, 1.15, 0.02), readout_format='.3f',))
-    #sliders.update(_BoundedFloatText(bound_f=(0.95, 0.85, 0.99, 0.002)))
+
+    bak = w_conf.pop('layout')
+    #w_conf['style'] = {'description_width': 'initial'}
+    w_conf['layout'] = widgets.Layout(width=f"{mpl.rcParams['figure.dpi']*figsize[0]*1.2}px",)
+    sliders.update(_FloatRangeSlider(frange_excluded=([tes.freq[0], tes.freq[0]], tes.freq[0], tes.freq[-1], tes.freq[2]-tes.freq[0])))
+    w_conf['layout'] = bak
+
 
     plt.ioff()
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=figsize)
@@ -143,6 +153,11 @@ def main():
     ax1.set_title('origial spectra', fontsize=8)
     ax2.set_title('spectra after baseline removed', fontsize=8)
 
+    def return_v(*args, **kwargs): return tes.frange_excluded[0]
+    [iplt.axvline(return_v, controls=controls, ax=ax, color='r') for ax in [ax1, ax2, ax3]]
+    def return_v(*args, **kwargs): return tes.frange_excluded[1]
+    [iplt.axvline(return_v, controls=controls, ax=ax, color='r') for ax in [ax1, ax2, ax3]]
+
     fig.tight_layout()
 
     w = controls.controls
@@ -157,10 +172,11 @@ def main():
             [widgets.Label(value=f"3. Show one spectra in top and middle panels:"), w['i']]),
         widgets.HBox([widgets.Label(
             value=f"4. Show the stack spectra of in the range in the bottom panel:"), w['start_stop']]),
+        widgets.HBox([w['frange_excluded'], ]),
     ]
 
     BOX = widgets.VBox(hbs)
     display(BOX)
     plt.show()
     display(BOX)
-    return tes
+    return tes, w, BOX
