@@ -336,7 +336,9 @@ class IO(BaseIO):
         shortf_args['rms_frange'] = args.rms_frange
         shortf_args['thr_type'] = args.lsn_thr_type
 
-        if args.sf_use_time_only:
+        if args.sf_use_time_only and args.all_beams:
+            whole_rfi = np.all(is_rfi, axis = 1)
+            is_rfi[whole_rfi] = False
             is_timerfi = np.any(is_rfi, axis = 1)
             shortf_args['is_timerfi'] = is_timerfi
 
@@ -621,3 +623,4 @@ if __name__ == '__main__':
     HistoryAdd = {'args_from': args_from} if args_.my_config is not None else None
     io = IO(args_, HistoryAdd=HistoryAdd)
     io()
+    
