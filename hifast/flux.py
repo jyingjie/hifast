@@ -20,8 +20,12 @@ group = parser.add_argument_group(f'*Flux\n{sep_line}')
 # --flux affect the outfield name
 group.add_argument('--flux', type=bool_fun, choices=[True], default='True', not_in_write_out_config_file=True,
                    help='It must be True.')
-group.add_argument('--cali_fname', default='none',
-                   help='calibration source file name')
+group.add_argument('--cbr_store', '--cali_fname', dest='cbr_store', default='none',
+                   help='calibrator file name or directory stored multi-files')
+group.add_argument('--cbr_name', default='*',
+                   help='calibrator name')
+group.add_argument('--only_use_19beams', type=bool_fun, choices=[True, False], default='False',
+                   help='')
 group.add_argument('--fix_diff_tcal', type=bool_fun, choices=[True, False], default='True',
                    help='If True, fix the tcal differece in spec and calibator')
 
@@ -39,7 +43,7 @@ class IO(BaseIO):
     def gen_s2p_out(self,):
         args = self.args
         s2p = self.s2p[:]
-        from .core.flux import cali_src
+        from .core.flux import FluxCali
         print('Flux calibrating ...')
         if args.fix_diff_tcal:
             tcal_spec = self.fs['Tcal'][:]
@@ -47,10 +51,12 @@ class IO(BaseIO):
                 tcal_spec = tcal_spec[:, self.is_use_freq]
         else:
             tcal_spec = None
-        if args.cali_fname != 'none' and args.cali_fname is not None:
-            print(f'using {args.cali_fname} ...')
-        self.s2p_out = cali_src(s2p, self.nB, self.freq, args.cali_fname, ra=self.ra, dec=self.dec, mjd=self.mjd,
-                               tcal_spec=tcal_spec)
+        if args.cbr_store != 'none' and args.cbr_store is not None:
+            print(f'using {args.cbr_store} ...')
+
+        fcali = FluxCali(self.nB, self.freq, cbr_store=args.cbr_store, cbr_name=args.cbr_name, tcal_spec=tcal_spec,  only_use_19beams=args.only_use_19beams,
+                           mjd=self.mjd, ra=self.ra, dec=self.dec)
+        self.s2p_out = fcali(s2p)
 
 # Cell
 if __name__ == '__main__':
