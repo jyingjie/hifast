@@ -23,11 +23,11 @@ group.add_argument('--flux', type=bool_fun, choices=[True], default='True', not_
 group.add_argument('--cbr_store', '--cali_fname', dest='cbr_store', default='none',
                    help='calibrator file name or directory stored multi-files')
 group.add_argument('--cbr_name', default='*',
-                   help='calibrator name')
+                   help='calibrator name, e.g. 3C48')
 group.add_argument('--only_use_19beams', type=bool_fun, choices=[True, False], default='False',
-                   help='')
+                   help='only use 19beams calibrator')
 group.add_argument('--fix_diff_tcal', type=bool_fun, choices=[True, False], default='True',
-                   help='If True, fix the tcal differece in spec and calibator')
+                   help='If True, fix the tcal differece in spec and calibrator')
 
 # Cell
 class IO(BaseIO):
@@ -51,8 +51,8 @@ class IO(BaseIO):
                 tcal_spec = tcal_spec[:, self.is_use_freq]
         else:
             tcal_spec = None
-        if args.cbr_store != 'none' and args.cbr_store is not None:
-            print(f'using {args.cbr_store} ...')
+#         if args.cbr_store != 'none' and args.cbr_store is not None:
+#             print(f'using {args.cbr_store} ...')
 
         fcali = FluxCali(self.nB, self.freq, cbr_store=args.cbr_store, cbr_name=args.cbr_name, tcal_spec=tcal_spec,  only_use_19beams=args.only_use_19beams,
                            mjd=self.mjd, ra=self.ra, dec=self.dec)

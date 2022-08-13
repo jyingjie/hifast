@@ -12,6 +12,7 @@ import h5py
 import numpy as np
 import scipy.interpolate as interp
 from astropy.time import Time
+from astropy import units
 
 from .gain import Get_gain as Get_gain_eta
 
@@ -51,13 +52,14 @@ class Calibrator:
 
     @staticmethod
     def get_date_nearest(fpath_list, mjd):
-#         #not using this because the observation may cross midnight
-#         dates_have = [os.path.basename(fpath).split('-', 2)[1] for fpath in fpath_list]
-#         mjds_h = Time([f'{s[:4]}-{s[4:6]}-{s[6:8]} 00:00:00.000' for s in dates_have], format='iso').mjd
-        mjds_h = np.empty(len(fpath_list), dtype='float64')
-        for i, fpath in enumerate(fpath_list):
-            with h5py.File(fpath) as fs:
-                mjds_h[i] = fs['mjd'][0]
+        dates_have = [os.path.basename(fpath).split('-', 2)[1] for fpath in fpath_list]
+        dates_have = [f'{s[:4]}-{s[4:6]}-{s[6:8]} {s[8:10]}:{s[10:12]}:00.000' for s in dates_have]
+        mjds_h = (Time(dates_have, format='iso', scale='utc') - 8*units.hour).mjd
+## use mjd
+#         mjds_h = np.empty(len(fpath_list), dtype='float64')
+#         for i, fpath in enumerate(fpath_list):
+#             with h5py.File(fpath) as fs:
+#                 mjds_h[i] = fs['mjd'][0]
         ind = np.argmin(abs(mjds_h - mjd))
         return fpath_list[ind]
 
