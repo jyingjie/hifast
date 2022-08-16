@@ -4,27 +4,40 @@ import time
 import subprocess
 import signal
 import argparse
+from glob import glob
+
 # from importlib import import_module
 
-subcomands_type1 = [
-    'sep',
-    'pos_swi',
-    'radec',
-    'bld',
-    'flux',
-    'sw',
-    'rfi',
-    'multi',
-    'add_radec',
-    'sub_ref',
-    'convert',
-    'downsample',
-     ]
+# subcomands_type1 = [
+#     'sep',
+#     'pos_swi',
+#     'radec',
+#     'bld',
+#     'flux',
+#     'sw',
+#     'rfi',
+#     'multi',
+#     'add_radec',
+#     'sub_ref',
+#     'convert',
+#     'downsample',
+#      ]
 
-subcomands_type2 = [
-    'cube',
-    'waterfall',
-     ]
+# subcomands_type2 = [
+#     
+#     'waterfall',
+#      ]
+
+subcomands_excl = ['cube', 'cube2', 'waterfall', 'funcs', 'find']
+subcomands_type1 = []
+for fpath in glob(os.path.dirname(__file__) + '/[a-z,A-Z]*.py'):
+    subcomand = os.path.basename(fpath)[:-3]
+    if subcomand not in subcomands_excl:
+        subcomands_type1 += [subcomand, ]
+subcomands_type1.sort()
+subcomands_type2 = []
+
+
 
 ## parser
 
