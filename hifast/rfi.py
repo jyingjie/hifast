@@ -29,6 +29,7 @@ parser.add_argument('--replace_rfi', type=bool_fun, choices=[True, False], defau
 group = parser.add_argument_group(f'*mark rfi from a DS9 regions file\n{sep_line}')
 group.add_argument('--reg_from', default='none',
                    help='If not set as ``none``, mark rfi through regions from a DS9 format regions file. ' + \
+                        "If set as ``shared``, beams will shared one region file" + \
                         "If set as ``default``, will try to find the file:  the input spectra  fpath + '.reg'. If set as other string, will be treated as a file path")
 
 #################### Time domain continuous RFI ######################
@@ -215,13 +216,24 @@ class IO(BaseIO):
             if not os.path.exists(fpath_reg):
                 print(f'can not find the default regions file {fpath_reg}, skipping')
                 return None
+        elif args.reg_from == 'shared':
+            from glob import glob
+            fpath_regs = glob(os.path.dirname + '*.reg')
+            length = len(fpath_regs)
+            if length == 1:
+                fpath_reg = fpath_regs[0]
+            elif length == 0:
+                print('can not find any specified regions files, skipping')
+                return None
+            else:
+                raise FileError('Too many regions file! All 19 beams should share only one.')
         else:
             nB = get_nB(args.fpath)
             project = get_project(args.fpath)
             date = get_date_from_path(args.fpath)
             fpath_reg = sub_patten(args.reg_from, date=date, nB=f'{nB:02d}', project=project)
             if not os.path.exists(fpath_reg):
-                print('can not find the specified regions file {fpath_reg}, skipping')
+                print(f'can not find the specified regions file {fpath_reg}, skipping')
                 return None
         print(f'read regions from {fpath_reg}')
         regions = read_regions(fpath_reg)
@@ -345,7 +357,7 @@ class IO(BaseIO):
         return mask_time_rfi(T, self.freq, rtype = 'short-freq',plot = False,
                                **shortf_args)
 
-    def get_time_rfi(self,is_rfi = None):
+    def get_time_rfi(self,is_rfi = None, is_rfi_tmp = None):
         """
         lf & sf
         """
@@ -354,11 +366,13 @@ class IO(BaseIO):
 
         t_rfi = np.isnan(T)
         Tt = deepcopy(T)
-        Tt[:,self.protect_use] = np.nan
+        Tt[:,self.protect_use] = 0
+        if is_rfi_tmp is not None: Tt[is_rfi_tmp] = 0 
 
         if args.lf:
             print('finding lf')
             t_rfi |= self.get_lf(Tt)
+            
         Tt[t_rfi] = 0
         if args.sf:
             print('finding sf')
@@ -513,7 +527,8 @@ class IO(BaseIO):
         self.gen_s2p_out()
         self.s2p = self.s2p[:]
         self.s2p_mean = np.mean(self.s2p,axis = 2)
-
+        
+        # average in 19 beams
         if args.all_beams:
             if os.path.exists(self._19name):
                 is_19rfi = self.load_19rfi()
@@ -521,25 +536,32 @@ class IO(BaseIO):
                 raise FileNotFoundError(f"Can't find {self._19name}. Did it run hifast.rfi_multi?")
 
         is_rfi = np.full(self.s2p.shape[:2], False, dtype=bool)
+        
+        # manual regions
+        is_rfi_tmp = self.get_from_regions()
+        if is_rfi_tmp is not None:
+            is_rfi |= is_rfi_tmp
 
         self.protect_use = self.protect_mw()
         self.check_rms_range()
-
+        
+        # long or short freq time RFI
         if args.lf or args.sf:
             if args.all_beams and args.sf_use_time_only:
-                    is_rfi |= self.get_time_rfi(is_19rfi)
+                    is_rfi |= self.get_time_rfi(is_19rfi, is_rfi_tmp)
                     print("Use is_timerfi(sf) in 19 beams rfi :P")
             else:
                 if args.all_beams:
                     is_rfi |= is_19rfi
                     args.sf = False
                     print("Use is_rfi(sf) in 19 beams rfi :P")
-                is_rfi |= self.get_time_rfi(is_rfi = None)
+                is_rfi |= self.get_time_rfi(is_rfi = None, is_rfi_tmp = is_rfi_tmp)
 
         whole_rfi = np.all(is_rfi,axis = 1)
         self.not_rfi_num = np.arange(is_rfi.shape[0])[~whole_rfi]
         self.is_rfi_num = np.arange(is_rfi.shape[0])[whole_rfi]
-
+        
+        # time continuous RFI 
         if args.tr:
             print('finding tr')
             is_rfi |= self.get_tr()
@@ -549,22 +571,23 @@ class IO(BaseIO):
             self.s2p_mask[is_rfi,:] = np.nan
         else:
             self.s2p_mask = self.s2p
-
+        
+        # narrowband RFI
         if args.nr:
             print('finding nr')
             is_rfi |= self.get_nr()
-
+        
+        # 8.1 MHz period RFI
         if args.pdr:
             print('finding period rfi')
             is_rfi |= self.get_pdr()
+        
+        # polarized RFI
         if args.pr:
             print('finding pr')
             is_rfi |= self.get_pr()
 
-        is_rfi_tmp = self.get_from_regions()
-        if is_rfi_tmp is not None:
-            is_rfi |= is_rfi_tmp
-
+        # existing RFI
         if 'is_rfi' in self.fs.keys():
             is_rfi |= self.fs['is_rfi'][:]
 
@@ -624,3 +647,4 @@ if __name__ == '__main__':
     io = IO(args_, HistoryAdd=HistoryAdd)
     io()
     
+
