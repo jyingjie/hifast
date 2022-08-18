@@ -95,25 +95,25 @@ def plot(fname, ax, polar=0, ytick1='index', ytick2=None, replace_rfi = False, *
         vals = S['flux']
     else:
         raise(ValueError('can not find spec'))
-    
+
     if 'vel' in S.keys():
         x = S['vel'][()]
     elif 'freq' in S.keys():
         x = S['freq'][()]
     else:
         raise()
-        
+
     if vals.ndim == 3:
         if polar == -1:
             vals = np.mean(vals, axis = 0)
         else:
             vals = vals[polar]
-   
+
     if replace_rfi:
         if 'is_rfi' in S.keys():
             is_rfi = S['is_rfi'][:]
             vals[is_rfi] = np.nan
-            
+
     if ytick1 in ['ra', 'dec', 'mjd', 'time']:
         key = 'mjd' if ytick1=='time' else ytick1
         try:
@@ -203,7 +203,7 @@ if __name__ == '__main__':
             axs = axs.flatten()
             for i, (fname, ax) in enumerate(zip(_files['fname'], axs[:19])):
                 im = plot(fname, ax, polar=args.polar, ytick1=args.ytick1, ytick2=args.ytick2, vmin=args.vmin, vmax=args.vmax,
-                          x_plot_range=xrange, vlines=vlines, colorbar=False,replace_rfi = args.replace_rfi, 
+                          x_plot_range=xrange, vlines=vlines, colorbar=False,replace_rfi = args.replace_rfi,
                           **imshow_kwargs)
             fig.colorbar(im, ax= axs[-1])
             ax = axs[-1]
@@ -223,7 +223,7 @@ if __name__ == '__main__':
             ncols=1
             fig, ax = plt.subplots(nrows, ncols, figsize=(15,12), sharex=True, sharey=True)
             im = plot(fname, ax, polar=args.polar, ytick1=args.ytick1, ytick2=args.ytick2, vmin=args.vmin, vmax=args.vmax,
-                      x_plot_range=xrange, vlines=vlines, colorbar=False,replace_rfi = args.replace_rfi, 
+                      x_plot_range=xrange, vlines=vlines, colorbar=False,replace_rfi = args.replace_rfi,
                       **imshow_kwargs)
             fig.colorbar(im, ax= ax)
             ax.set_title(fbasename)
