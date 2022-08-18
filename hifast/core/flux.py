@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
 import h5py
 import numpy as np
 import scipy.interpolate as interp
@@ -22,7 +19,7 @@ def get_ratio(nB, freq=None):
         freq_key=freq
     return ratios, freq_key
 
-def get_K_Jy_cali(cali_fname, nB, freq, ra=None, dec=None, mjd=None):
+def get_K_Jy_cali(cali_fname, nB, freq, ra=None, dec=None, mjd=None, tcal_spec=None):
     """
     K/Jy from Calibator
     ----------------------
@@ -30,29 +27,32 @@ def get_K_Jy_cali(cali_fname, nB, freq, ra=None, dec=None, mjd=None):
     nB: source beam number
     freq: 
     ra, dec, mjd: properties of spectra, needed if only Beam 1 in cali_fname
+    tcal_spec: 
     """
     
-    with  h5py.File(cali_fname,'r') as fs:
-        freq_c= fs['freq_key'][()]
+    with h5py.File(cali_fname,'r') as fs:
+        freq_c= fs['freq'][()]
         if f'M{nB:02d}' in fs.keys():
-            K_Jy = fs[f'M{nB:02d}'][()] # K/Jy
+            K_Jy = fs[f'M{nB:02d}'][0] # K/Jy
+            if tcal_spec is not None:
+                K_Jy /= fs[f'Tcal{nB}'][0] # to count of tcal
             need_ratio = False
         else:
-            K_Jy = fs[f'M01'][()] # K/Jy
-            need_ratio = True
-#         mjd= fs['mjd'][()]
-#         ra= fs['ra'][()]
-#         dec= fs['dec'][()]
-    # 
+            K_Jy = fs[f'M01'][()][0] # K/Jy
+            if tcal_spec is not None:
+                K_Jy /= fs[f'Tcal1'][0] # to count of tcal
+            need_ratio = True 
     K_Jy = interp.interp1d(freq_c, K_Jy, kind='quadratic', fill_value= "extrapolate", axis=0)(freq)
+    if tcal_spec is not None:
+        K_Jy *= tcal_spec[0]
     K_Jy = K_Jy[None,...] # mjd axis
     if K_Jy.ndim == 2:
-        K_Jy = K_Jy[...,None] # polar axis
+        K_Jy = K_Jy[..., None] # polar axis
     if need_ratio:
         K_Jy = K_Jy*get_ratio(nB, freq)[0][None,:,None]
     return K_Jy
 
-def cali_src(T, nB, freq, cali_fname=None, ra=None, dec=None, mjd=None):
+def cali_src(T, nB, freq, cali_fname=None, ra=None, dec=None, mjd=None, tcal_spec=None):
     """
     flux calibration using fixed factor or Calibator 
     -----------------------
@@ -65,6 +65,7 @@ def cali_src(T, nB, freq, cali_fname=None, ra=None, dec=None, mjd=None):
        quasar calibration file name; hdf5 file
        If None, use the gain depended on Zenith angle (arxiv:2002.01786) and need input ra, dec and mjd.
     ra, dec, mjd: None or array_like, shape (m,)
+    tcal_spec: shape: (1,n,2); T.shape need be (m,n,2); if spec and Calibator used different Tcal, input this to fix it.
     """
     
     if cali_fname is None or cali_fname=='none':
@@ -79,13 +80,22 @@ def cali_src(T, nB, freq, cali_fname=None, ra=None, dec=None, mjd=None):
         
         K_Jy = Get_gain(ra, dec, mjd, nB, freq)[0] * 25.6   #K/Jy
         K_Jy= K_Jy[:,:,None]
+        
     else:
-        K_Jy= get_K_Jy_cali(cali_fname, nB, freq)
+        if tcal_spec is not None:
+            if T.ndim != 3 or T.shape[-1] !=2:
+                raise(ValueError('tcal_spec is not None, T.shape need be (m,n,2)'))
+            if tcal_spec.ndim != 3 or tcal_spec.shape[0] !=1 or tcal_spec.shape[-1] !=2:
+                raise(ValueError('tcal_spec.shape need be (1, n, 2)'))
+        K_Jy = get_K_Jy_cali(cali_fname, nB, freq, tcal_spec=tcal_spec)
     
     if T.ndim == 2:
-        return T/np.mean(K_Jy,axis=2)
-    elif T.ndim == 3 and T.shape[-1]==2:
-        return T/K_Jy
+        return T/np.mean(K_Jy, axis=2)
+    elif T.ndim == 3:
+        if T.shape[-1] == 2:
+            return T/K_Jy
+        elif T.shape[-1] == 1:
+            return T/np.mean(K_Jy, axis=2, keepdims=True)
     else:
         raise(ValueError('shape of T'))
 

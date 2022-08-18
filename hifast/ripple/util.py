@@ -72,15 +72,64 @@ def do_smooth(s1p, s_method_t = 'none', s_sigma_t = None,
     is_excluded = np.all(is_rfi,axis = 1)
     T[is_rfi] = 0
 
-    from hifast.utils.misc import smooth1d
+    from ..utils.misc import smooth1d
     if s_method_t in ['gaussian', 'boxcar', 'median']:
         print('Smoothing t ...')
         T[~is_excluded] = smooth1d(T[~is_excluded], axis=0, sigma=s_sigma_t, method=s_method_t)
+    elif s_method_t == 'iter_median':
+        print('Smoothing t ...')
+        from .sw_fft import med_fit_ripple
+        T[~is_excluded] = med_fit_ripple(T[~is_excluded], nspec = s_sigma_t, func='iter')
 
     if s_method_freq in ['gaussian', 'boxcar', 'median']:
         print('Smoothing freq ...')
         T[~is_excluded] = smooth1d(T[~is_excluded], axis=1, sigma=s_sigma_freq, method=s_method_freq)
     return T
+
+def do_smooth_onoff(s1p, is_on = None,is_rfi = None, **kwargs):
+    T = deepcopy(s1p)
+    if is_on is None: 
+        T = do_smooth(T,is_rfi = is_rfi, **kwargs)
+    else:
+        if is_rfi is None: is_rfi = np.full(T.shape[:2], False, dtype=bool)
+        T[is_on] = do_smooth(T[is_on],is_rfi = is_rfi[is_on], **kwargs)
+        T[~is_on] = do_smooth(T[~is_on],is_rfi = is_rfi[~is_on], **kwargs)
+    return T
+
+def line_set(ax,xlabel,ylabel,direction='in',xlim=None,ylim=None,legend=True,
+             title=None,loc='best', size = None,frameon=True):
+    """
+    plot settings
+    """
+    if size is None:
+        size = {'mz': 1,   # Set thickness of the tick marks
+                'lz': 3,   # Set length of the tick marks
+                'lbz': 14,  # Set label size
+                'tkz': 12,  # Set tick size
+                }
+    mz = size['mz']; lz = size['lz']
+    lbz = size['lbz']; tkz = size['tkz']
+    # Make tick lines thicker
+    for l in ax.get_xticklines():
+        l.set_markersize(lz)
+        l.set_markeredgewidth(mz)
+    for l in ax.get_yticklines():
+        l.set_markersize(lz)
+        l.set_markeredgewidth(mz)
+
+    # Make figure box thicker
+    for s in ax.spines.values():
+        s.set_linewidth(mz)
+    ax.minorticks_on()
+    ax.tick_params("both",which = 'both',direction=direction,labelsize=tkz,
+                  bottom=True, top=True,left=True,right=True)
+    if xlim is not None: ax.set_xlim(xlim)
+    if ylim is not None: ax.set_ylim(ylim)
+    ax.set_xlabel(xlabel,fontsize=lbz)
+    ax.set_ylabel(ylabel,fontsize=lbz)
+    if legend: ax.legend(loc = loc,fontsize=tkz, frameon=frameon)
+    if title is not None: ax.set_title(title,fontsize=lbz)
+
     
 class Args(object):
     def __init__(self, fpath, frange = None, outdir = None,):
@@ -91,12 +140,32 @@ class Args(object):
 class Read_hdf5(BaseIO):
     ver = 'old'
     
-    def load_and_add_Header(self,):
-        pass
+    def __init__(self, args, dict_in=None, inplace_args=False, HistoryAdd=None):
+        """
+        args: class
+              including attributes: fpath, outdir, frange
+        dict_in: if None, load data from args.fpath, if set, omit data in args.fpath
+        """
+        self.args = args if inplace_args else deepcopy(args)
+        self.dict_in = dict_in
+        self.HistoryAdd = HistoryAdd
+        self._gen_fpath_out()
+        if self.dict_in is None:
+            self._check_fout()
+        self.nB = self.get_nB(self.args.fpath)
+        self._import_m()
+        self.open_fpath()
+        self.load_specs()
+        self.load_radec()
+        try:
+            self.load_and_add_Header()
+        except TypeError:
+            pass
     
     def get_data(self, polar = 'none'):
         data = deepcopy(self.s2p)
         if data.shape[0] == 2 or data.shape[0] == 1:
+            from .io import PolarMjdChan_to_MjdChanPolar
             data = PolarMjdChan_to_MjdChanPolar(data)
         if len(data.shape) == 3:
             if polar == 'xx':
@@ -135,15 +204,13 @@ class Read_hdf5(BaseIO):
         
         if len(data.shape) != 2:
             raise ValueError(f"Check your input data shape {data.shape}. Are they 2D? ")
-        if data.shape[1] != len(freq):
-            data = data.T
 
         if xrange != None:
             x1,x2 = np.min(xrange),np.max(xrange)
             is_use = (x>=x1)&(x<=x2)
             x = x[is_use]
-            if data.shape[1] != x.shape[0]:
-                data = data[:,is_use]
+#             if data.shape[1] != x.shape[0]:
+#                 data = data[:,is_use]
         else:
             xrange = [x[0],x[-1]]
 

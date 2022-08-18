@@ -57,10 +57,24 @@ def add_argument(self, *args, **kwargs):
     """
     Arguments added:
         not_in_write_out_config_file: excluded in 'is_write_out_config_file_arg' file
+        not_add_hyphen_option: bool
     """
     not_in_write_out_config_file = kwargs.pop("not_in_write_out_config_file", None)
+    not_add_hyphen_option = kwargs.pop("not_add_hyphen_option", False)
+    
+    if not not_add_hyphen_option:
+        args = list(args)
+        for op in args:
+            if '_' in op and op.startswith('-'):
+                op_hy = op.replace('_', '-')
+                if op_hy not in args:
+                    args += [op_hy, ]
+    
     action = self.configargparse_original_add_argument(*args, **kwargs)
     action.not_in_write_out_config_file = not_in_write_out_config_file
+    
+    
+    
     return action
 
 

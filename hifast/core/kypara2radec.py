@@ -6,11 +6,8 @@ import numpy as np
 import math
 import erfa
 
-# global 
-#地理
-hm = 1110.03;
-elong = 1.8650006658875442;
-phi = 0.44772847428643703;
+from . import conf
+
 #观测波长
 wl = 300000.0;
 gap = 0.27 #多波束中心间距 米
@@ -77,7 +74,8 @@ def kypara2radec(obstime, multibeamAngle, nB, globalCenterX,  globalCenterY, glo
         print(f"relative humidity: {humidity}")
         if backend == 'erfa':
             print(f"dUT1: {dUT1}")
-    return AzZD2radec(obstime, Az, ZD, backend=backend)
+    ra, dec = AzZD2radec(obstime, Az, ZD, backend=backend)
+    return ra, dec, Az, ZD
     
     
     
@@ -159,7 +157,7 @@ def AzZD2radec(obstime, Az, ZD, backend='erfa'):
         from astropy.time import Time
         import astropy.units as u
         
-        location = EarthLocation(lon=elong*u.radian, lat=phi*u.radian, height=hm*u.m)
+        location = EarthLocation(lat=conf.lat*u.radian, lon=conf.long*u.radian, height=conf.height*u.m)
         
         coords = SkyCoord(frame='altaz', alt=90*u.deg-ZD*u.radian, az=Az*u.radian, obstime=obstime, location=location,
                 pressure=phpa*u.hPa, temperature=temperature*u.deg_C, relative_humidity=humidity, obswl=wl*u.um)

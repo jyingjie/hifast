@@ -4,7 +4,6 @@ __all__ = ['IO']
 
 # Cell
 from .utils.io import *
-#nbdev_comment _all_ = ['parser']
 
 # Internal Cell
 sep_line = '##'+'#'*70+'##'
@@ -18,7 +17,7 @@ parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
                     help='Limit frequence range')
 parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
                     help="don't check or add ra dec")
-parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True',
+parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True', env_var='HIFAST_SHOW_PROG',
                     help='')
 
 # group = parser.add_argument_group(f'*Flux\n{sep_line}')
@@ -29,13 +28,23 @@ parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default
 
 # baseline fitting
 group = parser.add_argument_group(f'*BaseLine (set --method as none to skip this) \n{sep_line}')
-group.add_argument('--method', default='arPLS', choices=['none', 'arPLS', 'srPLS', 'asPLS', 'masPLS', 'Chebyshev', 'poly', 'original', ],
+
+rew_type = ['asym1', 'asym2', 'asym3', 'sym1',]
+method = ['none']
+method += ['PLS-'+r for r in rew_type]
+method += ['poly-'+r for r in rew_type]
+method += ['masPLS-'+r for r in rew_type]
+method += ['asPLS',]
+method += ['original']
+method += ['MedMed', 'MinMed']
+
+group.add_argument('--method', default='arPLS', choices=method,
                    help='method used to fit baseline, if set as none, skip this')
 group.add_argument('--nproc', '-n', type=int, default=1,
                    help='number of process used in fitting baseline')
 group = parser.add_argument_group('preprocessing before baseline fitting')
 group.add_argument('-T', '--trans', type=bool_fun, choices=[True, False], default='False',
-                   help='')
+                   help='if set True, fitting the baseline along time instead of frequency.')
 group.add_argument('--njoin', type=int, default=0,
                    help='join spectra (average) to fit same baseline')
 group.add_argument('--s_method_t', default='none', choices=['none', 'gaussian', 'boxcar', 'median'],
@@ -59,6 +68,17 @@ group.add_argument('--ratio', type=float, default=0.01,
                    help='baseline fit parameters')
 group.add_argument('--niter', type=int, default=100,
                    help='baseline fit parameters')
+group.add_argument('--exclude_add', '--exclude_type', default='none', choices=['none', 'auto1', 'auto2'],
+                   help='baseline fit parameters')
+
+# MinMed or MedMed
+group = parser.add_argument_group(f'*MinMed or MedMed\n{sep_line}')
+group.add_argument('--nsection', type=int,
+                   help='divide each part into n sections. Same with nspec')
+group.add_argument('--nspec', type=int,
+                   help='divide each part into n sections. One section has n specs.')
+group.add_argument('--npart', type=int,
+                   help='divide data into n parts')
 
 # interaction
 group = parser.add_argument_group(f'*Interaction\n{sep_line}')
@@ -90,27 +110,68 @@ class IO(BaseIO):
         from .core.baseline import sub_baseline
 
     @staticmethod
-    def fit_baseline(s2p, freq, mjd, args):
+    def fit_baseline(s2p, freq, mjd, args, is_excluded=None):
         fit_kwargs = {}
         keys = ['method', 'nproc',
                 'njoin', 's_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',
-                'lam', 'deg', 'offset', 'ratio', 'niter']
+                'lam', 'deg', 'offset', 'ratio', 'niter', 'exclude_add']
         for key in keys:
             fit_kwargs[key] = getattr(args, key)
-        fit_kwargs['verbose'] = args.show_prog
+        fit_kwargs['is_excluded'] = is_excluded
         if args.trans:
             return sub_baseline(mjd, s2p.transpose((1, 0, 2)), subtract=True, **fit_kwargs).transpose((1, 0, 2))
         else:
             return sub_baseline(freq, s2p, subtract=True, **fit_kwargs)
 
-    def gen_s2p_out(self,):
+    def _load_is_excluded(self,):
+        import numpy as np
+        fs = self.fs
+        if 'is_excluded' in fs.keys():
+            is_excluded = fs['is_excluded'][:]
+
+            whole_rfi = np.all(is_excluded, axis=1)
+            is_excluded[whole_rfi] = False
+
+            if is_excluded.ndim != self.s2p.ndim:
+                is_excluded = np.full(is_excluded.shape + (2,), is_excluded[...,None])
+            self.is_excluded = is_excluded
+
+    def med_fit_baseline(self,):
         args = self.args
         # gen self.s2p_out
         s2p = self.s2p[:]
+        from copy import deepcopy
+        s2p_ori = deepcopy(s2p)
+        import numpy as np
+        if 'is_rfi' in self.fs.keys():
+            is_rfi = self.fs['is_rfi'][:]
+            s2p[is_rfi,:] = np.nan
+
+        from .ripple.sw_fft import minmed
+        kwargs = {}
+        keys = ['nsection', 'nspec', 'npart', 'method']
+        for key in keys:
+            kwargs[key] = getattr(args, key)
+        s2p = s2p_ori - minmed(s2p, **kwargs)
+        return s2p
+
+    def gen_s2p_out(self,):
+        args = self.args
+        if args.interact:
+            self.s2p_out = interact_spec.bld
+            return
+
+        # gen self.s2p_out
+        s2p = self.s2p[:]
         # fit baseline:
-        if args.method is not None and args.method != 'none':
+        if 'Med' in args.method:
+            print(f'Use {args.method} to substract baseline. Remember another linear substraction.')
+            s2p = self.med_fit_baseline()
+        elif args.method is not None and args.method != 'none':
+            # is_excluded
+            self._load_is_excluded()
             print('fit and substract baseline')
-            s2p = self.fit_baseline(s2p, self.freq, self.mjd, args)
+            s2p = self.fit_baseline(s2p, self.freq, self.mjd, args, getattr(self, 'is_excluded', None))
         else:
             print('no baseline method assigned, skip. Make sure the input spectra have been baselined.')
         self.s2p_out = s2p
@@ -119,7 +180,7 @@ class IO(BaseIO):
 def check_backend():
     import matplotlib as mpl
     if 'ipympl' not in mpl.get_backend():
-        print('Please run interaction in Jupyert and \'%matplotlib ipympl\' in the notebook cell ')
+        print('Please use interaction mode in Jupyert and run \'%matplotlib ipympl\' in the notebook cell first')
         sys.exit()
 
 
@@ -135,14 +196,20 @@ def interact(args):
         T = fs['Ta']
     elif 'flux' in fs.keys():
         T = fs['flux']
+    if 'is_excluded' in fs.keys():
+        is_excluded = fs['is_excluded']
+    else:
+        is_excluded = None
     interact.T2p = T
+    interact.is_excluded = is_excluded
     interact.freq = fs['freq'][:]
     interact.frange = args.frange
     interact.nproc = args.nproc
-    interact.length = args.length
+    interact.length = min(args.length, interact.T2p.shape[1])
     interact.figsize = args.figsize
     interact.ylim = args.ylim[0] if len(args.ylim) == 1 else args.ylim
-    interact.main()
+    interact.trans = args.trans
+    return interact.main()
     # sys.exit()
 
 # Cell
@@ -153,10 +220,15 @@ if __name__ == '__main__':
     # print("----------")
     # print(parser.format_values())  # useful for logging where different settings came from
     if args_.interact:
-        interact(args_)
+        interact_spec = interact(args_)[0]
+        save = IO(args_)
+        print('Please run \'save()\' in the notebook cell to save your results')
     else:
         print('#'*35+'Args'+'#'*35)
-        print(parser.format_values())  # useful for logging where different settings came from
+        args_from = parser.format_values()
+        print(args_from)
         print('#'*35+'####'+'#'*35)
-        io = IO(args_)
+
+        HistoryAdd = {'args_from': args_from} if args_.my_config is not None else None
+        io = IO(args_, HistoryAdd=HistoryAdd)
         io()

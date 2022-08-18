@@ -4,7 +4,6 @@ __all__ = ['IO']
 
 # Cell
 from .utils.io import *
-#nbdev_comment _all_ = ['parser']
 
 # Internal Cell
 sep_line = '##'+'#'*70+'##'
@@ -23,6 +22,8 @@ group.add_argument('--flux', type=bool_fun, choices=[True], default='True', not_
                    help='It must be True.')
 group.add_argument('--cali_fname', default='none',
                    help='calibration source file name')
+group.add_argument('--fix_diff_tcal', type=bool_fun, choices=[True, False], default='True',
+                   help='If True, fix the tcal differece in spec and calibator')
 
 # Cell
 class IO(BaseIO):
@@ -40,17 +41,31 @@ class IO(BaseIO):
         s2p = self.s2p[:]
         from .core.flux import cali_src
         print('Flux calibrating ...')
-        self.s2p_out = cali_src(s2p, self.nB, self.freq, args.cali_fname, ra=self.ra, dec=self.dec, mjd=self.mjd)
+        if args.fix_diff_tcal:
+            tcal_spec = self.fs['Tcal'][:]
+            if self.is_use_freq is not None:
+                tcal_spec = tcal_spec[:, self.is_use_freq]
+        else:
+            tcal_spec = None
+        if args.cali_fname != 'none' and args.cali_fname is not None:
+            print(f'using {args.cali_fname} ...')
+        self.s2p_out = cali_src(s2p, self.nB, self.freq, args.cali_fname, ra=self.ra, dec=self.dec, mjd=self.mjd,
+                               tcal_spec=tcal_spec)
 
 # Cell
 if __name__ == '__main__':
+    dests_hide = ['flux',]
+    hide_paras(parser, dests_hide)
+
     args_ = parser.parse_args()
     # print(parser.format_help())
     # print("----------")
-    dests_hide = ['flux',]
-    hide_paras(parser, dests_hide)
     print('#'*35+'Args'+'#'*35)
-    print(del_paras_in_string(parser.format_values(), dests_hide))  # useful for logging where different settings came from
+    args_from = parser.format_values()
+    args_from = del_paras_in_string(args_from, dests_hide)
+    print(args_from)
     print('#'*35+'####'+'#'*35)
-    io = IO(args_)
+
+    HistoryAdd = {'args_from': args_from} if args_.my_config is not None else None
+    io = IO(args_, HistoryAdd=HistoryAdd)
     io()

@@ -12,17 +12,18 @@ class Find_point(object):
     @staticmethod
     def get_radec(fname):
         f = h5py.File(fname,'r')
+        S = f["S"] if "S" in f.keys() else f
         ra_list = []
         beam_list = []
-        for key in f.keys():
+        for key in S.keys():
             if 'ra' == key[:2]:
                 try:
                     beam_list += [key[2:]]
                 except:
                     beam_list += ['']
-                ra_list += [f[key][()]]
+                ra_list += [S[key][()]]
 
-        dec_list = [f[f'dec{beam}'][()] for beam in beam_list]
+        dec_list = [S[f'dec{beam}'][()] for beam in beam_list]
         radec = {}
         for ra, dec, beam in zip(ra_list, dec_list, beam_list):
             radec[beam] = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
