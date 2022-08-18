@@ -328,6 +328,7 @@ class IO(BaseIO):
                 fft_args['sw_periods'].insert(-1, '2mhz')
             else:
                 print('beam number !=6, remove 2mhz in sw_periods if it exists')
+        
         # use the first factor for noise off or not defined
         for key in ['amp_thr_mean_factor', 'amp_thr_solo_factor']:
             fft_args[key] = getattr(args, key)[0]
@@ -335,13 +336,14 @@ class IO(BaseIO):
         if is_on is not None:
             ret = np.zeros_like(s1p)
             print("# noise off")
-            ret[is_on] = sw_fft.fit_sw_fft(s1p[is_on], self.freq, args.nproc, **fft_args)
             fft_args['is_excluded_mean'] = np.all(is_rfi[~is_on], axis=1) if is_rfi is not None else None
             ret[~is_on] = sw_fft.fit_sw_fft(s1p[~is_on], self.freq, args.nproc, **fft_args)
+            
             print("# noise on")
             for key in ['amp_thr_mean_factor', 'amp_thr_solo_factor']:
                 fft_args[key] = getattr(args, key)[1]
             fft_args['is_excluded_mean'] = np.all(is_rfi[is_on], axis=1) if is_rfi is not None else None
+            ret[is_on] = sw_fft.fit_sw_fft(s1p[is_on], self.freq, args.nproc, **fft_args)
         else:
             fft_args['is_excluded_mean'] = np.all(is_rfi, axis=1) if is_rfi is not None else None
             ret = sw_fft.fit_sw_fft(s1p, self.freq, args.nproc, **fft_args)
