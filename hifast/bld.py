@@ -130,7 +130,8 @@ class IO(BaseIO):
         fs = self.fs
         if 'is_excluded' in fs.keys():
             is_excluded = fs['is_excluded'][:]
-
+            if self.is_use_freq is not None:
+                is_excluded = is_excluded[:, self.is_use_freq]
             whole_rfi = np.all(is_excluded, axis=1)
             is_excluded[whole_rfi] = False
 

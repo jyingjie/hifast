@@ -741,6 +741,9 @@ def sub_baseline(freq, yss, *, subtract=True, nproc=1, exclude_fun=None, is_excl
     # add exclude
     if is_excluded is not None:
         exclude = is_excluded
+        if njoin is not None and njoin > 1:
+            # todo: using np.logical_and.reduce
+            exclude = average_every_n(exclude, njoin, axis=0, drop=False).astype('bool')
     elif exclude_fun is not None:
         exclude = exclude_fun(yss)
     else:

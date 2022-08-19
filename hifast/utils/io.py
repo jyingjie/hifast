@@ -605,6 +605,9 @@ class BaseIO(Path_IO):
                     dict_out['Tcal'] = dict_out['Tcal'][:, self.is_use_freq]
                 except:
                     pass
+            for key in ['is_excluded', 'is_rfi']:
+                if key in dict_out.keys():
+                    dict_out[key] = dict_out[key][:, self.is_use_freq]
         # add ra dec
         for key in ['ra', 'dec', 'is_extrapo']:
             if hasattr(self, key):
