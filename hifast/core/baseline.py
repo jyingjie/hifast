@@ -14,6 +14,7 @@ import numpy as np
 import scipy.interpolate as interp
 from scipy import ndimage
 from scipy import optimize
+from threadpoolctl import ThreadpoolController
 
 from astropy.stats import sigma_clipped_stats
 
@@ -201,15 +202,22 @@ def get_baseline(x, ys, axis=None, *,
         else:
             return bls
 
+# Internal Cell
+controller = ThreadpoolController()
+
 # Cell
+
 class get_baseline_mp(object):
     def __init__(self, n):
         # n process
         self.n = n
+
     @staticmethod
     def get_baseline_q(q, *args, **kwargs):
         res = get_baseline(*args, **kwargs)
         q.put(res)
+
+    @controller.wrap(limits=1, user_api='blas')
     def __call__(self, x, ys, *, exclude=None,  **kwargs):
         """
         testing...

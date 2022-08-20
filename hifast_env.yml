@@ -25,3 +25,4 @@ dependencies:
     - configargparse==1.5.3
     - pyastronomy==0.16.0
     - mpl_interactions[jupyter]==0.18.1
+    - threadpoolctl
