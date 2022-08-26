@@ -348,7 +348,7 @@ class IO(BaseIO):
         shortf_args['rms_frange'] = args.rms_frange
         shortf_args['thr_type'] = args.lsn_thr_type
 
-        if args.sf_use_time_only and args.all_beams:
+        if args.sf_use_time_only and args.all_beams and is_rfi is not None:
             whole_rfi = np.all(is_rfi, axis = 1)
             is_rfi[whole_rfi] = False
             is_timerfi = np.any(is_rfi, axis = 1)
@@ -367,12 +367,12 @@ class IO(BaseIO):
         t_rfi = np.isnan(T)
         Tt = deepcopy(T)
         Tt[:,self.protect_use] = 0
-        if is_rfi_tmp is not None: Tt[is_rfi_tmp] = 0
+        if is_rfi_tmp is not None: Tt[is_rfi_tmp] = 0 
 
         if args.lf:
             print('finding lf')
             t_rfi |= self.get_lf(Tt)
-
+            
         Tt[t_rfi] = 0
         if args.sf:
             print('finding sf')
@@ -527,7 +527,7 @@ class IO(BaseIO):
         self.gen_s2p_out()
         self.s2p = self.s2p[:]
         self.s2p_mean = np.mean(self.s2p,axis = 2)
-
+        
         # average in 19 beams
         if args.all_beams:
             if os.path.exists(self._19name):
@@ -536,7 +536,7 @@ class IO(BaseIO):
                 raise FileNotFoundError(f"Can't find {self._19name}. Did it run hifast.rfi_multi?")
 
         is_rfi = np.full(self.s2p.shape[:2], False, dtype=bool)
-
+        
         # manual regions
         is_rfi_tmp = self.get_from_regions()
         if is_rfi_tmp is not None:
@@ -544,7 +544,7 @@ class IO(BaseIO):
 
         self.protect_use = self.protect_mw()
         self.check_rms_range()
-
+        
         # long or short freq time RFI
         if args.lf or args.sf:
             if args.all_beams and args.sf_use_time_only:
@@ -560,8 +560,8 @@ class IO(BaseIO):
         whole_rfi = np.all(is_rfi,axis = 1)
         self.not_rfi_num = np.arange(is_rfi.shape[0])[~whole_rfi]
         self.is_rfi_num = np.arange(is_rfi.shape[0])[whole_rfi]
-
-        # time continuous RFI
+        
+        # time continuous RFI 
         if args.tr:
             print('finding tr')
             is_rfi |= self.get_tr()
@@ -571,17 +571,17 @@ class IO(BaseIO):
             self.s2p_mask[is_rfi,:] = np.nan
         else:
             self.s2p_mask = self.s2p
-
+        
         # narrowband RFI
         if args.nr:
             print('finding nr')
             is_rfi |= self.get_nr()
-
+        
         # 8.1 MHz period RFI
         if args.pdr:
             print('finding period rfi')
             is_rfi |= self.get_pdr()
-
+        
         # polarized RFI
         if args.pr:
             print('finding pr')
@@ -646,3 +646,4 @@ if __name__ == '__main__':
     HistoryAdd = {'args_from': args_from} if args_.my_config is not None else None
     io = IO(args_, HistoryAdd=HistoryAdd)
     io()
+    

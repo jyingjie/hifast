@@ -326,7 +326,7 @@ class IO(BaseIO):
         return mask_time_rfi(T, self.freq, rtype = 'long-freq',plot = False,
                               **longf_args)
 
-    def get_sf(self,T):
+    def get_sf(self,T,is_rfi = None):
         """
         Time domain uncontinuous RFI: short freq time RFI
         """
@@ -346,6 +346,12 @@ class IO(BaseIO):
         shortf_args['rfi_width_lim'] = args.sf_rfi_last
         shortf_args['rms_frange'] = args.rms_frange
         shortf_args['thr_type'] = args.lsn_thr_type
+
+        if is_rfi is not None and args.all_beams:
+            whole_rfi = np.all(is_rfi, axis = 1)
+            is_rfi[whole_rfi] = False
+            is_timerfi = np.any(is_rfi, axis = 1)
+            shortf_args['is_timerfi'] = is_timerfi
 
         return mask_time_rfi(T, self.freq, rtype = 'short-freq',plot = False,
                                **shortf_args)
