@@ -19,9 +19,20 @@ from .radec import _tight_ra
 from . import conf
 from .corr_vel import freq2vel, vel2freq
 from ..utils.io import get_nB
+from ..utils.io import replace_nB
 
 from multiprocessing import RawArray
 from multiprocessing import Process, Queue
+
+# Internal Cell
+def groups_print_fnames(fnames):
+    from itertools import groupby
+    nBs = [get_nB(fname) for fname in fnames]
+    pairs = [(replace_nB(fname, 0), get_nB(fname)) for fname in fnames]
+    pairs.sort()
+    for key, group in groupby(pairs, lambda x:x[0]):
+        print(key)
+        print('Beams:', ', '.join([str(pp[1]) for pp in group]))
 
 # Cell
 class SpecFile():
@@ -149,7 +160,10 @@ class Imaging():
         fpaths.sort()
         if len(fpaths) == 0:
             raise(ValueError('no file input'))
-        print(*fpaths, sep='\n')
+        try:
+            groups_print_fnames(fpaths)
+        except:
+            print(*fpaths, sep='\n')
         self.fpaths = fpaths
 
     def gen_specfiles(self, ):
@@ -279,6 +293,7 @@ class Imaging():
         cata = SkyCoord(self.ra_stack, self.dec_stack, unit=(u.degree, u.degree))
         grid = SkyCoord(self.ra_grid, self.dec_grid, unit=(u.degree, u.degree))
 
+        print('searching spectra in r_cut for each grid...')
         self.ind_g, self.ind_cata, self.d2d, d3d = cata.ravel().search_around_sky(
                                                         grid.ravel(), args.r_cut*u.arcsec)
 #         self.ind_cata, self.ind_g, self.d2d, d3d = grid.ravel().search_around_sky(
