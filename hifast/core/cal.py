@@ -313,7 +313,7 @@ class FastRawSpec(FastRawData):
         #freq += 0.000476837158203125/2 # using center frequency
         super()._get_freq(center_corr = 0.000476837158203125/2)
 
-    def _get_smoothed(self, power, freq=None):
+    def _get_smoothed(self, power, freq=None, use_ndimage=False):
         """
         power: ndim 3
         freq: if is None, use self.freq_use
@@ -325,7 +325,11 @@ class FastRawSpec(FastRawData):
         power = power.astype('float64')
         if smooth=='gaussian':
             sigma = s_para['s_sigma']/(np.nanmax(freq) - np.nanmin(freq))*len(freq)
-            s_power = smooth_axis1_d3(power, method=smooth, sigma=sigma)
+            if use_ndimage:
+                from scipy import ndimage
+                s_power = ndimage.gaussian_filter1d(power, sigma=sigma, axis=1)
+            else:
+                s_power = smooth_axis1_d3(power, method=smooth, sigma=sigma)
         elif smooth=='poly':
             s_power = smooth_axis1_d3(power, method=smooth, x=freq, deg= s_para['s_deg'])
         else:
@@ -561,7 +565,7 @@ class CalOnOff(FastRawSpec):
         count_off = p_off.astype('float64') / p_cal_s[np.where(inds_in_tcal_off[:,None] - uni[None,:] ==0, )[1]]
         return count_on, count_off, p_cal_s, inds_ton[uni]
 
-    def __call__(self, outdir='./', step=None, header=None, sep_save=False, save_p_cal=False, cali=True):
+    def __call__(self, outdir='./', step=None, header=None, sep_save=False, save_pcals=False, cali=True):
         """
         get T, mjd etc, and save in hdf5 file
 
@@ -604,7 +608,7 @@ class CalOnOff(FastRawSpec):
             else:
                 count_tcal_res = [self.get_field(inds_on, 'DATA',), self.get_field(inds_off, 'DATA', close_file=True)]
             T = np.vstack(count_tcal_res[:2])
-            if save_p_cal:
+            if save_pcals:
                 p_cal_s_list += [count_tcal_res[2]]
                 inds_ton_list += [count_tcal_res[3]]
             else:
@@ -649,7 +653,7 @@ class CalOnOff(FastRawSpec):
             res['Header'] = header
             save_specs_hdf5(outname, res, wcs_data_name='Ta')
             print(f"Saved to {outname}")
-        if save_p_cal:
+        if save_pcals:
             p_cal_s_res = {}
             inds_ton = np.vstack(inds_ton_list)
             _, ind_uni = np.unique(inds_ton[:,0],return_index=True)
