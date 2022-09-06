@@ -652,11 +652,12 @@ class CalOnOff1111(CheckPCal, CalOnOffSav):
                 ## mask as nan if cal and spec not close enough
                 is_too_far = abs(inds_on - inds_ton_m_use[inds_close]) > (self.n_on + self.n_off)*delat_t_lim
                 c_on[is_too_far, b:e+1, polar] = np.nan
-                c_on -= 1  # have subtracted cal
+
                 # on
                 inds_close = np.argmin(abs(inds_ton_m_use - inds_off[:, None]), axis=1)
                 c_off[:, b:e+1, polar] /= pcals_s[:, b:e+1, polar][is_use_in_segs[i]][inds_close]
                 ## mask as nan if cal and spec not close enough
                 is_too_far = abs(inds_off - inds_ton_m_use[inds_close]) > (self.n_on + self.n_off)*delat_t_lim
                 c_off[is_too_far, b:e+1, polar] = np.nan
+        c_on -= 1  # have subtracted cal
         return c_on, c_off
