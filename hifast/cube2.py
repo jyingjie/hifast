@@ -70,6 +70,9 @@ parser.add_argument('--r_cut', type=float,
                         "``--method bessel_gaussian``: 3.8317059702075*bsize/pi;\n"+
                         "``--method sinc_gaussian``: bsize")
 
+parser.add_argument('--polar', choices=['XX','YY','M'], default='M',
+                       help='polarization')
+
 parser.add_argument('--wcs_from',
                    help='use the wcs parameters from input fits')
 
