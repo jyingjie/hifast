@@ -620,7 +620,7 @@ class CalOnOff1111(CheckPCal, CalOnOffSav):
         axs[1].set_title('pcals smoothed, polar 1')
         fig.suptitle(os.path.basename(self.out_name_base))
         fig.tight_layout()
-        fig.savefig(self.out_name_base + '-pcals-merged.png')
+        fig.savefig(self.out_name_base + '-pcals-smoothed.png')
 
     def set_para_pcals(self, cal_dis_lim=2):
         self.delat_t_lim = cal_dis_lim

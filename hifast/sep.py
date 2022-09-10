@@ -217,6 +217,16 @@ if __name__ == '__main__':
         paras['pcal_vary_lim_bin'] = args.pcal_vary_lim_bin
         paras['pcal_bad_lim_freq'] = args.pcal_bad_lim_freq
         if args.merge_pcals:
+            # check
+            if args.method_interp in ['gaussian', 'slinear', 'linear', 'quadratic', 'cubic', 'nearest']:
+                pass
+            elif args.method_interp.startswith('poly'):
+                try:
+                    int(args.method_interp[4:-1])
+                except ValueError:
+                    raise(ValueError(f'`--method_interp {args.method_interp}` not support'))
+            else:
+                raise(ValueError(f'`--method_interp {args.method_interp}` not support'))
             Cal_cls = CalOnOffM
         else:
             Cal_cls = CalOnOff1111
