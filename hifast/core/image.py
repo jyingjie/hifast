@@ -392,7 +392,8 @@ class Imaging():
         # loop step
         nspecs = np.array([len(sf.ra) for sf in self.specfiles])
         starts = np.arange(0, len(self.specfiles), step)
-        for start in starts:
+        for i, start in enumerate(starts):
+            print(f"Part [{i+1}/{len(starts)}]")
             sfs = self.specfiles[start:start+step]
             # index in current specs
             ind_cata_the = self.ind_cata - np.sum(nspecs[:start])
@@ -405,7 +406,7 @@ class Imaging():
             assert (self.ra_stack[self.ind_cata[is_]] == np.hstack([sf.ra for sf in sfs])[ind_cata_the_use]).all()
             assert (self.dec_stack[self.ind_cata[is_]] == np.hstack([sf.dec for sf in sfs])[ind_cata_the_use]).all()
 
-            csp = CalcSpecPixel(sfs, key=args.key, scale_beams=self.scale_beams, share_mem=args.share_mem)
+            csp = CalcSpecPixel(sfs, key=args.key, polar=args.polar, scale_beams=self.scale_beams, share_mem=args.share_mem)
             res = csp(ind_g_use, ind_cata_the_use, weis_use, n_worker=args.nproc)
             ii = res[0]
             self.pixel_data[ii] += res[1]
@@ -437,8 +438,13 @@ def _get_start_stop(arr,arr_in):
 
 # Cell
 class CalcSpecPixel():
-    def __init__(self, sfs, *, key='flux', scale_beams=None, share_mem=False):
+    def __init__(self, sfs, *, key='flux', polar='M', scale_beams=None, share_mem=False):
+        """
+        key:
+        polar: 'M','XX','YY'
+        """
         # init shared specs
+        self.polar = polar
         self.scale_beams = scale_beams
         self.share_mem = share_mem
         self.ns = ns = [len(sf.ra) for sf in sfs]
@@ -466,34 +472,47 @@ class CalcSpecPixel():
 
         for sf, s in zip(sfs, np.cumsum([0, *self.ns[:-1]])):
             f = h5py.File(sf.fpath)
-            print(f"loading spectra from {sf.fpath}")
+            print(f"loading: {sf.fpath}", end='\033[K\r')
             f_spec = f['S'][self.key]
+            if self.polar == 'XX':
+                sli = 0
+            elif self.polar == 'YY':
+                if f_spec.shape[0] < 2:
+                    raise(ValueError(f'polar method is YY, but spectra have only one polar.'))
+                sli = 1
+            else:
+                sli = slice(None)
             if sf.is_use_t is not None:
                 ind_use_t = np.where(sf.is_use_t)[0]
                 if sf.ind_use_chan is not None:
                     if (np.diff(sf.ind_use_chan) == 1).all():
-                        _specs = f_spec[:, ind_use_t, sf.ind_use_chan[0]:sf.ind_use_chan[-1]+1]
+                        _specs = f_spec[sli, ind_use_t, sf.ind_use_chan[0]:sf.ind_use_chan[-1]+1]
                     else:
                         raise(ValueError('select chans fail'))
                 else:
-                    _specs = f_spec[:, ind_use_t]
+                    _specs = f_spec[sli, ind_use_t]
             else:
                 if sf.ind_use_chan is not None:
                     if (np.diff(sf.ind_use_chan) == 1).all():
-                        _specs = f_spec[:, :, sf.ind_use_chan[0]:sf.ind_use_chan[-1]+1]
+                        _specs = f_spec[sli, :, sf.ind_use_chan[0]:sf.ind_use_chan[-1]+1]
                     else:
                         raise(ValueError('select chans fail'))
                 else:
-                    _specs = f_spec[()]
-            if _specs.shape[0] == 1:
-                _specs = _specs[0]
-            else:
+                    _specs = f_spec[sli]
+            if self.polar == 'M':
                 _specs = np.mean(_specs, axis=0) # only two float32 to average
+            elif self.polar in ['XX', 'YY']:
+                ...
+            elif self.polar == 'B':
+                ...
+            else:
+                raise(ValueError(f'polar method not support {self.polar}'))
             if self.scale_beams is not None:
                 _specs *= self.scale_beams[sf.nB-1]
                 print(self.scale_beams[sf.nB-1])
             self.specs[s:s+len(_specs)] = _specs.astype(self.DataType)
             f.close()
+        print('')
 
     @staticmethod
     def calc(q, s, e,
