@@ -77,17 +77,19 @@ group.add_argument('--merge_pcals', type=bool_fun, choices=[True, False], defaul
 group = parser.add_argument_group(f'**`--merge_pcals True`: merging all pcal to get a smoothing shape a pcal with freq \n{sep_line}')
 group.add_argument('--method_merge', choices=['median', 'mean'], default='mean',
                     help='method used to merge cal along time axis')
-group.add_argument('--merge_cal_pre_process', choices=[True, False], default='True',
-                    help="if True, scale the pcals to similar amplitude before merge")
+group.add_argument('--merge_cal_pre_process', choices=['scale', 'none'], default='scale',
+                    help="if `scale`, scale the pcals to similar amplitude before merge")
 group.add_argument('--calc_diff_method', choices=['div', 'sub'], default='div',
                     help="used if '--merge_pcals' is not set as 'not'")
 group.add_argument('--squeeze_diff_freq', choices=['median', 'mean',], default='mean',
                     help="method applied to the difference of pcals with the 'merged-pcals' along freq to get relative amplitude")
+group.add_argument('--squeeze_diff_freq_frange', type=float, nargs=2,
+                    help='freq range used in `--squeeze_diff_freq`, if None, use all the freq without any bad pcals')
 group.add_argument('--method_interp', default='quadratic',
                     help="Interpolate the relative amplitude to get pcal for each spectrum."
                          "Choose from 'gaussian', 'slinear', 'quadratic', 'cubic', 'nearest' \nor 'poly1d', poly2d, ..., 'polynd'.\n"
                          "'gaussian' is gaussian smooth; 'polynd' is poly fitting")
-group.add_argument('--sigma_t', type=float, default=300,
+group.add_argument('--method_interp_sigma_t', type=float, default=300,
                     help='sigma_t in  ``--method_interp gaussian``')
 group.add_argument('--method_interp_edges', choices=['nearest', 'extrapolate'], default='nearest',
                     help="how to deal the edge spetra in interpolating")
@@ -215,6 +217,16 @@ if __name__ == '__main__':
         paras['pcal_vary_lim_bin'] = args.pcal_vary_lim_bin
         paras['pcal_bad_lim_freq'] = args.pcal_bad_lim_freq
         if args.merge_pcals:
+            # check
+            if args.method_interp in ['gaussian', 'slinear', 'linear', 'quadratic', 'cubic', 'nearest']:
+                pass
+            elif args.method_interp.startswith('poly'):
+                try:
+                    int(args.method_interp[4:-1])
+                except ValueError:
+                    raise(ValueError(f'`--method_interp {args.method_interp}` not support'))
+            else:
+                raise(ValueError(f'`--method_interp {args.method_interp}` not support'))
             Cal_cls = CalOnOffM
         else:
             Cal_cls = CalOnOff1111
@@ -227,11 +239,12 @@ if __name__ == '__main__':
         if args.merge_pcals:
             spec.set_para_pcals(calc_diff_method=args.calc_diff_method,
                                 squeeze_diff_freq=args.squeeze_diff_freq,
+                                squeeze_diff_freq_frange=args.squeeze_diff_freq_frange,
                                 method_merge=args.method_merge,
                                 merge_cal_pre_process=args.merge_cal_pre_process,
                                 method_interp=args.method_interp,
                                 method_interp_edges=args.method_interp_edges,
-                                sigma_t=args.sigma_t,
+                                method_interp_sigma_t=args.method_interp_sigma_t,
                                )
         else:
             spec.set_para_pcals(cal_dis_lim=args.cal_dis_lim,

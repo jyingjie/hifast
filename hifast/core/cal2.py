@@ -377,8 +377,13 @@ class CalOnOffSav(CalOnOff):
 # Cell
 class CalOnOffM(CheckPCal, CalOnOffSav):
 
-    def squeeze_freq(self, arr, method='median'):
-        # squee freq
+    def squeeze_freq(self, arr):
+        """
+        squeeze freq axis
+        """
+        method = self.squeeze_diff_freq
+        frange = self.squeeze_diff_freq_frange
+
         if arr.ndim !=3 :
             raise(ValueError('need 3d'))
         if method == 'median':
@@ -390,28 +395,42 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
         arr_s = np.zeros((arr.shape[0], arr.shape[2]), dtype='float64')
 
         for i in range(arr.shape[2]):
-            is_ = ~np.logical_or.reduce(self.is_bad_fbins[..., i][~self.is_aband_whole[:,i]], axis=0)
-            arr_s[:,i] = squ_fun(arr[:, is_[self.ind_in_bins], i], axis=1)
+            if frange is None:
+                # use all the freq bins without any bad pcals
+                bin_is = ~np.logical_or.reduce(self.is_bad_fbins[..., i][~self.is_aband_whole[:,i]], axis=0)
+                is_ = bin_is[self.ind_in_bins]
+            else:
+                is_ = (self.freq_use > frange[0]) & (self.freq_use < frange[1])
+            arr_s[:,i] = squ_fun(arr[:, is_, i], axis=1)
         return arr_s
 
-    def merge_pcals(self, method_merge='median', pre_process=False, exclued_franges=[]):
+    def merge_pcals(self,):
         """
         merging pcals at all time and smoothing it
         """
+        method_merge = self.method_merge
+        # 'scale' or 'none'
+        pre_process = self.merge_cal_pre_process
+
         pcals = self.pcals
-        if pre_process:
+        if pre_process == 'scale':
             # use the power not is_bad_fbins to sacle
-            amp = self.squeeze_freq(pcals, 'mean')
-            pcals = pcals*(np.nanmedian(amp, axis=0)/amp)[:,None,:]
+            amp = self.squeeze_freq(pcals)
+            # not change self.pcals
+            if self.calc_diff_method == 'div':
+                pcals = pcals * (np.nanmedian(amp, axis=0) / amp)[:,None,:]
+            elif self.calc_diff_method == 'sub':
+                pcals = pcals + (np.nanmedian(amp, axis=0) - amp)[:,None,:]
 
         if method_merge == 'median':
             pcals_merged = np.nanmedian(pcals, axis=0, keepdims=True)
         elif method_merge == 'mean':
             pcals_merged = np.nanmean(pcals, axis=0, dtype='float64', keepdims=True)
+
         self.pcals_merged = pcals_merged
         self.pcals_merged_s = self._get_smoothed(pcals_merged, use_ndimage=True)
 
-    def gen_pcals_amp_diff(self, calc_diff_method='div', squeeze_diff_freq='median', exclued_franges=None):
+    def gen_pcals_amp_diff(self,):
         """
         run self.merge_pcals first to get self.pcals_merged and self.pcals_merged_s
         gen self.pcals_amp_diff
@@ -422,23 +441,19 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
         exclued_franges: str; freq ranges which are not used in calculating amplitude offset; e.g. [[1375, 1385],]
         """
         pcals = self.pcals
+        calc_diff_method = self.calc_diff_method
+
         if calc_diff_method == 'div':
             pcals_diff = pcals / self.pcals_merged_s
         elif calc_diff_method == 'sub':
             pcals_diff = pcals - self.pcals_merged_s
         else:
             raise(ValueError(f"calc_diff_method:{calc_diff_method}"))
-        if exclued_franges is not None:
-            is_not = np.full(len(self.freq_use), False)
-            for (start, end) in exclued_franges:
-                is_not |= ((self.freq_use > start) & (self.freq_use < end))
-            pcals_diff = pcals_diff[:, ~is_not]
-            self.freq_use_amp_interp = self.freq_use[~is_not]
-        self.pcals_amp_diff = self.squeeze_freq(pcals_diff, method=squeeze_diff_freq)
+        self.pcals_amp_diff = self.squeeze_freq(pcals_diff)
         self.pcals_amp_diff_inds = np.mean(self.inds_ton, axis=1)
         self.calc_diff_method = calc_diff_method
 
-    def gen_pcals_amp_diff_interp_values(self, method_interp='quadratic', sigma_t=600, edges='nearest'):
+    def gen_pcals_amp_diff_interp_values(self,):
         """
         interplate pcals_amp_diff
         gen self.pcals_amp_diff_interp_values: the amplitude offset relate to mergred pcals, shape is (inds, polar)
@@ -450,6 +465,10 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
         edges: 'nearest', 'extrapolate'
         """
         pcals_amp_diff = self.pcals_amp_diff
+        method_interp = self.method_interp
+        sigma_t = self.method_interp_sigma_t
+        edges = self.method_interp_edges
+
         self.pcals_amp_diff_interp_values = np.zeros((len(self.inds), pcals_amp_diff.shape[1]), dtype='float64')
         for i in range(pcals_amp_diff.shape[1]):
             x = self.pcals_amp_diff_inds
@@ -480,13 +499,14 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
 
 
 
-    def set_para_pcals(self, calc_diff_method='div', squeeze_diff_freq='median',
+    def set_para_pcals(self, calc_diff_method='div',
+                       squeeze_diff_freq='median',
+                       squeeze_diff_freq_frange=None,
                        method_interp='quadratic',
                        method_interp_edges='nearest',
-                       sigma_t=600,
+                       method_interp_sigma_t=600,
                        method_merge='median',
-                       merge_cal_pre_process=True,
-
+                       merge_cal_pre_process='scale',
                        ):
         """
         para used in self.prepare_pcals
@@ -495,11 +515,19 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
         """
         self.calc_diff_method = calc_diff_method # in self.pcals_amp_interp & self.get_count_tcal
         self.squeeze_diff_freq = squeeze_diff_freq
+        self.squeeze_diff_freq_frange = squeeze_diff_freq_frange
         self.method_interp = method_interp
         self.method_interp_edges = method_interp_edges
-        self.sigma_t = sigma_t
+        self.method_interp_sigma_t = method_interp_sigma_t
         self.method_merge = method_merge
         self.merge_cal_pre_process = merge_cal_pre_process
+
+    def prepare_pcals(self,):
+        self.gen_pcals()
+        self.merge_pcals()
+        self.gen_pcals_amp_diff()
+        self.gen_pcals_amp_diff_interp_values()
+        self.plot_pcal_merged()
 
     def plot_pcal_merged(self,):
         if not getattr(self, 'plot_pcals', False):
@@ -512,30 +540,27 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
         ax.plot(self.freq_use, self.pcals_merged[0,:,0], 'r', alpha=0.5)
         ax.plot(self.freq_use, self.pcals_merged_s[0,:,0], 'k', lw=2)
         ax.set_title(f'~ {num} pcals, polar 0')
+        ax.set_xlabel(f'Freq')
         ax = axs[0][1]
         ax.plot(self.freq_use, self.pcals[::step,:,1].T, alpha=0.2)
         ax.plot(self.freq_use, self.pcals_merged[0,:,1], 'r', alpha=0.5)
         ax.plot(self.freq_use, self.pcals_merged_s[0,:,1], 'k', lw=2)
         ax.set_title(f'~ {num} pcals, polar 1')
+        ax.set_xlabel(f'Freq')
         ax = axs[1][0]
         ax.plot(self.inds, self.pcals_amp_diff_interp_values[:,0])
         ax.scatter(self.pcals_amp_diff_inds, self.pcals_amp_diff[:,0], color='r')
         ax.set_title('pcal amp diff, polar 0')
+        ax.set_xlabel(f'Index')
         ax = axs[1][1]
         ax.plot(self.inds, self.pcals_amp_diff_interp_values[:,1])
         ax.scatter(self.pcals_amp_diff_inds, self.pcals_amp_diff[:,1], color='r')
         ax.set_title('pcal amp diff, polar 1')
+        ax.set_xlabel(f'Index')
         fig.suptitle(os.path.basename(self.out_name_base))
         fig.tight_layout()
         fig.savefig(self.out_name_base + '-pcals-merged.png')
 
-    def prepare_pcals(self,):
-        self.gen_pcals()
-        self.merge_pcals(method_merge=self.method_merge, pre_process=self.merge_cal_pre_process)
-        self.gen_pcals_amp_diff(self.calc_diff_method, squeeze_diff_freq=self.squeeze_diff_freq,)
-        self.gen_pcals_amp_diff_interp_values(method_interp=self.method_interp, sigma_t=self.sigma_t,
-                                         edges=self.method_interp_edges)
-        self.plot_pcal_merged()
 
     def get_count_tcal(self, inds_on, inds_off):
         """
@@ -595,7 +620,7 @@ class CalOnOff1111(CheckPCal, CalOnOffSav):
         axs[1].set_title('pcals smoothed, polar 1')
         fig.suptitle(os.path.basename(self.out_name_base))
         fig.tight_layout()
-        fig.savefig(self.out_name_base + '-pcals-merged.png')
+        fig.savefig(self.out_name_base + '-pcals-smoothed.png')
 
     def set_para_pcals(self, cal_dis_lim=2):
         self.delat_t_lim = cal_dis_lim
