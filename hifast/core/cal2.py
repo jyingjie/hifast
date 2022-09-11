@@ -727,8 +727,7 @@ class FASTRawCut(FastRawData):
         super()._get_freq(center_corr=None)
 
     def gen_out_name_base(self, outdir):
-        fname_add = os.path.basename(os.path.dirname(os.path.abspath(self.fname_part)))
-        self.out_name_base = os.path.join(outdir, f"{os.path.basename(self.fname_part)[:-1]}-{fname_add}")
+        self.out_name_base = os.path.join(outdir, f"{os.path.basename(self.fname_part)}")
 
     def gen_new_freq_axis(self, ):
         is_ = (self.freq >= self.frange[0]) & (self.freq <= self.frange[1])
@@ -780,7 +779,7 @@ class FASTRawCut(FastRawData):
             res[key] = np.hstack([d[key] for d in args])
         return res
 
-    def __call__(self, outdir='./', step=1, header=None, sep_save=False):
+    def __call__(self, outdir='./', step=1, header=None, sep_save=False, h5_compression='lzf'):
         """
 
         Parameters
@@ -794,7 +793,8 @@ class FASTRawCut(FastRawData):
         sep_save : bool
             if True, save file every step.
         """
-        #
+        if h5_compression == 'none':
+            h5_compression = None
         self.gen_out_name_base(outdir)
         self.gen_new_freq_axis()
 
@@ -815,13 +815,13 @@ class FASTRawCut(FastRawData):
             # large data
             T = dict2[stype]
             if sep_save:
-                outname = self.out_name_base + f"-P_{i:04d}_{i+1:04d}.hdf5"
+                outname = self.out_name_base + f"{i+1:04d}.hdf5"
                 fout_sep = h5py_write(outname)
                 write_header(fout_sep, header)
                 g_sep = fout_sep.create_group('1') # table
-                for key in res1.keys():
+                for key in dict1.keys():
                     g_sep[key] = dict1[key]
-                g_sep[stype] = T
+                g_sep.create_dataset(stype, data=T, chunks=True, compression=h5_compression)
                 # NAXIS1=self.NCHAN_new*self.2 ?
                 self.write_fits_header(g_sep,
                                        NAXIS2=len(inds),
@@ -835,14 +835,14 @@ class FASTRawCut(FastRawData):
             else:
                 # open file
                 if i == 0:
-                    outname = self.out_name_base + f"-PA_0001.hdf5"
+                    outname = self.out_name_base + f"0001.hdf5"
                     fout = h5py_write(outname)
                     fout.create_group('1')
                     g = fout['1']
                     # prepare writing spec
                     d_shape = list(T.shape)
                     d_shape[1] = len(self.inds)
-                    g.create_dataset(stype, shape=d_shape, dtype=T.dtype, chunks=True)
+                    g.create_dataset(stype, shape=d_shape, dtype=T.dtype, chunks=True, compression=h5_compression)
                 g[stype][:, b:e, :] = T
                 fout.flush()
                 dict1_list.append(dict1)

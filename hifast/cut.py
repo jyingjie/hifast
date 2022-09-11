@@ -33,8 +33,12 @@ parser.add_argument('--stop', type=int,
                    help='chunk number of stop')
 parser.add_argument('--sep_save', type=bool_fun, choices=[True, False], default='False',
                    help='every step save to a file')
+parser.add_argument('--h5_compression', default='lzf',
+                   help='`compression` in `h5py create_dataset`; `none`, `lzf`, `gzip`, or a number in range(10)')
 
 # Cell
+%%time
+# export
 if __name__ == '__main__':
     args_ = parser.parse_args()
     print('#'*35+'Args'+'#'*35)
@@ -42,6 +46,13 @@ if __name__ == '__main__':
     print('#'*35+'####'+'#'*35)
 
     args = args_
+
+    # check h5_compression
+    try:
+        args.h5_compression = int(args.h5_compression)
+    except ValueError:
+        pass
+
     #record history
     header = rec_his(args=json.dumps(args.__dict__))
 
@@ -87,4 +98,6 @@ if __name__ == '__main__':
     Fd(outdir=args.outdir,
        step=args.step,
        header=header,
-       sep_save=args.sep_save)
+       sep_save=args.sep_save,
+       h5_compression=args.h5_compression,
+      )
