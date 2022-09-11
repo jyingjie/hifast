@@ -3,7 +3,8 @@
 __all__ = ['formatter_class', 'os', 'sys', 'c', 're', 'copy', 'ArgumentParser', 'argparse', 'sub_patten', 'bool_fun',
            'add_common_argument', 'hide_paras', 'del_paras_in_string', 'rec_his', 'MjdChanPolar_to_PolarMjdChan',
            'PolarMjdChan_to_MjdChanPolar', 'save_dict_hdf5', 'gen_carta_group', 'save_specs_hdf5', 'load_hdf5_to_dict',
-           'load_hdf5_to_dict_old', 'get_project', 'get_date_from_path', 'get_nB', 'replace_nB', 'Path_IO', 'BaseIO']
+           'load_hdf5_to_dict_old', 'get_project', 'get_date_from_path', 'get_nB', 'replace_nB', 'Path_IO', 'BaseIO',
+           'HFDataT', 'HFGroup', 'H5HDU', 'H5FitsRead']
 
 # Cell
 import os
@@ -173,7 +174,9 @@ def save_dict_hdf5(fname, dict_in, mode='w', spec2float32=False):
     f.close()
 
 
-def gen_carta_group(f, data_shape, wcs_data_name, axis1=None, axis2=None):
+def gen_carta_group(f, data_shape, wcs_data_name, axis1=None, axis2=None,
+                    wcs_data_group='S',
+                    image_group='0'):
     import h5py
     import numpy as np
     wcs = {'SIMPLE': 1,
@@ -215,12 +218,12 @@ def gen_carta_group(f, data_shape, wcs_data_name, axis1=None, axis2=None):
         # print(wcs)
     except:
         pass
-    f.create_group('0')
-    f['0']['DATA'] = h5py.SoftLink(f'/S/{wcs_data_name}')
+    f.create_group(image_group)
+    f[image_group]['DATA'] = h5py.SoftLink(f'/{wcs_data_group}/{wcs_data_name}')
     # for key in ['MipMaps', 'PermutedData', 'Statistics', 'SwizzledData']:
     #     f['0'].create_group(key)
     for key in wcs.keys():
-        f['0'].attrs[key] = wcs[key]
+        f[image_group].attrs[key] = wcs[key]
 
 
 def save_specs_hdf5(fname, dict_in, mode='w', spec2float32=True, wcs_data_name=None):
@@ -639,3 +642,114 @@ class BaseIO(Path_IO):
         # save to hdf5 file
         if save:
             self.save()
+
+# Cell
+class HFDataT:
+    """
+    h5py dataset with Ta(flux, DATA...) transpose
+    """
+    def __init__(self, dataset):
+        assert dataset.ndim == 3
+        self.dataset = dataset
+        self.ndim = dataset.ndim
+        self.size = dataset.size
+        self.dtype = dataset.dtype
+
+    @property
+    def shape(self):
+        shape = self.dataset.shape
+        return (shape[1], shape[2], shape[0])
+
+    def __len__(self,):
+        return len(self.dataset)
+
+    def __repr__(self,):
+        return f"shape {self.shape}, type {self.dtype}"
+
+    def __getitem__(self, arg_in):
+        """"""
+        arg = [slice(None, None, None),]*3
+        if isinstance(arg_in, int) or isinstance(arg_in, slice):
+            arg[0] = arg_in
+        elif isinstance(arg_in, type(Ellipsis)):
+            pass
+        elif isinstance(arg_in, tuple):
+            ell_ind = None
+            for i, a in enumerate(arg):
+                if isinstance(a, type(Ellipsis)):
+                    ell_ind = i
+                    break
+            if ell_ind is not None:
+                ind = ell_ind
+                arg[:ind] = arg_in[:ind]
+                arg[ind-len(arg_in):] = arg_in[ind-len(arg_in):]
+            else:
+                arg[:len(arg_in)] = arg_in
+        else:
+            raise(ValueError(f'slic err {arg_in}'))
+
+
+        arg_T = [slice(None, None, None),]*3
+        for i in range(len(arg)):
+            if isinstance(arg[i], int):
+                arg[i] = slice(arg[i], arg[i]+1)
+                arg_T[i] = 0
+        arg = (arg[2], arg[0], arg[1])
+        arg_T = tuple(arg_T)
+
+        res = self.dataset.__getitem__(arg)
+        res = res.transpose((1, 2, 0))[arg_T]
+
+        return res
+
+class HFGroup:
+
+    def __init__(self, group, kT):
+        """
+        group: input h5py group
+        kT: key need transpose
+        """
+        self.group = group
+        self._key_trans_ = kT
+        self.keys = group.keys
+
+    def __getitem__(self, arg):
+        r = self.group.__getitem__(arg)
+        if arg == self._key_trans_:
+            r = HFDataT(r)
+        return r
+
+    def __repr__(self,):
+        return f"keys: {self.group.keys()}"
+
+# Cell
+from dataclasses import dataclass
+@dataclass
+class H5HDU:
+    name: str
+    data: HFGroup
+    header: dict
+
+class H5FitsRead:
+
+    def __init__(self, fpath, kT='DATA'):
+        import h5py
+        f = h5py.File(fpath, 'r')
+        self.f = f
+        self.close = f.close
+
+        self.hdus = {}
+        for name in ['0', '1']:
+            try:
+                self.hdus[int(name)] = self._read_hdu(name, kT)
+            except:
+                pass
+
+    def _read_hdu(self, hdu_name, kT):
+        return H5HDU(hdu_name,
+                     HFGroup(self.f[hdu_name], kT),
+                     dict(self.f[hdu_name].attrs.items())
+                     )
+
+    def __getitem__(self, arg):
+        return self.hdus[arg]

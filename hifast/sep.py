@@ -37,11 +37,11 @@ parser.add_argument('--dfactor',
                     help='Down-sample the spectra freq resolution; str "W" or a int number')
 parser.add_argument('--step', type=int, default=1,
                    help='number of files processed every time, default 1')
-parser.add_argument('--start', type=int,
+parser.add_argument('--start', type=int, default=1,
                    help='chunk number of start')
 parser.add_argument('--stop', type=int,
                    help='chunk number of stop')
-parser.add_argument('--sep_save', action='store_true',
+parser.add_argument('--sep_save', type=bool_fun, choices=[True, False], default='False',
                    help='every step save to a file')
 
 group = parser.add_argument_group(f'*Power and Temperature of Cal smoothing\n{sep_line}')
@@ -112,7 +112,7 @@ parser.add_argument('--not_cali', type=bool_fun, choices=[True, False], default=
 if __name__ == '__main__':
     args_ = parser.parse_args()
     print('#'*35+'Args'+'#'*35)
-    parser.format_values()
+    print(parser.format_values())
     print('#'*35+'####'+'#'*35)
 
     args = args_
@@ -136,6 +136,7 @@ if __name__ == '__main__':
     ## check out file
     fname_add = date
     fname_part = re.sub('[0-9]{4}\.fits\Z', '', args.fpath)
+    fname_part = re.sub('[0-9]{4}\.hdf5\Z', '', fname_part)
     out_name_base = os.path.join(args.outdir, f"{os.path.basename(fname_part)[:-1]}-{fname_add}")
     fileout =  out_name_base + f"-specs_T.hdf5"
     fileout_sep = glob(out_name_base + rf"-specs_T_[0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9].hdf5")
@@ -157,8 +158,6 @@ if __name__ == '__main__':
     # chunk files
     if args.start is None:
         args.start = 1
-    if args.stop is None:
-        args.stop = len(glob(fname_part+'*.fits'))
 
     # cal smooth
     smooth = args.smooth #"mean", "gaussian","poly"
@@ -204,7 +203,7 @@ if __name__ == '__main__':
             'med_filter_size_cal',
             ]
     paras = {key:getattr(args, key) for key in keys}
-    paras['fname_part'] = fname_part
+    paras['fname_part'] = args.fpath # use full
     paras['verbose'] = True
     paras['smooth'] = smooth
     paras['s_para'] = s_para
