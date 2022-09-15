@@ -42,10 +42,17 @@ def get_radec(file_spec, mjd, nB_radec=1, file_radec = None):
         # ra dec file
         file_radec = file_spec.rsplit('specs_T', 1)[0] + 'specs_T-radec.hdf5'
         #file_radec = re.findall(r'.*-specs_T', file_radec)+'-radec.hdf5'
+        file_radec_ori = file_radec
+        # default is in beam `nB_radec`
         file_radec = replace_nB(file_radec, nB_radec)
-    if not os.path.exists(file_radec):
-        raise(OSError("can not find the RA DEC file, please generate it by using 'python -m hifast.radec'"))
-    f = h5py.File(file_radec, 'r')
+
+    if os.path.exists(file_radec):
+        f = h5py.File(file_radec, 'r')
+    elif os.path.exists(file_radec_ori):
+        f = h5py.File(file_radec_ori, 'r')
+    else:
+        raise(OSError(f"can not find the RA DEC file \n{file_radec}\n, please generate it by using 'python -m hifast.radec'"))
+
     # check if mjd match
     mjd_match = False if len(mjd) != len(
         f['S']['mjd'][:]) else (mjd == f['S']['mjd'][:]).all()
