@@ -218,7 +218,7 @@ class IO(BaseIO):
                 return None
         elif args.reg_from == 'shared':
             from glob import glob
-            fpath_regs = glob(os.path.dirname + '*.reg')
+            fpath_regs = glob(os.path.dirname(args.fpath) + '/*.reg')
             length = len(fpath_regs)
             if length == 1:
                 fpath_reg = fpath_regs[0]
@@ -647,3 +647,4 @@ if __name__ == '__main__':
     io = IO(args_, HistoryAdd=HistoryAdd)
     io()
     
+
