@@ -779,7 +779,7 @@ class FASTRawCut(FastRawData):
             res[key] = np.hstack([d[key] for d in args])
         return res
 
-    def __call__(self, outdir='./', step=1, header=None, sep_save=False, h5_compression='lzf'):
+    def __call__(self, outdir='./', step=1, header=None, sep_save=False, h5_compression='none'):
         """
 
         Parameters

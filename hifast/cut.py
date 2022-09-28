@@ -33,12 +33,11 @@ parser.add_argument('--stop', type=int,
                    help='chunk number of stop')
 parser.add_argument('--sep_save', type=bool_fun, choices=[True, False], default='False',
                    help='every step save to a file')
-parser.add_argument('--h5_compression', default='lzf',
-                   help='`compression` in `h5py create_dataset`; `none`, `lzf`, `gzip`, or a number in range(10)')
+parser.add_argument('--h5_compression', default='none',
+                   help='`compression` in `h5py create_dataset`; `none`, `lzf`, `gzip`, or a number in range(10). '
+                         'Note: compressed file may not be opened by carta.')
 
 # Cell
-%%time
-# export
 if __name__ == '__main__':
     args_ = parser.parse_args()
     print('#'*35+'Args'+'#'*35)
@@ -74,10 +73,10 @@ if __name__ == '__main__':
     ## check out file
     fname_add = date
     fname_part = re.sub('[0-9]{4}\.fits\Z', '', args.fpath)
-    out_name_base = os.path.join(args.outdir, f"{os.path.basename(fname_part)[:-1]}-{fname_add}")
+    out_name_base = os.path.join(args.outdir, f"{os.path.basename(fname_part)}")
 
-    fileout = out_name_base + rf"-PA_0001.hdf5"
-    fileout_sep = glob(out_name_base + rf"-P_[0-9][0-9][0-9][0-9].hdf5")
+    fileout = out_name_base + rf"0001.hdf5"
+    fileout_sep = glob(out_name_base + rf"[0-9][0-9][0-9][0-9].hdf5")
 
 
     if os.path.exists(fileout) or len(fileout_sep)>0:
