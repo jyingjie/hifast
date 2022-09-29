@@ -79,7 +79,7 @@ group.add_argument('--method_merge', choices=['median', 'mean'], default='mean',
                     help='method used to merge cal along time axis')
 group.add_argument('--merge_cal_pre_process', choices=['scale', 'none'], default='scale',
                     help="if `scale`, scale the pcals to similar amplitude before merge")
-group.add_argument('--calc_diff_method', choices=['div', 'sub'], default='div',
+group.add_argument('--calc_diff_method', choices=['div'], default='div',
                     help="used if '--merge_pcals' is not set as 'not'")
 group.add_argument('--squeeze_diff_freq', choices=['median', 'mean',], default='mean',
                     help="method applied to the difference of pcals with the 'merged-pcals' along freq to get relative amplitude")
