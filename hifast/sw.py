@@ -271,9 +271,12 @@ class IO(BaseIO):
         rms_frange = args.rms_frange
         if (rms_frange is None) or (rms_frange[1] - rms_frange[0] <= 0):
             from .ripple.markRFI import get_rms_frange
-            is_lf = np.all(is_rfi, axis = 1)
-            is_excluded = np.any(is_rfi[~is_lf], axis = 0)
-            data = self.s2p[~is_lf]
+            if is_rfi is not None:
+                is_lf = np.all(is_rfi, axis = 1)
+                is_excluded = np.any(is_rfi[~is_lf], axis = 0)
+                data = self.s2p[~is_lf]
+            else:
+                data = self.s2p
             spec = np.nanmean(np.nanmean(data, axis = 0),axis = -1)
             self.args.rms_frange = get_rms_frange(spec,self.freq,rms_step=5,is_excluded = is_excluded)
         else:
@@ -328,7 +331,7 @@ class IO(BaseIO):
                 fft_args['sw_periods'].insert(-1, '2mhz')
             else:
                 print('beam number !=6, remove 2mhz in sw_periods if it exists')
-
+        
         # use the first factor for noise off or not defined
         for key in ['amp_thr_mean_factor', 'amp_thr_solo_factor']:
             fft_args[key] = getattr(args, key)[0]
@@ -338,7 +341,7 @@ class IO(BaseIO):
             print("# noise off")
             fft_args['is_excluded_mean'] = np.all(is_rfi[~is_on], axis=1) if is_rfi is not None else None
             ret[~is_on] = sw_fft.fit_sw_fft(s1p[~is_on], self.freq, args.nproc, **fft_args)
-
+            
             print("# noise on")
             for key in ['amp_thr_mean_factor', 'amp_thr_solo_factor']:
                 fft_args[key] = getattr(args, key)[1]

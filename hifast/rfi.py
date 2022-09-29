@@ -534,8 +534,10 @@ class IO(BaseIO):
                 is_19rfi = self.load_19rfi()
             else:
                 raise FileNotFoundError(f"Can't find {self._19name}. Did it run hifast.rfi_multi?")
-
-        is_rfi = np.full(self.s2p.shape[:2], False, dtype=bool)
+        
+        is_rfi = np.isnan(self.s2p_mean)
+        
+#         is_rfi = np.full(self.s2p.shape[:2], False, dtype=bool)
         
         # manual regions
         is_rfi_tmp = self.get_from_regions()
