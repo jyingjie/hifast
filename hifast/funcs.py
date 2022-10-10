@@ -59,7 +59,7 @@ class HFSpec:
         else:
             for key in self._DATA_cand:
                 if key in keys_:
-                    self._DATA = 'Ta'
+                    self._DATA = key
                     break
         if self._DATA is None:
             raise(KeyError('can not find spec data'))
