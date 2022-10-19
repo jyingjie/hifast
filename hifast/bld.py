@@ -150,7 +150,7 @@ class IO(BaseIO):
             is_rfi = self.fs['is_rfi'][:]
             s2p[is_rfi,:] = np.nan
             
-        if 'is_excluded' in fs.keys():
+        if 'is_excluded' in self.fs.keys():
             s2p[self.is_excluded] = np.nan
 
         from .ripple.sw_fft import minmed
