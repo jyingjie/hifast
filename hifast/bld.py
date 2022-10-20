@@ -149,7 +149,7 @@ class IO(BaseIO):
         if 'is_rfi' in self.fs.keys():
             is_rfi = self.fs['is_rfi'][:]
             s2p[is_rfi,:] = np.nan
-            
+
         if 'is_excluded' in self.fs.keys():
             s2p[self.is_excluded] = np.nan
 
@@ -168,7 +168,7 @@ class IO(BaseIO):
         s2p = self.s2p[:]
         # is_excluded
         self._load_is_excluded()
-        
+
         # fit baseline:
         if 'Med' in args.method:
             print(f'Use {args.method} to substract baseline. Remember another linear substraction.')

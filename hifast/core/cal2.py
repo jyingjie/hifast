@@ -76,7 +76,6 @@ def binned_statistic_e(x, values, axis=-1, **kwargs):
     res = res_tuple(res_stat, *res[1:])
     return res
 
-
 # Internal Cell
 def test_binned_statistic_e():
     x = np.random.rand(1000)
@@ -112,8 +111,6 @@ def split_continues(bools):
     ind_e = np.append(ind_inv, len(bools))-1
 
     return zip(bools[ind_b], ind_b, ind_e)
-
-
 
 # Internal Cell
 def test_split_continues():
@@ -237,7 +234,6 @@ class CheckPCal(CalOnOff):
         self.is_bad_fbins = is_bad_fbins
         self.ind_in_bins = ind_in_bins
         self.is_aband_whole = is_aband_whole
-
 
 # Cell
 class CalOnOffSav(CalOnOff):
@@ -621,8 +617,6 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
             c_off /= (self.pcals_merged_s + amp_interp_off[:, None, :])
 
         return c_on, c_off
-
-
 
 # Cell
 class CalOnOff1111(CheckPCal, CalOnOffSav):
