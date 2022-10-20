@@ -27,6 +27,7 @@ from ..utils.tcal import read_tcal
 from ..utils.misc import smooth_axis1_d3, down_sample, median_filter_axis1_d3
 from ..utils.misc import smooth1d
 from ..utils.io import save_specs_hdf5, MjdChanPolar_to_PolarMjdChan
+from ..utils.io import H5FitsRead
 
 # Cell
 class FastRawData(object):
@@ -70,7 +71,15 @@ class FastRawData(object):
             print('files:')
             for filename in self.filenames:
                 print(filename)
-        self.hduls = [fits.open(filename) for filename in self.filenames]
+        if self.filenames[0].endswith('.fits'):
+            self.hduls = [fits.open(filename) for filename in self.filenames]
+            self.ftype = 'fits'
+        elif self.filenames[0].endswith('.hdf5'):
+            self.hduls = [H5FitsRead(filename) for filename in self.filenames]
+            self.ftype = 'hdf5'
+        else:
+            raise(ValueError('File not support'))
+
         self.hd0s = [hdul[0].header for hdul in self.hduls]
         self.hd1s = [hdul[1].header for hdul in self.hduls]
         self.lens= [header['NAXIS2'] for header in self.hd1s]
@@ -145,9 +154,15 @@ class FastRawData(object):
         for j in ifile_uni:
             try:
                 # test if file is opened
-                self.hduls[j][1].data.shape
+                if self.ftype == 'fits':
+                    self.hduls[j][1].data.shape
+                elif self.ftype == 'hdf5':
+                    self.hduls[j][1].data[field].shape
             except:
-                self.hduls[j] = fits.open(self.filenames[j], memmap=True, lazy_load_hdus=True)
+                if self.ftype == 'fits':
+                    self.hduls[j] = fits.open(self.filenames[j], memmap=True, lazy_load_hdus=True)
+                elif self.ftype == 'hdf5':
+                    self.hduls[j] = H5FitsRead(self.filenames[j])
                 j_list += [j,]
         if field == 'DATA':
             if self.frange is not None:
@@ -167,7 +182,11 @@ class FastRawData(object):
             data = np.hstack([self.hduls[i][1].data[field][ii] for i, ii in zip(ifile_uni,ind_ifile_list)])
         #check if the length in the header is correct
         for i_tmp in ifile_uni:
-            if not self.lens[i_tmp] == self.hduls[i_tmp][1].data.shape[0]:
+            if self.ftype == 'fits':
+                  leng = self.hduls[i_tmp][1].data.shape[0]
+            elif self.ftype == 'hdf5':
+                  leng = self.hduls[i_tmp][1].data[field].shape[0]
+            if not self.lens[i_tmp] == leng:
                 raise(ValueError(f"length in the header is not equal to the data shape:", self.filenames[i_tmp]))
         [self.hduls[j].close() for j in j_list]
         if close_file:
@@ -287,20 +306,30 @@ class FastRawSpec(FastRawData):
                  smooth='gaussian', s_para={'s_sigma':5},
                  noise_mode=None, noise_date='auto'):
         """
-        fname_part: str; one of chunk file name
+        fname_part: str; one of chunk file name; '*.hdf5' or '*.fits'
         start: int; chunk file start
         stop: int; chunk file stop
         frange: frequency range
         dfactor: 'W' or int; if 'W', downsampling 'N' or 'F' to 'W' band; if int, downsampling the spectra with a factor of dfactor
         """
         # generate fits filename list
-        fname_part = re.sub('[0-9]{4}\.fits\Z', '', fname_part)
-        if stop is None:
-            stop = len(glob(fname_part+'*.fits'))
-        self.fname_part = fname_part
-        filenames = [fname_part+'%04d.fits'%i for i in range(start,stop+1)]
+        if fname_part.endswith('.fits'):
+            ftype = 'fits'
+        elif fname_part.endswith('.hdf5'):
+            ftype = 'hdf5'
+        else:
+            raise(ValueError('File not support'))
+
+        fname_part = re.sub('[0-9]{4}\.%s\Z' % ftype, '', fname_part)
+        if stop is not None:
+            if stop < 1:
+                raise(ValueError('input stop < 1'))
+        else:
+            stop = len(glob(fname_part + f'*.{ftype}'))
+        filenames = [f"{fname_part}{i:04d}.{ftype}" for i in range(start,stop+1)]
         if len(filenames) == 0:
             raise(OSError(f"can not find file, please check fname_part:{fname_part}"))
+        self.fname_part = fname_part
         super().__init__(filenames, frange=frange, dfactor=dfactor, med_filter_size=med_filter_size, verbose=verbose)
 
         self.nB= int(re.findall(r'-M[0-1][0-9]', fname_part)[-1][2:])
@@ -313,7 +342,7 @@ class FastRawSpec(FastRawData):
         #freq += 0.000476837158203125/2 # using center frequency
         super()._get_freq(center_corr = 0.000476837158203125/2)
 
-    def _get_smoothed(self, power, freq=None):
+    def _get_smoothed(self, power, freq=None, use_ndimage=False):
         """
         power: ndim 3
         freq: if is None, use self.freq_use
@@ -325,7 +354,11 @@ class FastRawSpec(FastRawData):
         power = power.astype('float64')
         if smooth=='gaussian':
             sigma = s_para['s_sigma']/(np.nanmax(freq) - np.nanmin(freq))*len(freq)
-            s_power = smooth_axis1_d3(power, method=smooth, sigma=sigma)
+            if use_ndimage:
+                from scipy import ndimage
+                s_power = ndimage.gaussian_filter1d(power, sigma=sigma, axis=1)
+            else:
+                s_power = smooth_axis1_d3(power, method=smooth, sigma=sigma)
         elif smooth=='poly':
             s_power = smooth_axis1_d3(power, method=smooth, x=freq, deg= s_para['s_deg'])
         else:
@@ -350,6 +383,7 @@ class FastRawSpec(FastRawData):
         tc= self._get_smoothed(tc_.T[None,:,:], freq=tc_freq)
         tc_inter = interp.interp1d(tc_freq, tc, axis=1, kind='linear', fill_value ='extrapolate')(self.freq_use)
         return tc_inter
+
     def gen_out_name_base(self, outdir):
         fname_add = os.path.basename(os.path.dirname(os.path.abspath(self.fname_part)))
         self.out_name_base = os.path.join(outdir, f"{os.path.basename(self.fname_part)[:-1]}-{fname_add}")
@@ -561,7 +595,7 @@ class CalOnOff(FastRawSpec):
         count_off = p_off.astype('float64') / p_cal_s[np.where(inds_in_tcal_off[:,None] - uni[None,:] ==0, )[1]]
         return count_on, count_off, p_cal_s, inds_ton[uni]
 
-    def __call__(self, outdir='./', step=None, header=None, sep_save=False, save_p_cal=False, cali=True):
+    def __call__(self, outdir='./', step=None, header=None, sep_save=False, save_pcals=False, cali=True):
         """
         get T, mjd etc, and save in hdf5 file
 
@@ -604,7 +638,7 @@ class CalOnOff(FastRawSpec):
             else:
                 count_tcal_res = [self.get_field(inds_on, 'DATA',), self.get_field(inds_off, 'DATA', close_file=True)]
             T = np.vstack(count_tcal_res[:2])
-            if save_p_cal:
+            if save_pcals:
                 p_cal_s_list += [count_tcal_res[2]]
                 inds_ton_list += [count_tcal_res[3]]
             else:
@@ -649,7 +683,7 @@ class CalOnOff(FastRawSpec):
             res['Header'] = header
             save_specs_hdf5(outname, res, wcs_data_name='Ta')
             print(f"Saved to {outname}")
-        if save_p_cal:
+        if save_pcals:
             p_cal_s_res = {}
             inds_ton = np.vstack(inds_ton_list)
             _, ind_uni = np.unique(inds_ton[:,0],return_index=True)
