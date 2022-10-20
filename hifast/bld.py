@@ -149,6 +149,9 @@ class IO(BaseIO):
         if 'is_rfi' in self.fs.keys():
             is_rfi = self.fs['is_rfi'][:]
             s2p[is_rfi,:] = np.nan
+            
+        if 'is_excluded' in self.fs.keys():
+            s2p[self.is_excluded] = np.nan
 
         from .ripple.sw_fft import minmed
         kwargs = {}
@@ -163,13 +166,14 @@ class IO(BaseIO):
 
         # gen self.s2p_out
         s2p = self.s2p[:]
+        # is_excluded
+        self._load_is_excluded()
+        
         # fit baseline:
         if 'Med' in args.method:
             print(f'Use {args.method} to substract baseline. Remember another linear substraction.')
             s2p = self.med_fit_baseline()
         elif args.method is not None and args.method != 'none':
-            # is_excluded
-            self._load_is_excluded()
             print('fit and substract baseline')
             s2p = self.fit_baseline(s2p, self.freq, self.mjd, args, getattr(self, 'is_excluded', None))
         else:

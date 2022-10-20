@@ -189,20 +189,23 @@ def mask_sf(data,freq,frange = None,rms_frange = None,ext_times=1,mask_rms_times
     start,end = get_startend(is_timerfi,ext_sec = 1)
     from ..utils.misc import smooth1d
     for s,e in zip(start,end):
-        mspec = np.mean(data[s:e,:],axis = 0)
+        mspec = np.nanmean(data[s:e,:],axis = 0)
         sm = smooth1d(mspec[f_use],method='gaussian',sigma=10)
         MAX = max(sm)
-        fmax = freq[f_use][np.argmax(sm)]
+        fmax = freq[f_use][np.nanargmax(sm)]
         f50 = freq[f_use][sm > MAX / 2]
-        w50 = f50[-1] - f50[0]
-        rms_thresh = rms(mspec,freq,rms_frange) * mask_rms_times
+        if len(f50) > 1:
+            w50 = f50[-1] - f50[0]
+            rms_thresh = rms(mspec,freq,rms_frange) * mask_rms_times
 
-        mask_frange = find_edge_2sides(mspec,freq,peak_position=fmax-w50/2,step=w50,
-                 rms_thresh=rms_thresh,Print=False,ext_times=ext_times,small_rfi_times=0)
-        print(f"tn = {[s,e]} mask frange:",mask_frange)
+            mask_frange = find_edge_2sides(mspec,freq,peak_position=fmax-w50/2,step=w50,
+                     rms_thresh=rms_thresh,Print=False,ext_times=ext_times,small_rfi_times=0)
+            print(f"tn = {[s,e]} mask frange:",mask_frange)
 
-        mask_use =  (freq>mask_frange[0])&(freq<mask_frange[1])
-        ret[s:e,mask_use] = True
+            mask_use =  (freq>mask_frange[0])&(freq<mask_frange[1])
+            ret[s:e,mask_use] = True
+        else:
+            ret[s:e,:] = True
 
     ext_add = kwargs['ext_add']
     if ext_add is not None:
@@ -339,3 +342,4 @@ def mask_freq_rfi(data,freq,rtype = 'long-time',**kwargs):
 
     print("Finish")
     return ret
+
