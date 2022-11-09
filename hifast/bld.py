@@ -68,9 +68,9 @@ group.add_argument('--exclude_add', '--exclude_type', default='none', choices=['
 
 # Exclude files
 group = parser.add_argument_group(f'*Exclude known source catalogs\n{sep_line}')
-# group.add_argument('--continumm_file', 
+# group.add_argument('--continumm_file',
 #                    help='txt catalog with #ra[deg], dec[deg], R[arcmin], freq_min[MHz], freq_max[MHz]')
-group.add_argument('--HI_file', 
+group.add_argument('--HI_file',
                    help='txt catalog with #ra[deg], dec[deg], R[arcmin], freq_min[MHz], freq_max[MHz]')
 group.add_argument('--frame', choices=['BARYCENT', 'HELIOCEN', 'LSRK', 'LSRD'], default='LSRK',
                    help='Velocity Rest Frames, HELIOCEN or LSRK')
@@ -119,7 +119,7 @@ class IO(BaseIO):
             return sub_baseline(mjd, s2p.transpose((1, 0, 2)), subtract=True, **fit_kwargs).transpose((1, 0, 2))
         else:
             return sub_baseline(freq, s2p, subtract=True, **fit_kwargs)
-        
+
     def _load_is_rfi(self,):
         fs = self.fs
         if 'is_rfi' in fs.keys():
@@ -137,15 +137,15 @@ class IO(BaseIO):
                 is_excluded = is_excluded[:, self.is_use_freq]
 
             self.is_excluded = is_excluded
-        
+
     def _load_sources(self):
         args = self.args
         fpath = args.HI_file
         if fpath is not None:
-            from hifast.core.regions import mask_srcs
+            from .core.regions import mask_srcs
             is_excluded = self.is_excluded if hasattr(self,'is_excluded') else np.zeros(self.s2p.shape[:2], dtype = bool)
             print(f"loading excluded files from {fpath}")
-            self.is_excluded = mask_srcs(fpath, is_excluded, self.ra, self.dec, self.freq, 
+            self.is_excluded = mask_srcs(fpath, is_excluded, self.ra, self.dec, self.freq,
                                          self.mjd, inplace=True, rest_frame=args.frame)
 
     def med_fit_baseline(self,):
@@ -197,18 +197,17 @@ class IO(BaseIO):
         else:
             print('no baseline method assigned, skip. Make sure the input spectra have been baselined.')
         self.s2p_out = s2p
-        
+
     def __call__(self, save=True):
         self.gen_s2p_out()
         self.gen_dict_out()
 
         if hasattr(self,'is_excluded'):
             self.dict_out['is_excluded'] = self.is_excluded # update
-        
+
         # save to hdf5 file
         if save:
             self.save()
-
 
 # Internal Cell
 def check_backend():
