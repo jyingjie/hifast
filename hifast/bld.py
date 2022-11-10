@@ -68,8 +68,6 @@ group.add_argument('--exclude_add', '--exclude_type', default='none', choices=['
 
 # Exclude files
 group = parser.add_argument_group(f'*Exclude known source catalogs\n{sep_line}')
-# group.add_argument('--continumm_file', 
-#                    help='txt catalog with #ra[deg], dec[deg], R[arcmin], freq_min[MHz], freq_max[MHz]')
 group.add_argument('--HI_file', 
                    help='txt catalog with #ra[deg], dec[deg], R[arcmin], freq_min[MHz], freq_max[MHz]')
 group.add_argument('--frame', choices=['BARYCENT', 'HELIOCEN', 'LSRK', 'LSRD'], default='LSRK',
@@ -137,6 +135,7 @@ class IO(BaseIO):
                 is_excluded = is_excluded[:, self.is_use_freq]
 
             self.is_excluded = is_excluded
+            
         
     def _load_sources(self):
         args = self.args
@@ -148,28 +147,6 @@ class IO(BaseIO):
             self.is_excluded = mask_srcs(fpath, is_excluded, self.ra, self.dec, self.freq, 
                                          self.mjd, inplace=True, rest_frame=args.frame)
 
-    def med_fit_baseline(self,):
-        args = self.args
-        # gen self.s2p_out
-        s2p = self.s2p[:]
-        from copy import deepcopy
-        s2p_ori = deepcopy(s2p)
-        import numpy as np
-        if 'is_rfi' in self.fs.keys():
-            is_rfi = self.fs['is_rfi'][:]
-            s2p[is_rfi,:] = np.nan
-
-        if 'is_excluded' in self.fs.keys():
-            s2p[self.is_excluded] = np.nan
-
-        from .ripple.sw_fft import minmed
-        kwargs = {}
-        keys = ['nsection', 'nspec', 'npart', 'method']
-        for key in keys:
-            kwargs[key] = getattr(args, key)
-        s2p = s2p_ori - minmed(s2p, **kwargs)
-        return s2p
-
     def gen_s2p_out(self,):
         args = self.args
 
@@ -177,7 +154,6 @@ class IO(BaseIO):
         s2p = self.s2p[:]
         # is_excluded
         self._load_is_excluded()
-
         self._load_sources()
 
         # fit baseline:
