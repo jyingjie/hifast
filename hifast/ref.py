@@ -24,76 +24,38 @@ parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default
 # baseline fitting
 group = parser.add_argument_group(f'*BaseLine (set --method as none to skip this) \n{sep_line}')
 
-rew_type = ['asym1', 'asym2', 'asym3', 'sym1',]
 method = ['none']
-method += ['PLS-'+r for r in rew_type]
-method += ['poly-'+r for r in rew_type]
-method += ['Gauss-'+r for r in rew_type]
-method += ['masPLS-'+r for r in rew_type]
-method += ['asPLS',]
-method += ['original']
+method += ['MedMed', 'MinMed']
 
-group.add_argument('--method', default='arPLS', choices=method,
+group.add_argument('--method', default='MedMed', choices=method,
                    help='method used to fit baseline, if set as none, skip this')
-group.add_argument('--nproc', '-n', type=int, default=1,
-                   help='number of process used in fitting baseline')
-group = parser.add_argument_group('preprocessing before baseline fitting')
-group.add_argument('-T', '--trans', type=bool_fun, choices=[True, False], default='False',
-                   help='if set True, fitting the baseline along time instead of frequency.')
-group.add_argument('--njoin', type=int, default=0,
-                   help='join spectra (average) to fit same baseline')
-group.add_argument('--s_method_t', default='none', choices=['none', 'gaussian', 'boxcar', 'median'],
-                   help='method used to smooth every channel along time axis')
-group.add_argument('--s_sigma_t', type=int, default=5,
-                   help='used with --s_method_t')
-group.add_argument('--s_method_freq', default='none', choices=['none', 'median', 'gaussian', 'boxcar', 'PLS', 'fft'],
-                   help='method used to smooth every spectrum along frequency axis')
-group.add_argument('--s_sigma_freq', type=float, default=5,
-                   help='used with --s_method_freq')
-group.add_argument('--average_every_freq', type=int, default=0,
-                   help='')
-group = parser.add_argument_group('fit and subtract the baseline')
-group.add_argument('--lam', type=float, default=1.0e8,
-                   help='baseline fit parameters')
-group.add_argument('--deg', type=int, default=2,
-                   help='baseline fit parameters')
-group.add_argument('--offset', type=float, default=2,
-                   help='baseline fit parameters')
-group.add_argument('--ratio', type=float, default=0.01,
-                   help='baseline fit parameters')
-group.add_argument('--niter', type=int, default=100,
-                   help='baseline fit parameters')
-group.add_argument('--exclude_add', '--exclude_type', default='none', choices=['none', 'auto1', 'auto2'],
-                   help='baseline fit parameters')
+
+
+# MinMed or MedMed
+group = parser.add_argument_group(f'*MinMed or MedMed\n{sep_line}')
+group.add_argument('--nsection', type=int,
+                   help='divide each part into n sections. Same with nspec')
+group.add_argument('--nspec', type=int,
+                   help='divide each part into n sections. One section has n specs.')
+group.add_argument('--npart', type=int,
+                   help='divide data into n parts')
 
 # Exclude files
 group = parser.add_argument_group(f'*Exclude known source catalogs\n{sep_line}')
-# group.add_argument('--continumm_file', 
-#                    help='txt catalog with #ra[deg], dec[deg], R[arcmin], freq_min[MHz], freq_max[MHz]')
+group.add_argument('--continuum_file', 
+                   help='txt catalog with #ra[deg], dec[deg], R[arcmin], freq_min[MHz], freq_max[MHz]')
 group.add_argument('--HI_file', 
                    help='txt catalog with #ra[deg], dec[deg], R[arcmin], freq_min[MHz], freq_max[MHz]')
 group.add_argument('--frame', choices=['BARYCENT', 'HELIOCEN', 'LSRK', 'LSRD'], default='LSRK',
                    help='Velocity Rest Frames, HELIOCEN or LSRK')
 
-# interaction
-group = parser.add_argument_group(f'*Interaction\n{sep_line}')
-group.add_argument('-i', '--interact', action='store_true', not_in_write_out_config_file=True,
-                   help='interaction')
-group.add_argument('--ylim', nargs='+', default=['auto'], not_in_write_out_config_file=True,
-                   help='ylim')
-group.add_argument('--figsize', type=float, nargs=2, default=(10, 7), not_in_write_out_config_file=True,
-                   help='figsize')
-group.add_argument('--length', type=int, default=20, not_in_write_out_config_file=True,
-                   help='spetra numbers used to test')
-group.add_argument('--start_init', type=int, default=0, not_in_write_out_config_file=True,
-                   help='the index of the spectrum shown at start')
 
 # Cell
 class IO(BaseIO):
     ver = 'old'
 
     def _get_fpart(self,):
-        return '-bld'
+        return '-ref'
 
     def _import_m(self,):
         """
@@ -105,20 +67,6 @@ class IO(BaseIO):
         import h5py
         from collections import OrderedDict
         from .core.baseline import sub_baseline
-
-    @staticmethod
-    def fit_baseline(s2p, freq, mjd, args, is_excluded=None):
-        fit_kwargs = {}
-        keys = ['method', 'nproc',
-                'njoin', 's_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',
-                'lam', 'deg', 'offset', 'ratio', 'niter', 'exclude_add']
-        for key in keys:
-            fit_kwargs[key] = getattr(args, key)
-        fit_kwargs['is_excluded'] = is_excluded
-        if args.trans:
-            return sub_baseline(mjd, s2p.transpose((1, 0, 2)), subtract=True, **fit_kwargs).transpose((1, 0, 2))
-        else:
-            return sub_baseline(freq, s2p, subtract=True, **fit_kwargs)
         
     def _load_is_rfi(self,):
         fs = self.fs
@@ -138,16 +86,48 @@ class IO(BaseIO):
 
             self.is_excluded = is_excluded
             
+            
+    def _load_continuum(self):
+        args = self.args
+        fpath = args.continuum_file
+        if fpath is not None:
+            from .core.regions import mask_srcs
+
+            is_excluded = np.zeros(self.s2p.shape[:2], dtype = bool)
+            print(f"loading excluded files from {fpath}")
+            self.is_continum = mask_srcs(fpath, is_excluded, self.ra, self.dec, self.freq, 
+                                         self.mjd, inplace=True, rest_frame=args.frame)
         
     def _load_sources(self):
         args = self.args
         fpath = args.HI_file
         if fpath is not None:
-            from hifast.core.regions import mask_srcs
+            from .core.regions import mask_srcs
             is_excluded = self.is_excluded if hasattr(self,'is_excluded') else np.zeros(self.s2p.shape[:2], dtype = bool)
             print(f"loading excluded files from {fpath}")
             self.is_excluded = mask_srcs(fpath, is_excluded, self.ra, self.dec, self.freq, 
                                          self.mjd, inplace=True, rest_frame=args.frame)
+
+    def med_fit_baseline(self,):
+        args = self.args
+        # gen self.s2p_out
+        s2p = self.s2p[:]
+        from copy import deepcopy
+        s2p_ori = deepcopy(s2p)
+        
+        is_excluded = deepcopy(self.is_excluded) if hasattr(self,'is_excluded') else np.zeros(self.s2p.shape[:2], dtype = bool)
+        for key in ['is_rfi', 'is_continum']:
+            if hasattr(self, key):
+                is_excluded |= getattr(self, key)
+        s2p[is_excluded] = np.nan
+
+        from .ripple.sw_fft import minmed
+        kwargs = {}
+        keys = ['nsection', 'nspec', 'npart', 'method']
+        for key in keys:
+            kwargs[key] = getattr(args, key)
+        s2p = s2p_ori - minmed(s2p, **kwargs)
+        return s2p
 
     def gen_s2p_out(self,):
         args = self.args
@@ -159,27 +139,26 @@ class IO(BaseIO):
         self._load_sources()
 
         # fit baseline:
-        if args.method is not None and args.method != 'none':
-            if hasattr(self,'is_excluded'):
-                is_excluded = self.is_excluded
-                whole_rfi = np.all(is_excluded, axis=1)
-                is_excluded[whole_rfi] = False # I don't like some warnings when whole spec is nan ...
-
-                if is_excluded.ndim != self.s2p.ndim:
-                    is_excluded = np.full(is_excluded.shape + (2,), is_excluded[...,None])
-            else:
-                is_excluded = None
-
-            print('fit and substract baseline')
-            s2p = self.fit_baseline(s2p, self.freq, self.mjd, args, is_excluded)
+        if 'Med' in args.method:
+            self._load_continuum()
+            
+            print(f'Use {args.method} to substract baseline. Remember another linear substraction.')
+            s2p = self.med_fit_baseline()
         else:
             print('no baseline method assigned, skip. Make sure the input spectra have been baselined.')
         self.s2p_out = s2p
         
     def __call__(self, save=True):
         self.gen_s2p_out()
-        self.gen_dict_out()
-
+        if hasattr(self,'is_continum'):
+            print("save is_continum :D")
+            self.gen_dict_out(is_continum = self.is_continum)
+        else:
+            self.gen_dict_out()
+#             if 'is_continum' in self.dict_out.keys():
+#                 args = self.args
+#                 self.dict_out['is_continum'] = h5py.ExternalLink(os.path.relpath(
+#                     args.fpath, os.path.dirname(self.fpath_out)), f'/S/is_continum')
         if hasattr(self,'is_excluded'):
             self.dict_out['is_excluded'] = self.is_excluded # update
         
@@ -188,50 +167,6 @@ class IO(BaseIO):
             self.save()
 
 
-# Internal Cell
-def check_backend():
-    import matplotlib as mpl
-    if 'ipympl' not in mpl.get_backend():
-        print('Please use interaction mode in Jupyert and run \'%matplotlib ipympl\' in the notebook cell first')
-        sys.exit()
-
-
-def interact(args):
-    check_backend()
-    import h5py
-    from .interaction import bld_i as interact
-    f = h5py.File(args.fpath, 'r')
-    fs = f['S']
-    if 'T' in fs.keys():
-        T = fs['T']
-    elif 'Ta' in fs.keys():
-        T = fs['Ta']
-    elif 'flux' in fs.keys():
-        T = fs['flux']
-    if 'is_excluded' in fs.keys():
-        is_excluded = fs['is_excluded']
-    else:
-        is_excluded = None
-    interact.T2p = T
-    interact.is_excluded = is_excluded
-    interact.freq = fs['freq'][:]
-    interact.frange = args.frange
-    interact.nproc = args.nproc
-    interact.length = min(args.length, interact.T2p.shape[1])
-    interact.figsize = args.figsize
-    interact.ylim = args.ylim[0] if len(args.ylim) == 1 else args.ylim
-    interact.trans = args.trans
-    interact.start_init = args.start_init
-    return interact.main()
-    # sys.exit()
-
-# Cell
-class IO_i(IO):
-    def gen_s2p_out(self,):
-        args = self.args
-        if args.interact:
-            self.s2p_out = interact_spec.bld
-            return
 
 # Cell
 
@@ -241,16 +176,12 @@ if __name__ == '__main__':
     # print(parser.format_help())
     # print("----------")
     # print(parser.format_values())  # useful for logging where different settings came from
-    if args_.interact:
-        interact_spec, widgets = interact(args_)[0:2]
-        save = IO_i(args_, HistoryAdd={'interact':str(widgets)})
-        print('Please run \'save()\' in the notebook cell to save your results')
-    else:
-        print('#'*35+'Args'+'#'*35)
-        args_from = parser.format_values()
-        print(args_from)
-        print('#'*35+'####'+'#'*35)
 
-        HistoryAdd = {'args_from': args_from} if args_.my_config is not None else None
-        io = IO(args_, HistoryAdd=HistoryAdd)
-        io()
+    print('#'*35+'Args'+'#'*35)
+    args_from = parser.format_values()
+    print(args_from)
+    print('#'*35+'####'+'#'*35)
+
+    HistoryAdd = {'args_from': args_from} if args_.my_config is not None else None
+    io = IO(args_, HistoryAdd=HistoryAdd)
+    io()

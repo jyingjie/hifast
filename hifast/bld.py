@@ -162,7 +162,6 @@ class IO(BaseIO):
         s2p = self.s2p[:]
         # is_excluded
         self._load_is_excluded()
-
         self._load_sources()
 
         # fit baseline:
