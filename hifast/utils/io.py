@@ -49,7 +49,7 @@ def bool_fun(s):
 def add_common_argument(parser):
     # common
     parser.add_argument('--outdir', default='default',
-                        help='The directory of the output file, default is same with the input file')
+                        help='The directory used to save output file, default is same with the input file')
     parser.add_argument('-f', action='store_true', dest='force',
                         help='if set, overwriting file if output file exists')
     parser.add_argument('-g', is_write_out_config_file_arg=True,
