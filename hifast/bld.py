@@ -10,10 +10,10 @@ import numpy as np
 sep_line = '##'+'#'*70+'##'
 parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}",
                         formatter_class=formatter_class, allow_abbrev=False,
-                        description='Fit and subtract baseline', )
+                        description='Fit and subtract the baseline', )
 add_common_argument(parser)
 parser.add_argument('fpath',
-                    help='input spectra temperature or flux file path.')
+                    help='input the file including spectra with temperature or flux')
 parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
                     help='Limit frequence range')
 parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
@@ -22,7 +22,7 @@ parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default
                     help='')
 
 # baseline fitting
-group = parser.add_argument_group(f'*BaseLine (set --method as none to skip this) \n{sep_line}')
+group = parser.add_argument_group(f'*BaseLine fitting {sep_line}')
 
 rew_type = ['asym1', 'asym2', 'asym3', 'sym1',]
 method = ['none']
@@ -30,33 +30,34 @@ method += ['PLS-'+r for r in rew_type]
 method += ['poly-'+r for r in rew_type]
 method += ['Gauss-'+r for r in rew_type]
 method += ['masPLS-'+r for r in rew_type]
-method += ['asPLS',]
+method += ['asPLS', 'arPLS']
 method += ['original']
 
 group.add_argument('--method', default='arPLS', choices=method,
-                   help='method used to fit baseline, if set as none, skip this')
+                   help='method used to fit baseline')
 group.add_argument('--nproc', '-n', type=int, default=1,
                    help='number of process used in fitting baseline')
 group = parser.add_argument_group('preprocessing before baseline fitting')
 group.add_argument('-T', '--trans', type=bool_fun, choices=[True, False], default='False',
                    help='if set True, fitting the baseline along time instead of frequency.')
 group.add_argument('--njoin', type=int, default=0,
-                   help='join spectra (average) to fit same baseline')
+                   help='join spectra (average) to fit a common baseline')
 group.add_argument('--s_method_t', default='none', choices=['none', 'gaussian', 'boxcar', 'median'],
-                   help='method used to smooth every channel along time axis')
+                   help='method used to smooth each channel along time axis')
 group.add_argument('--s_sigma_t', type=int, default=5,
                    help='used with --s_method_t')
 group.add_argument('--s_method_freq', default='none', choices=['none', 'median', 'gaussian', 'boxcar', 'PLS', 'fft'],
-                   help='method used to smooth every spectrum along frequency axis')
+                   help='method used to smooth each spectrum along frequency axis')
 group.add_argument('--s_sigma_freq', type=float, default=5,
                    help='used with --s_method_freq')
 group.add_argument('--average_every_freq', type=int, default=0,
-                   help='')
+                   help='bin the channels by this factor')
+
 group = parser.add_argument_group('fit and subtract the baseline')
 group.add_argument('--lam', type=float, default=1.0e8,
-                   help='baseline fit parameters')
+                   help='smooth parameter for `*PLS` methods, larger values make the baseline close to an low-order polynomial. adjust in log scale.')
 group.add_argument('--deg', type=int, default=2,
-                   help='baseline fit parameters')
+                   help='polynomial degree for `*-poly` methods')
 group.add_argument('--offset', type=float, default=2,
                    help='baseline fit parameters')
 group.add_argument('--ratio', type=float, default=0.01,
@@ -66,12 +67,18 @@ group.add_argument('--niter', type=int, default=100,
 group.add_argument('--exclude_add', '--exclude_type', default='none', choices=['none', 'auto1', 'auto2'],
                    help='baseline fit parameters')
 
+
+group = parser.add_argument_group(f'*Use pre-determined is_excluded array in input file\n{sep_line}')
+group.add_argument('--use_pre_is_excluded', type=bool_fun, choices=[True, False], default='True',
+                   help='If True, use pre-determined is_excluded array if existed to mask channels')
 # Exclude files
 group = parser.add_argument_group(f'*Exclude known source catalogs\n{sep_line}')
-group.add_argument('--HI_file', 
-                   help='txt catalog with #ra[deg], dec[deg], R[arcmin], freq_min[MHz], freq_max[MHz]')
+# group.add_argument('--continumm_file',
+#                    help='txt catalog with #ra[deg], dec[deg], R[arcmin], freq_min[MHz], freq_max[MHz]')
+group.add_argument('--src_file',
+                   help='txt catalog with #ra[deg], dec[deg], R[arcmin], freq_min[MHz], freq_max[MHz]. This will also add the region to is_excluded array.')
 group.add_argument('--frame', choices=['BARYCENT', 'HELIOCEN', 'LSRK', 'LSRD'], default='LSRK',
-                   help='Velocity Rest Frames, HELIOCEN or LSRK')
+                   help='Velocity Rest Frames. Used in excluding the source freq ranges.')
 
 # interaction
 group = parser.add_argument_group(f'*Interaction\n{sep_line}')
@@ -117,7 +124,7 @@ class IO(BaseIO):
             return sub_baseline(mjd, s2p.transpose((1, 0, 2)), subtract=True, **fit_kwargs).transpose((1, 0, 2))
         else:
             return sub_baseline(freq, s2p, subtract=True, **fit_kwargs)
-        
+
     def _load_is_rfi(self,):
         fs = self.fs
         if 'is_rfi' in fs.keys():
@@ -128,6 +135,8 @@ class IO(BaseIO):
             self.is_rfi = is_rfi
 
     def _load_is_excluded(self):
+        if not self.args.use_pre_is_excluded:
+            return
         fs = self.fs
         if 'is_excluded' in fs.keys():
             is_excluded = fs['is_excluded'][:]
@@ -135,16 +144,15 @@ class IO(BaseIO):
                 is_excluded = is_excluded[:, self.is_use_freq]
 
             self.is_excluded = is_excluded
-            
-        
+
     def _load_sources(self):
         args = self.args
-        fpath = args.HI_file
+        fpath = args.src_file
         if fpath is not None:
-            from hifast.core.regions import mask_srcs
+            from .core.regions import mask_srcs
             is_excluded = self.is_excluded if hasattr(self,'is_excluded') else np.zeros(self.s2p.shape[:2], dtype = bool)
             print(f"loading excluded files from {fpath}")
-            self.is_excluded = mask_srcs(fpath, is_excluded, self.ra, self.dec, self.freq, 
+            self.is_excluded = mask_srcs(fpath, is_excluded, self.ra, self.dec, self.freq,
                                          self.mjd, inplace=True, rest_frame=args.frame)
 
     def gen_s2p_out(self,):
@@ -173,18 +181,17 @@ class IO(BaseIO):
         else:
             print('no baseline method assigned, skip. Make sure the input spectra have been baselined.')
         self.s2p_out = s2p
-        
+
     def __call__(self, save=True):
         self.gen_s2p_out()
         self.gen_dict_out()
 
-        if hasattr(self,'is_excluded'):
+        if hasattr(self, 'is_excluded'):
             self.dict_out['is_excluded'] = self.is_excluded # update
-        
+
         # save to hdf5 file
         if save:
             self.save()
-
 
 # Internal Cell
 def check_backend():
