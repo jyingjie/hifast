@@ -38,12 +38,12 @@ group.add_argument('--method', default='MedMed', choices=method,
 
 # MinMed or MedMed
 group = parser.add_argument_group(f'*MinMed or MedMed\n{sep_line}')
+group.add_argument('--npart', type=int,
+                   help='divide data into n parts')
 group.add_argument('--nsection', type=int,
                    help='divide each part into n sections. Same with nspec')
 group.add_argument('--nspec', type=int,
                    help='divide each part into n sections. One section has n specs.')
-group.add_argument('--npart', type=int,
-                   help='divide data into n parts')
 
 
 group = parser.add_argument_group(f'*Use pre-determined is_excluded array in input file\n{sep_line}')
@@ -90,7 +90,10 @@ group.add_argument('--post_exclude_add', '--post_exclude_type', default='none', 
 class IO(bld_IO):
 
     def _get_fpart(self,):
-        return '-bld'
+        fpart = '-ref'
+        if self.args.post_method is not None and self.args.post_method != 'none':
+            fpart += '_p'
+        return fpart
 
     def _import_m(self,):
         """
@@ -157,8 +160,14 @@ class IO(bld_IO):
         if args.post_method is not None and args.post_method !='none':
             if hasattr(self,'is_excluded'):
                 is_excluded = self.is_excluded
+                # check is_excluded shape
+                if is_excluded.ndim == 2:
+                    is_excluded = np.full(is_excluded.shape + s2p.shape[2:], is_excluded[..., None])
+                else:
+                    raise(ValueError('Now `is_excluded` only supports 2-dim.'))
             else:
                 is_excluded = None
+            # not use is_continum on baseline fitting
             print('applying low-order polynomial fitting on each spectrum')
             s2p = self.post_fit_baseline(s2p, self.freq, self.mjd, args, is_excluded)
         self.s2p_out = s2p

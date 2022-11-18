@@ -3,8 +3,8 @@
 __all__ = ['IO', 'IO_i']
 
 # Cell
-from .utils.io import *
 import numpy as np
+from .utils.io import *
 
 # Internal Cell
 sep_line = '##'+'#'*70+'##'
@@ -21,6 +21,8 @@ parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_f
 parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True', env_var='HIFAST_SHOW_PROG',
                     help='')
 
+parser.add_argument('--nproc', '-n', type=int, default=1,
+                   help='number of process used in fitting baseline')
 # baseline fitting
 group = parser.add_argument_group(f'*BaseLine fitting {sep_line}')
 
@@ -35,8 +37,6 @@ method += ['original']
 
 group.add_argument('--method', default='arPLS', choices=method,
                    help='method used to fit baseline')
-group.add_argument('--nproc', '-n', type=int, default=1,
-                   help='number of process used in fitting baseline')
 group = parser.add_argument_group('preprocessing before baseline fitting')
 group.add_argument('-T', '--trans', type=bool_fun, choices=[True, False], default='False',
                    help='if set True, fitting the baseline along time instead of frequency.')
@@ -123,7 +123,10 @@ class IO(BaseIO):
     ver = 'old'
 
     def _get_fpart(self,):
-        return '-bld'
+        fpart = '-bld'
+        if self.args.post_method is not None and self.args.post_method != 'none':
+            fpart += '_p'
+        return fpart
 
     def _import_m(self,):
         """
@@ -139,9 +142,21 @@ class IO(BaseIO):
     @staticmethod
     def fit_baseline(s2p, freq, mjd, args, is_excluded=None):
         fit_kwargs = {}
-        keys = ['method', 'nproc',
-                'njoin', 's_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',
-                'lam', 'deg', 'offset', 'ratio', 'niter', 'exclude_add']
+        keys = ['nproc',
+                'method',
+                'njoin',
+                's_method_t',
+                's_sigma_t',
+                's_method_freq',
+                's_sigma_freq',
+                'average_every_freq',
+                'lam',
+                'deg',
+                'offset',
+                'ratio',
+                'niter',
+                'exclude_add',
+               ]
         for key in keys:
             fit_kwargs[key] = getattr(args, key)
         fit_kwargs['is_excluded'] = is_excluded
@@ -155,8 +170,16 @@ class IO(BaseIO):
     @staticmethod
     def post_fit_baseline(s2p, freq, mjd, args, is_excluded=None):
         fit_kwargs = {}
-        keys = ['method', 's_method_freq', 's_sigma_freq',
-                 'deg', 'offset', 'ratio', 'niter', 'exclude_add']
+        keys = ['method',
+                's_method_freq',
+                's_sigma_freq',
+                'average_every_freq',
+                'deg',
+                'offset',
+                'ratio',
+                'niter',
+                'exclude_add',
+               ]
         for key in keys:
             fit_kwargs[key] = getattr(args, 'post_'+key)
         fit_kwargs['nproc'] = args.nproc
@@ -164,7 +187,6 @@ class IO(BaseIO):
         fit_kwargs['s_method_t'] = 'none'
         fit_kwargs['s_sigma_t'] = 0
         fit_kwargs['lam'] = 0
-
         fit_kwargs['is_excluded'] = is_excluded
 
         return sub_baseline(freq, s2p, subtract=True, **fit_kwargs)
@@ -186,11 +208,6 @@ class IO(BaseIO):
             is_excluded = fs['is_excluded'][:]
             if self.is_use_freq is not None:
                 is_excluded = is_excluded[:, self.is_use_freq]
-            # suppress nan warning in baseline fitting in the future
-            # whole_rfi = np.all(is_excluded, axis=1)
-            # is_excluded[whole_rfi] = False # I don't like some warnings when whole spec is nan ...
-            if is_excluded.ndim != self.s2p.ndim:
-                is_excluded = np.full(is_excluded.shape + (2,), is_excluded[...,None])
             self.is_excluded = is_excluded
 
     def _load_sources(self):
@@ -217,6 +234,14 @@ class IO(BaseIO):
         if args.method is not None and args.method != 'none':
             if hasattr(self,'is_excluded'):
                 is_excluded = self.is_excluded
+                # suppress nan warning in baseline fitting in the future
+                # whole_rfi = np.all(is_excluded, axis=1)
+                # is_excluded[whole_rfi] = False # I don't like some warnings when whole spec is nan ...
+                # check is_excluded shape
+                if is_excluded.ndim == 2:
+                    is_excluded = np.full(is_excluded.shape + s2p.shape[2:], is_excluded[..., None])
+                else:
+                    raise(ValueError('Now `is_excluded` only supports 2-dim.'))
             else:
                 is_excluded = None
 
@@ -287,13 +312,8 @@ class IO_i(IO):
             return
 
 # Cell
-
 if __name__ == '__main__':
     args_ = parser.parse_args()
-
-    # print(parser.format_help())
-    # print("----------")
-    # print(parser.format_values())  # useful for logging where different settings came from
     if args_.interact:
         interact_spec, widgets = interact(args_)[0:2]
         save = IO_i(args_, HistoryAdd={'interact':str(widgets)})

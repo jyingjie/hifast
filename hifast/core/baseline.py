@@ -173,6 +173,10 @@ def get_baseline(x, ys, axis=None, *,
                     _exclude = _exclude | (~is_finite)
                 else:
                     _exclude = ~is_finite
+            if _exclude is not None and _exclude.all():
+                warnings.warn('All points in this spectrum are excluded, it\'s baseline will set as all zeros.')
+                bls[ii + np.s_[:, ]] = 0
+                continue
         try:
             bl = BL.fit(x=x, y=y, exclude=_exclude, exclude_add=exclude_add)
         except Exception as err:
