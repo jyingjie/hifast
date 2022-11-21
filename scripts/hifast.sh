@@ -25,6 +25,10 @@ case $key in
     shift # past argument
     shift # past value
     ;;
+    -s|--save_log)
+    save_log=YES
+    shift # past argument
+    ;;
     *)    # unknown option
     POSITIONAL+=($1) # save it in an array for later
     shift # past argument
@@ -32,6 +36,7 @@ case $key in
 esac
 done
 
+echo "-s = $save_log"
 #set -- "${POSITIONAL[@]}" # restore positional parameters
 
 # set default nproc
@@ -96,8 +101,16 @@ done
 # run all files
 export -f Run_fname
 export coms
-echo "${fname_list[@]}" | xargs -n 1 -P $nproc bash -c 'echo "$coms"; Run_fname "$1"' _
-
+if [[ $save_log == "YES" ]]; then
+  lognameadd=`date +"%Y%m%d-%H%M%S"`
+  export lognameadd
+  mkdir -p log
+  echo "will save output to directory log"
+  echo "${fname_list[@]}" | xargs -n 1 -P $nproc bash -c \
+    'echo "$coms"; Run_fname "$1" > >( tee -a "log/$(basename $1).$lognameadd.out") 2> >(tee >(grep -v '███' >> "log/$(basename $1).$lognameadd.err") >&2)' _
+else
+  echo "${fname_list[@]}" | xargs -n 1 -P $nproc bash -c 'echo "$coms"; Run_fname "$1"' _
+fi
 #Run_fname &
 #wc ${file_l ist[@]}
 #echo $($command)
