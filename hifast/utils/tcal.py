@@ -48,7 +48,7 @@ def read_tcal(nB, s_type='w', tcal_dir=None, mode='high', date='auto', mjd=None)
     import os
     if tcal_dir is None:
         tcal_dir= os.path.expanduser("~")+'/Tcal/'
-    dates_have = [os.path.basename(i) for i in glob(tcal_dir + '/20[0-9][0-9][0-9][0-9][0-9][0-9]')]
+    dates_have = [os.path.basename(os.path.dirname(i)) for i in glob(tcal_dir + f'/20[0-9][0-9][0-9][0-9][0-9][0-9]/*{s_type}*')]
     if len(dates_have) == 0:
         raise(ValueError('can not find tcal file'))
     if date == 'auto':

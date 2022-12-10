@@ -329,18 +329,47 @@ class FastRawSpec(FastRawData):
         filenames = [f"{fname_part}{i:04d}.{ftype}" for i in range(start,stop+1)]
         if len(filenames) == 0:
             raise(OSError(f"can not find file, please check fname_part:{fname_part}"))
+        
+        self.fname_part_ori = fname_part
+        dash_sep = fname_part.split('-')
+        underscore_sep = dash_sep[-1].split('_')
+        
+        if len(underscore_sep) == 3:
+            band = underscore_sep[1]
+            nB =  int(underscore_sep[0][1:])
+        elif len(underscore_sep) == 2:
+            band = underscore_sep[0]
+            # only one Beam
+            nB = 1
+            underscore_sep.insert(0, 'M01')
+        else:
+            raise('receiver not supports')
+        dash_sep[-1] = '_'.join(underscore_sep)
+        fname_part = '-'.join(dash_sep)
         self.fname_part = fname_part
+        self.band = band
+       
+        # finnally call
         super().__init__(filenames, frange=frange, dfactor=dfactor, med_filter_size=med_filter_size, verbose=verbose)
-
-        self.nB= int(re.findall(r'-M[0-1][0-9]', fname_part)[-1][2:])
+        
+        self.nB = nB
         self.smooth = smooth
         self.s_para = s_para
         self.noise_mode = noise_mode
         self.noise_date = noise_date
-
+        
     def _get_freq(self,):
         #freq += 0.000476837158203125/2 # using center frequency
-        super()._get_freq(center_corr = 0.000476837158203125/2)
+        if self.band.upper() in ['W', 'F', 'N']:
+            center_corr = 0.000476837158203125/2
+        elif self.band.startswith('UWB'):
+            center_corr = None
+        else:
+            center_corr = None
+        super()._get_freq(center_corr=center_corr)
+        if self.band.startswith('UWB'):
+            # Hz to MHz
+            self.freq /= 1e6 
 
     def _get_smoothed(self, power, freq=None, use_ndimage=False):
         """
@@ -373,7 +402,15 @@ class FastRawSpec(FastRawData):
             _mjd = self.get_field(np.array([0,]), field='UTOBS')[0]
         else:
             _mjd = None
-        tc_freq, tc_, self.tcal_file = read_tcal(self.nB, mode= self.noise_mode, date=self.noise_date, mjd=_mjd)
+        
+        if self.band in ['W', 'N', 'F']:
+            # L-band
+            s_type = 'w'
+        else:
+            # UWV
+            s_type = self.band
+            
+        tc_freq, tc_, self.tcal_file = read_tcal(self.nB, s_type, mode= self.noise_mode, date=self.noise_date, mjd=_mjd)
         if self.frange is not None:
             is_use = (tc_freq <= self.frange[1] ) & (tc_freq >= self.frange[0])
         else:

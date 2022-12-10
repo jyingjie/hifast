@@ -121,9 +121,28 @@ if __name__ == '__main__':
     if not os.path.exists(args.fpath):
         raise(OSError(f'File {args.fpath} not exists.'))
 
+    ## check out file
+    fname_part = re.sub('[0-9]{4}\.fits\Z', '', args.fpath)
+    fname_part = re.sub('[0-9]{4}\.hdf5\Z', '', fname_part)
+    
+    # fake M01 if fname_part don't have MXX
+    dash_sep = fname_part.split('-')
+    underscore_sep = dash_sep[-1].split('_')    
+    if len(underscore_sep) == 3:
+        band = underscore_sep[1]
+        nB =  int(underscore_sep[0][1:])
+    elif len(underscore_sep) == 2:
+        band = underscore_sep[0]
+        # only one Beam
+        nB = 1
+        underscore_sep.insert(0, 'M01')
+    else:
+        raise('receiver not supports')
+    dash_sep[-1] = '_'.join(underscore_sep)
+    fname_part = '-'.join(dash_sep)
+    
     # replace patten in outdir
-    nB = get_nB(args.fpath)
-    project = get_project(args.fpath)
+    project = get_project(fname_part)
     ## use the dirname of the fits file as "date"
     date = os.path.basename(os.path.dirname(os.path.abspath(args.fpath)))
     args.outdir = sub_patten(args.outdir, date=date, nB=f'{nB:02d}', project=project)
@@ -132,11 +151,8 @@ if __name__ == '__main__':
         if not os.path.exists(args.outdir):
             print(f'outdir {args.outdir} not exists. Create it now')
             os.makedirs(args.outdir, exist_ok=True)
-
-    ## check out file
+    
     fname_add = date
-    fname_part = re.sub('[0-9]{4}\.fits\Z', '', args.fpath)
-    fname_part = re.sub('[0-9]{4}\.hdf5\Z', '', fname_part)
     out_name_base = os.path.join(args.outdir, f"{os.path.basename(fname_part)[:-1]}-{fname_add}")
     fileout =  out_name_base + f"-specs_T.hdf5"
     fileout_sep = glob(out_name_base + rf"-specs_T_[0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9].hdf5")
