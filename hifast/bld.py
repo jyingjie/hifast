@@ -3,8 +3,8 @@
 __all__ = ['IO', 'IO_i']
 
 # Cell
-from .utils.io import *
 import numpy as np
+from .utils.io import *
 
 # Internal Cell
 sep_line = '##'+'#'*70+'##'
@@ -21,6 +21,8 @@ parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_f
 parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True', env_var='HIFAST_SHOW_PROG',
                     help='')
 
+parser.add_argument('--nproc', '-n', type=int, default=1,
+                   help='number of process used in fitting baseline')
 # baseline fitting
 group = parser.add_argument_group(f'*BaseLine fitting {sep_line}')
 
@@ -35,8 +37,6 @@ method += ['original']
 
 group.add_argument('--method', default='arPLS', choices=method,
                    help='method used to fit baseline')
-group.add_argument('--nproc', '-n', type=int, default=1,
-                   help='number of process used in fitting baseline')
 group = parser.add_argument_group('preprocessing before baseline fitting')
 group.add_argument('-T', '--trans', type=bool_fun, choices=[True, False], default='False',
                    help='if set True, fitting the baseline along time instead of frequency.')
@@ -68,11 +68,11 @@ group.add_argument('--exclude_add', '--exclude_type', default='none', choices=['
                    help='baseline fit parameters')
 
 
-group = parser.add_argument_group(f'*Use pre-determined is_excluded array in input file\n{sep_line}')
+group = parser.add_argument_group(f'Use pre-determined is_excluded array in input file\n{sep_line}')
 group.add_argument('--use_pre_is_excluded', type=bool_fun, choices=[True, False], default='True',
                    help='If True, use pre-determined is_excluded array if existed to mask channels')
 # Exclude files
-group = parser.add_argument_group(f'*Exclude known source catalogs\n{sep_line}')
+group = parser.add_argument_group(f'Exclude known source catalogs\n{sep_line}')
 # group.add_argument('--continumm_file',
 #                    help='txt catalog with #ra[deg], dec[deg], R[arcmin], freq_min[MHz], freq_max[MHz]')
 group.add_argument('--src_file',
@@ -80,6 +80,31 @@ group.add_argument('--src_file',
 group.add_argument('--frame', choices=['BARYCENT', 'HELIOCEN', 'LSRK', 'LSRD'], default='LSRK',
                    help='Velocity Rest Frames. Used in excluding the source freq ranges.')
 
+# low-order polynomial on individual spectrum
+group = parser.add_argument_group(f'*Post-applying low-order polynomial fitting on individual spectrum if `--s_method_t` or `--njoin` used [optional]\n{sep_line}')
+
+rew_type = ['asym1', 'asym2', 'asym3', 'sym1',]
+method = ['none']
+method += ['poly-'+r for r in rew_type]
+
+group.add_argument('--post_method', default='none', choices=method,
+                   help='method used to fit baseline')
+group.add_argument('--post_s_method_freq', default='none', choices=['none', 'median', 'gaussian', 'boxcar', 'PLS', 'fft'],
+                   help='method used to smooth each spectrum along frequency axis')
+group.add_argument('--post_s_sigma_freq', type=float, default=5,
+                   help='used with --post_s_method_freq')
+group.add_argument('--post_average_every_freq', type=int, default=0,
+                   help='bin the channels by this factor')
+group.add_argument('--post_deg', type=int, default=2,
+                   help='polynomial degree for `*-poly` methods')
+group.add_argument('--post_offset', type=float, default=2,
+                   help='baseline fit parameters')
+group.add_argument('--post_ratio', type=float, default=0.01,
+                   help='baseline fit parameters')
+group.add_argument('--post_niter', type=int, default=100,
+                   help='baseline fit parameters')
+group.add_argument('--post_exclude_add', '--post_exclude_type', default='none', choices=['none', 'auto1', 'auto2'],
+                   help='baseline fit parameters')
 # interaction
 group = parser.add_argument_group(f'*Interaction\n{sep_line}')
 group.add_argument('-i', '--interact', action='store_true', not_in_write_out_config_file=True,
@@ -98,7 +123,10 @@ class IO(BaseIO):
     ver = 'old'
 
     def _get_fpart(self,):
-        return '-bld'
+        fpart = '-bld'
+        if self.args.post_method is not None and self.args.post_method != 'none':
+            fpart += '_p'
+        return fpart
 
     def _import_m(self,):
         """
@@ -114,16 +142,54 @@ class IO(BaseIO):
     @staticmethod
     def fit_baseline(s2p, freq, mjd, args, is_excluded=None):
         fit_kwargs = {}
-        keys = ['method', 'nproc',
-                'njoin', 's_method_t', 's_sigma_t', 's_method_freq', 's_sigma_freq',
-                'lam', 'deg', 'offset', 'ratio', 'niter', 'exclude_add']
+        keys = ['nproc',
+                'method',
+                'njoin',
+                's_method_t',
+                's_sigma_t',
+                's_method_freq',
+                's_sigma_freq',
+                'average_every_freq',
+                'lam',
+                'deg',
+                'offset',
+                'ratio',
+                'niter',
+                'exclude_add',
+               ]
         for key in keys:
             fit_kwargs[key] = getattr(args, key)
         fit_kwargs['is_excluded'] = is_excluded
-        if args.trans:
+
+        trans = args.trans
+        if trans:
             return sub_baseline(mjd, s2p.transpose((1, 0, 2)), subtract=True, **fit_kwargs).transpose((1, 0, 2))
         else:
             return sub_baseline(freq, s2p, subtract=True, **fit_kwargs)
+
+    @staticmethod
+    def post_fit_baseline(s2p, freq, mjd, args, is_excluded=None):
+        fit_kwargs = {}
+        keys = ['method',
+                's_method_freq',
+                's_sigma_freq',
+                'average_every_freq',
+                'deg',
+                'offset',
+                'ratio',
+                'niter',
+                'exclude_add',
+               ]
+        for key in keys:
+            fit_kwargs[key] = getattr(args, 'post_'+key)
+        fit_kwargs['nproc'] = args.nproc
+        fit_kwargs['njoin'] = 0
+        fit_kwargs['s_method_t'] = 'none'
+        fit_kwargs['s_sigma_t'] = 0
+        fit_kwargs['lam'] = 0
+        fit_kwargs['is_excluded'] = is_excluded
+
+        return sub_baseline(freq, s2p, subtract=True, **fit_kwargs)
 
     def _load_is_rfi(self,):
         fs = self.fs
@@ -131,6 +197,14 @@ class IO(BaseIO):
             is_rfi = fs['is_rfi'][:]
             if self.is_use_freq is not None:
                 is_rfi = is_rfi[:, self.is_use_freq]
+                
+            # M06 bandpass is not flat in [1410, 1416]    
+            if self.nB == 6:
+                whole_rfi = np.all(is_rfi, axis=1)
+                freq = self.freq
+                is_use = (freq > 1406) & (freq < 1416)
+                is_rfi[:, is_use] = False
+                is_rfi[whole_rfi] = True
 
             self.is_rfi = is_rfi
 
@@ -142,7 +216,11 @@ class IO(BaseIO):
             is_excluded = fs['is_excluded'][:]
             if self.is_use_freq is not None:
                 is_excluded = is_excluded[:, self.is_use_freq]
-
+            # M06 bandpass is not flat in [1410, 1416]    
+            if self.nB == 6:
+                freq = self.freq
+                is_use = (freq > 1406) & (freq < 1416)
+                is_excluded[:, is_use] = False
             self.is_excluded = is_excluded
 
     def _load_sources(self):
@@ -157,9 +235,10 @@ class IO(BaseIO):
 
     def gen_s2p_out(self,):
         args = self.args
-
-        # gen self.s2p_out
+        
         s2p = self.s2p[:]
+        
+        self._load_is_rfi()
         # is_excluded
         self._load_is_excluded()
         self._load_sources()
@@ -168,16 +247,22 @@ class IO(BaseIO):
         if args.method is not None and args.method != 'none':
             if hasattr(self,'is_excluded'):
                 is_excluded = self.is_excluded
-                whole_rfi = np.all(is_excluded, axis=1)
-                is_excluded[whole_rfi] = False # I don't like some warnings when whole spec is nan ...
-
-                if is_excluded.ndim != self.s2p.ndim:
-                    is_excluded = np.full(is_excluded.shape + (2,), is_excluded[...,None])
+                # suppress nan warning in baseline fitting in the future
+                # whole_rfi = np.all(is_excluded, axis=1)
+                # is_excluded[whole_rfi] = False # I don't like some warnings when whole spec is nan ...
+                # check is_excluded shape
+                if is_excluded.ndim == 2:
+                    is_excluded = np.full(is_excluded.shape + s2p.shape[2:], is_excluded[..., None])
+                else:
+                    raise(ValueError('Now `is_excluded` only supports 2-dim.'))
             else:
                 is_excluded = None
 
             print('fit and substract baseline')
             s2p = self.fit_baseline(s2p, self.freq, self.mjd, args, is_excluded)
+            if args.post_method is not None and args.post_method !='none':
+                print('applying low-order polynomial fitting on each spectrum')
+                s2p = self.post_fit_baseline(s2p, self.freq, self.mjd, args, is_excluded)
         else:
             print('no baseline method assigned, skip. Make sure the input spectra have been baselined.')
         self.s2p_out = s2p
@@ -187,7 +272,11 @@ class IO(BaseIO):
         self.gen_dict_out()
 
         if hasattr(self, 'is_excluded'):
-            self.dict_out['is_excluded'] = self.is_excluded # update
+            # update
+            self.dict_out['is_excluded'] = self.is_excluded
+        if hasattr(self, 'is_rfi'):
+            # update
+            self.dict_out['is_rfi'] = self.is_rfi
 
         # save to hdf5 file
         if save:
@@ -239,13 +328,8 @@ class IO_i(IO):
             return
 
 # Cell
-
 if __name__ == '__main__':
     args_ = parser.parse_args()
-
-    # print(parser.format_help())
-    # print("----------")
-    # print(parser.format_values())  # useful for logging where different settings came from
     if args_.interact:
         interact_spec, widgets = interact(args_)[0:2]
         save = IO_i(args_, HistoryAdd={'interact':str(widgets)})
