@@ -58,6 +58,9 @@ class IO(BaseIO):
                            mjd=self.mjd, ra=self.ra, dec=self.dec)
         self.s2p_out = fcali(s2p)
 
+        if args.cbr_store is not None and args.cbr_store != 'none':
+            self.Header['Calibrater_fpath'] = fcali.cbr_fpath
+
 # Cell
 if __name__ == '__main__':
     dests_hide = ['flux',]

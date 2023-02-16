@@ -186,6 +186,7 @@ class FluxCali:
                          use_counts=use_counts,
                          only_use_19beams=self.only_use_19beams)
         _, gain = CBR(self.freq)
+        self.cbr_fpath = CBR.cbr_fpath
         K_Jy = gain * self.tcal_spec[0] if use_counts else gain
         K_Jy = K_Jy[None,...] # mjd axis
         return K_Jy
