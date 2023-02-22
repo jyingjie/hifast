@@ -127,6 +127,8 @@ if __name__ == '__main__':
     ## use the dirname of the fits file as "date"
     date = os.path.basename(os.path.dirname(os.path.abspath(args.fpath)))
     args.outdir = sub_patten(args.outdir, date=date, nB=f'{nB:02d}', project=project)
+    # expand '~' as outdir may be a string in bash
+    args.outdir = os.path.expanduser(args.outdir)
     print(f'outdir: {args.outdir}')
     if args.outdir is not None:
         if not os.path.exists(args.outdir):
