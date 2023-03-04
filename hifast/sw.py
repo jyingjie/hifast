@@ -494,7 +494,7 @@ def check_backend():
         print('Please run interaction in Jupyert and \'%matplotlib ipympl\' in the notebook cell ')
         sys.exit()
 
-
+interact_save_lim = 20
 def interact(args):
     check_backend()
     import h5py
@@ -515,6 +515,10 @@ def interact(args):
     interact.figsize = args.figsize
     interact.ylim = args.ylim[0] if len(args.ylim) == 1 else args.ylim
     interact.start_init = args.start_init
+    if T.shape[1] <= interact_save_lim:
+        interact.save = True
+    else:
+        interact.save = False
     return interact.main()
 
 # Cell
@@ -522,7 +526,8 @@ class IO_i(IO):
     def gen_s2p_out(self,):
         args = self.args
         if args.interact:
-            self.s2p_out = interact_spec.bld
+            print('Please ensure you have adjusted the parameters for each `polar`, otherwise you will get nan vaules in the file')
+            self.s2p_out = interact_spec.bld_out
             return
 
 # Cell
@@ -535,7 +540,8 @@ if __name__ == '__main__':
     if args_.interact:
         interact_spec, widgets = interact(args_)[0:2]
         save = IO_i(args_, HistoryAdd={'interact':str(widgets)})
-        print('Please run \'save()\' in the notebook cell to save your results')
+        if interact_spec.save:
+            print('Please run \'save()\' in the notebook cell to save your results')
     else:
         print('#'*35+'Args'+'#'*35)
         args_from = parser.format_values()
