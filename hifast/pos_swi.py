@@ -83,7 +83,7 @@ class IO(Path_IO):
         fname_part = re.sub('[0-9]{4}\.fits\Z', '', args.fpath)
         fname_add = os.path.basename(os.path.dirname(os.path.abspath(fname_part)))
         out_name_base = os.path.join(args.outdir, f"{os.path.basename(fname_part)[:-1]}-{fname_add}")
-
+        self.out_name_base = out_name_base
         fpart = '-pos_swi'
         self.fpath_out = f'{out_name_base}{fpart}.hdf5'
 
@@ -110,8 +110,14 @@ class IO(Path_IO):
         self.S = S
 
     def __call__(self,):
+
         self.gen_S()
         S = self.S
+
+        S.plot = True
+        S.out_name_base = self.out_name_base
+        S.plot_sep()
+
         S.gen_Ta()
         S.gen_radec()
         S.plot_radec(outname=self.fpath_out + '-radec.pdf')

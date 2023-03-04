@@ -960,6 +960,14 @@ class PositionSwitch(CalOnOff):
         self.mjd_src_start = mjd_src_start
         self.mjd_ref_start = mjd_ref_start
 
+    def plot_sep(self,):
+        try:
+            if getattr(self, 'plot', False):
+                figname = self.out_name_base + "-sep.pdf"
+                plot_sep(self.inds_on, self.inds_off, self.p_on, self.p_off, figname=figname)
+        except:
+            pass
+
     def gen_Ta(self, only_off=False):
         """
         using
