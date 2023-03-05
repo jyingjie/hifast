@@ -9,7 +9,7 @@ from .utils.io import *
 sep_line = '##'+'#'*70+'##'
 parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}",
                         formatter_class=formatter_class, allow_abbrev=False,
-                        description='Src - Ref', )
+                        description='T Cal, Src - Ref', )
 parser.add_argument('fpath',
                     help='only need input the first chunk file path (e.g. XXX_0001.fits) of RAW spectra data')
 parser.add_argument('-f', dest='force', action='store_true',
@@ -96,7 +96,7 @@ class IO(Path_IO):
         fname_add = os.path.basename(os.path.dirname(os.path.abspath(fname_part)))
         out_name_base = os.path.join(args.outdir, f"{os.path.basename(fname_part)[:-1]}-{fname_add}")
         self.out_name_base = out_name_base
-        fpart = '-pos_swi'
+        fpart = '-S_ps'
         self.fpath_out = f'{out_name_base}{fpart}.hdf5'
 
     def load_and_add_Header(self, ):
