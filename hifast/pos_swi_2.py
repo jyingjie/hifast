@@ -20,10 +20,10 @@ parser.add_argument('--t_src', type=float, required=True,
                    help='on-source time[second]')
 parser.add_argument('--t_ref', type=float, required=True,
                    help='off-source time[second]')
-parser.add_argument('--t_change', type=float, required=True,
-                    help='swith time[second]')
+parser.add_argument('--t_change', type=float, required=True, choices=[30,60],
+                    help="switching time[second]. 30s for sepatation of src and ref less than 20'; 60s for sepatation between 20' and 60'.")
 parser.add_argument('--n_repeat', type=int, required=True,
-                    help='')
+                    help='The number of on-source off-source cycles')
 
 parser.add_argument('--only_off', type=bool_fun, choices=[True, False], default='False',
                     help='only noise off')
@@ -175,15 +175,17 @@ class IO(BaseIO):
         from matplotlib import pyplot as plt
         plt.figure(figsize=figsize)
         plt.scatter(self.ra_a[self.inds_on_src], self.dec_a[self.inds_on_src], s=1, color='r')
-        plt.scatter(self.ra_a[self.inds_off_src], self.dec_a[self.inds_off_src], s=1, color='r')
+        plt.scatter(self.ra_a[self.inds_off_src], self.dec_a[self.inds_off_src], s=1, color='r', label='src')
         plt.scatter(self.ra_a[self.inds_on_ref], self.dec_a[self.inds_on_ref], s=1, color='b')
-        plt.scatter(self.ra_a[self.inds_off_ref], self.dec_a[self.inds_off_ref], s=1, color='b')
+        plt.scatter(self.ra_a[self.inds_off_ref], self.dec_a[self.inds_off_ref], s=1, color='b', label='ref')
         plt.xlabel('ra')
         plt.ylabel('dec')
         plt.grid()
         plt.minorticks_on()
+        plt.legend()
         if outname is not None:
             print(f'Saving ra dec plot to {outname}')
+            plt.savefig(outname)
 
     def gen_s2p_out(self,):
         args = self.args
@@ -191,7 +193,7 @@ class IO(BaseIO):
         self.sep(args.t_src, args.t_ref, args.n_repeat, args.t_change)
         self.gen_Ta()
         self.gen_radec()
-        self.plot_radec(outname=self.fpath_out + '-radec.pdf')
+        self.plot_radec(outname=self.fpath_out + '-radec.png')
         self.s2p_out = self.Ta
 
     def __call__(self, save=True):

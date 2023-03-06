@@ -48,10 +48,10 @@ parser.add_argument('--t_src', type=float, required=True,
                    help='on-source time[second]')
 parser.add_argument('--t_ref', type=float, required=True,
                    help='off-source time[second]')
-parser.add_argument('--t_change', type=float, required=True,
-                    help='swith time[second]')
+parser.add_argument('--t_change', type=float, required=True, choices=[30,60],
+                    help="switching time[second]. 30s for sepatation of src and ref less than 20'; 60s for sepatation between 20' and 60'.")
 parser.add_argument('--n_repeat', type=int, required=True,
-                    help='')
+                    help='The number of on-source off-source cycles')
 
 parser.add_argument('--only_off', type=bool_fun, choices=[True, False], default='False',
                     help='only noise off')
@@ -132,7 +132,7 @@ class IO(Path_IO):
 
         S.gen_Ta(only_off=args.only_off)
         S.gen_radec()
-        S.plot_radec(outname=self.fpath_out + '-radec.pdf')
+        S.plot_radec(outname=self.fpath_out + '-radec.png')
 
         dict_out = {}
         dict_out['Header'] = self.Header

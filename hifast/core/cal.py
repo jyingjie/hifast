@@ -1040,13 +1040,14 @@ class PositionSwitch(CalOnOff):
         from matplotlib import pyplot as plt
         plt.figure(figsize=figsize)
         plt.scatter(self.ra_a[self.inds_on_src], self.dec_a[self.inds_on_src], s=1, color='r')
-        plt.scatter(self.ra_a[self.inds_off_src], self.dec_a[self.inds_off_src], s=1, color='r')
+        plt.scatter(self.ra_a[self.inds_off_src], self.dec_a[self.inds_off_src], s=1, color='r', label='src')
         plt.scatter(self.ra_a[self.inds_on_ref], self.dec_a[self.inds_on_ref], s=1, color='b')
-        plt.scatter(self.ra_a[self.inds_off_ref], self.dec_a[self.inds_off_ref], s=1, color='b')
+        plt.scatter(self.ra_a[self.inds_off_ref], self.dec_a[self.inds_off_ref], s=1, color='b', label='ref')
         plt.xlabel('ra')
         plt.ylabel('dec')
         plt.grid()
         plt.minorticks_on()
+        plt.legend()
         if outname is not None:
             print(f'Saving ra dec plot to {outname}')
             plt.savefig(outname)
