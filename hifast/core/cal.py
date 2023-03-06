@@ -325,7 +325,7 @@ class FastRawSpec(FastRawData):
             if stop < 1:
                 raise(ValueError('input stop < 1'))
         else:
-            stop = len(glob(fname_part + f'*.{ftype}'))
+            stop = len(glob(fname_part + f'[0-9][0-9][0-9][0-9].{ftype}'))
         filenames = [f"{fname_part}{i:04d}.{ftype}" for i in range(start,stop+1)]
         if len(filenames) == 0:
             raise(OSError(f"can not find file, please check fname_part:{fname_part}"))
