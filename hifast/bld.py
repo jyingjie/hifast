@@ -198,7 +198,7 @@ class IO(BaseIO):
             if self.is_use_freq is not None:
                 is_rfi = is_rfi[:, self.is_use_freq]
                 
-            # M06 bandpass is not flat in [1410, 1416]    
+                # M06 bandpass is not flat in [1410, 1416]    
             if self.nB == 6:
                 whole_rfi = np.all(is_rfi, axis=1)
                 freq = self.freq
@@ -235,12 +235,14 @@ class IO(BaseIO):
 
     def gen_s2p_out(self,):
         args = self.args
-        
+
+        # gen self.s2p_out
         s2p = self.s2p[:]
-        
+                
         self._load_is_rfi()
         # is_excluded
         self._load_is_excluded()
+
         self._load_sources()
 
         # fit baseline:
@@ -289,7 +291,7 @@ def check_backend():
         print('Please use interaction mode in Jupyert and run \'%matplotlib ipympl\' in the notebook cell first')
         sys.exit()
 
-
+interact_save_lim = 20
 def interact(args):
     check_backend()
     import h5py
@@ -302,7 +304,7 @@ def interact(args):
         T = fs['Ta']
     elif 'flux' in fs.keys():
         T = fs['flux']
-    if 'is_excluded' in fs.keys():
+    if args.use_pre_is_excluded and 'is_excluded' in fs.keys():
         is_excluded = fs['is_excluded']
     else:
         is_excluded = None
@@ -316,6 +318,10 @@ def interact(args):
     interact.ylim = args.ylim[0] if len(args.ylim) == 1 else args.ylim
     interact.trans = args.trans
     interact.start_init = args.start_init
+    if T.shape[1] <= interact_save_lim:
+        interact.save = True
+    else:
+        interact.save = False
     return interact.main()
     # sys.exit()
 
@@ -324,7 +330,8 @@ class IO_i(IO):
     def gen_s2p_out(self,):
         args = self.args
         if args.interact:
-            self.s2p_out = interact_spec.bld
+            print('Please ensure you have adjusted the parameters for each `polar`, otherwise you will get nan vaules in the file')
+            self.s2p_out = interact_spec.bld_out
             return
 
 # Cell
@@ -333,7 +340,8 @@ if __name__ == '__main__':
     if args_.interact:
         interact_spec, widgets = interact(args_)[0:2]
         save = IO_i(args_, HistoryAdd={'interact':str(widgets)})
-        print('Please run \'save()\' in the notebook cell to save your results')
+        if interact_spec.save:
+            print('Please run \'save()\' in the notebook cell to save your results')
     else:
         print('#'*35+'Args'+'#'*35)
         args_from = parser.format_values()

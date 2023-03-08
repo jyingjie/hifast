@@ -94,7 +94,7 @@ parser.add_argument('--mw_frange', type=float, nargs=2,
 group = parser.add_argument_group(f'*Long freq \n{sep_line}')
 group.add_argument('--lf', '--long_freq', type=bool_fun, choices=[True, False], default='False',
                    help='find time rfi')
-group.add_argument('--lsn_thr_type', default='input_med_times',
+group.add_argument('--lsn_thr_type', default='input_absmed_times',
                    choices=['input_med_times','input_absmed_times','input_posimed_times'],
                    help='input times of median value, its absolute value, or add an offset to make it positive.\
                    used for lf, sf, nr')
@@ -118,7 +118,7 @@ group.add_argument('--sf', '--short_freq', type=bool_fun, choices=[True, False],
                    help='find time rfi')
 group.add_argument('--sf_use_time_only', type=bool_fun, choices=[True, False], default='False',
                    help="if true, only use 'is_timerfi' of 19 beams")
-group.add_argument('--sf_frange', type=float, nargs=2, default = [1370, 1390],
+group.add_argument('--sf_frange', type=float, nargs=2, default = [1378, 1385],
                    help='freq range exists short-freq time rfi')
 group.add_argument('--sf_frange_step',type = int,
                    help='if sf_frange is None and sf_file is None, cycle in whole freq band.')
@@ -127,15 +127,15 @@ group.add_argument('--sf_file',
 group.add_argument('--sf_mean_times', type=float, default=3,
                    help="first threhold, rfi is this times of median value after mean along time axis; \
                    ")
-group.add_argument('--sf_diff_times', type=float, default=1,
+group.add_argument('--sf_diff_times', type=float, default=.08,
                    help="second threhold, sharp edge on time axis. diff above this times of median will be recognized; \
                    ")
-group.add_argument('--sf_rfi_last',type=float, nargs=2, default=[10,float("INF")],
+group.add_argument('--sf_rfi_last',type=float, nargs=2, default=[20,float("INF")],
                    help='rfi lasts at least 10 spec numbers')
-group.add_argument('--sf_ext_add',type = int,default=0,
+group.add_argument('--sf_ext_add',type = int,default=3,
                    help='extend edge')
-group.add_argument('--sf_mask_rms_times',type = float, default=3,
-                   help='mask from peak to 2 sides, until RMS drops to 3 times of RMS')
+group.add_argument('--sf_mask_rms_times',type = float, default=2,
+                   help='mask from peak to 2 sides, until RMS drops to 2 times of RMS')
 
 ################## Period 8 MHZ RFI #######################
 parser.add_argument('--rms_sigma', type=float, default =6,
@@ -187,7 +187,7 @@ group.add_argument('--chan_step' ,type=int, default=5,
 group.add_argument('--mask_all_theory', action= 'store_true',
                    help='mask_all_theory')
 ### time coherent
-group.add_argument('--time_coherent_per', type=float, default = 1,
+group.add_argument('--time_coherent_per', type=float, default = 0.7,
                    help='rfi in one freq appears more than emmm, maybe 0.7, mask them all on time axis.')
 
 # Cell
