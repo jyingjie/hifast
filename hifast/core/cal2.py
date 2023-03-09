@@ -148,6 +148,7 @@ class CheckPCal(CalOnOff):
             with h5py.File(fpath_inds_on_used) as f:
                 inds_ref = f['S/inds_ref'][:]
             self.PRE_inds_on_is_use = np.isin(self.inds_ton[:,0], inds_ref)
+        self.fpath_inds_on_used = fpath_inds_on_used
 
     def _get_vary_frac(self, inds, freq_bins_c, bin_stat='mean'):
         """
@@ -273,12 +274,13 @@ class CheckPCal(CalOnOff):
         run after self.gen_pcals if needed
         """
         import h5py
-        fpath_ref = fpath_inds_on_used
+        if self.fpath_inds_on_used is None:
+            return 
+        fpath_ref = self.fpath_inds_on_used
+
         with h5py.File(fpath_ref, 'r') as f:
             inds_ref = f['S']['inds_ref'][:]
             start_stop_groups = f['S']['start_stop_groups'][:]
-            mjd = f['S']['mjd'][:]
-            assert(len(mjd)==len())
 
         inds_groups = np.split(self.inds, start_stop_groups.flatten())[1::2]
         ton_inds = self.inds_ton_use[:, self.inds_ton_use.shape[1]//2]
@@ -601,6 +603,7 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
 
     def prepare_pcals(self,):
         self.gen_pcals()
+        self.merge_by_group()
         self.gen_squeeze_freq_is_use()
         self.merge_pcals()
         self.gen_pcals_amp_diff()
@@ -733,6 +736,7 @@ class CalOnOff1111(CheckPCal, CalOnOffSav):
 
     def prepare_pcals(self, ):
         self.gen_pcals()
+        self.merge_by_group()
 
         pcals_s = self._get_smoothed(self.pcals, use_ndimage=True)
         del self.pcals
