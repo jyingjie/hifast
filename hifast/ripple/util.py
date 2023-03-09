@@ -165,7 +165,7 @@ class Read_hdf5(BaseIO):
     def get_data(self, polar = 'none'):
         data = deepcopy(self.s2p)
         if data.shape[0] == 2 or data.shape[0] == 1:
-            from .io import PolarMjdChan_to_MjdChanPolar
+            from ..utils.io import PolarMjdChan_to_MjdChanPolar
             data = PolarMjdChan_to_MjdChanPolar(data)
         if len(data.shape) == 3:
             if polar == 'xx':
