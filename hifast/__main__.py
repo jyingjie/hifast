@@ -2,7 +2,6 @@ import os
 import sys
 import time
 import subprocess
-import signal
 import argparse
 from glob import glob
 
@@ -43,6 +42,8 @@ subcomands_type2 = []
 
 parser = argparse.ArgumentParser(prog=f"python -m hifast", formatter_class=argparse.ArgumentDefaultsHelpFormatter, allow_abbrev=False, add_help=True,
                         description='', usage="python -m hifast subcomand fpath1 [fpath2 fpath3 ...] ... [-p P] [Args with '-'] ... [Args with '--'] ...")
+parser.add_argument('--version', action='store_true',
+                   help='display version')
 subparsers = parser.add_subparsers(help='', dest="subcomand", description='')
 
 for subcomand in subcomands_type1:
@@ -86,9 +87,18 @@ for subcomand in subcomands_type2:
 ## RUN
 args, remain = parser.parse_known_args()
 
-if '--outdir' in remain:
-    ind = remain.index('--outdir') + 1
-    remain[ind] = f"'{remain[ind]}'"
+if args.version:
+    from .__init__ import __version__
+    print(__version__)
+    sys.exit(0)
+
+# if '--outdir' in remain:
+#     ind = remain.index('--outdir') + 1
+#     remain[ind] = f"'{remain[ind]}'"
+
+for i in range(len(remain)):
+    if '%(' in remain[i] and not remain[i].startswith("'") and not remain[i].startswith("\""):
+        remain[i] = f"'{remain[i]}'"
 
 if args.subcomand is None:
     command = f"{sys.executable} -m hifast -h"

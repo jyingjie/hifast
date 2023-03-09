@@ -325,7 +325,7 @@ class FastRawSpec(FastRawData):
             if stop < 1:
                 raise(ValueError('input stop < 1'))
         else:
-            stop = len(glob(fname_part + f'*.{ftype}'))
+            stop = len(glob(fname_part + f'[0-9][0-9][0-9][0-9].{ftype}'))
         filenames = [f"{fname_part}{i:04d}.{ftype}" for i in range(start,stop+1)]
         if len(filenames) == 0:
             raise(OSError(f"can not find file, please check fname_part:{fname_part}"))
@@ -966,6 +966,14 @@ class PositionSwitch(CalOnOff):
         self.mjd_src_start = mjd_src_start
         self.mjd_ref_start = mjd_ref_start
 
+    def plot_sep(self,):
+        try:
+            if getattr(self, 'plot', False):
+                figname = self.out_name_base + "-sep.pdf"
+                plot_sep(self.inds_on, self.inds_off, self.p_on, self.p_off, figname=figname)
+        except:
+            pass
+
     def gen_Ta(self, only_off=False):
         """
         using
@@ -1038,13 +1046,14 @@ class PositionSwitch(CalOnOff):
         from matplotlib import pyplot as plt
         plt.figure(figsize=figsize)
         plt.scatter(self.ra_a[self.inds_on_src], self.dec_a[self.inds_on_src], s=1, color='r')
-        plt.scatter(self.ra_a[self.inds_off_src], self.dec_a[self.inds_off_src], s=1, color='r')
+        plt.scatter(self.ra_a[self.inds_off_src], self.dec_a[self.inds_off_src], s=1, color='r', label='src')
         plt.scatter(self.ra_a[self.inds_on_ref], self.dec_a[self.inds_on_ref], s=1, color='b')
-        plt.scatter(self.ra_a[self.inds_off_ref], self.dec_a[self.inds_off_ref], s=1, color='b')
+        plt.scatter(self.ra_a[self.inds_off_ref], self.dec_a[self.inds_off_ref], s=1, color='b', label='ref')
         plt.xlabel('ra')
         plt.ylabel('dec')
         plt.grid()
         plt.minorticks_on()
+        plt.legend()
         if outname is not None:
             print(f'Saving ra dec plot to {outname}')
             plt.savefig(outname)

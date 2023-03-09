@@ -76,8 +76,8 @@ class SpecFile():
             self.mjd = S['mjd'][()]
             self.freq = S['freq'][()]
             self.get_frame(f)
-
-        self.ra = _tight_ra(self.ra)
+        # not here
+        # self.ra = _tight_ra(self.ra)
 
         self.nchan_ori = len(self.freq)
         self.nspec_ori = len(self.ra)
@@ -91,11 +91,13 @@ class SpecFile():
 
     def select_spec(self, ra_range, dec_range, r_add):
         """
-        select spectra in ra and dec range; generate self.is_use_t
+        select spectra in ra and dec range; generate self.is_use_t; also change ra, dec
         """
         if ra_range is not None:
             ra_tmp = self.ra
             is_use_t = (ra_tmp >= (ra_range[0] - 2*r_add)) & (ra_tmp <= (ra_range[1] + 2*r_add))
+            is_use_t |= ((ra_tmp >= (ra_range[0]+360 - 2*r_add)) & (ra_tmp <= (ra_range[1]+360 + 2*r_add)))
+            is_use_t |= ((ra_tmp >= (ra_range[0]-360 - 2*r_add)) & (ra_tmp <= (ra_range[1]-360 + 2*r_add)))
         else:
             is_use_t = np.full(len(self.ra), True)
         if dec_range is not None:
@@ -265,7 +267,7 @@ class Imaging():
         """
         args = self.args
 
-        self.ra_stack = ra_stack = np.hstack([sf.ra for sf in self.specfiles])
+        self.ra_stack = ra_stack = _tight_ra(np.hstack([sf.ra for sf in self.specfiles]))
         self.dec_stack = dec_stack = np.hstack([sf.dec for sf in self.specfiles])
         if args.ra_range is None:
             args.ra_range = ra_stack.min(), ra_stack.max()
@@ -427,10 +429,13 @@ class Imaging():
             # select current ind_g, ind_cata, wei,
             is_ = (ind_cata_the < np.sum(nspecs[start:start+step])) & (ind_cata_the >=0)
             ind_cata_the_use = ind_cata_the[is_]
+            # if empty
+            if len(ind_cata_the_use) == 0:
+                # notice: make sure the skip not affect the following steps
+                continue
             ind_g_use = self.ind_g[is_]
             weis_use = weis[is_]
             # check
-            assert (self.ra_stack[self.ind_cata[is_]] == np.hstack([sf.ra for sf in sfs])[ind_cata_the_use]).all()
             assert (self.dec_stack[self.ind_cata[is_]] == np.hstack([sf.dec for sf in sfs])[ind_cata_the_use]).all()
 
             csp = CalcSpecPixel(sfs, key=args.key, polar=args.polar, scale_beams=self.scale_beams, share_mem=args.share_mem)
