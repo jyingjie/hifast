@@ -134,13 +134,20 @@ class CheckPCal(CalOnOff):
                               pcal_vary_lim_bin=0.01,
                               pcal_bad_lim_t=0.5,
                               pcal_bad_lim_freq=0.7,
+                              fpath_inds_on_used=None,
                               **kwargs):
         # self.pcal_vary_frac = pcal_vary_frac
         self.pcal_vary_lim_bin = pcal_vary_lim_bin
         self.pcal_bad_lim_t = pcal_bad_lim_t # not used now
         self.pcal_bad_lim_freq = pcal_bad_lim_freq
         self.freq_step_c = freq_step_c
+
         super().__init__(*args, **kwargs)
+
+        if fpath_inds_on_used is not None:
+            with h5py.File(fpath_inds_on_used) as f:
+                inds_ref = f['S/inds_ref'][:]
+            self.PRE_inds_on_is_use = np.isin(self.inds_ton[:,0], inds_ref)
 
     def _get_vary_frac(self, inds, freq_bins_c, bin_stat='mean'):
         """
@@ -150,7 +157,10 @@ class CheckPCal(CalOnOff):
             raise(ValueError('inds should be 2D.'))
         if bin_stat == 'mean_a':
             bin_stat = mean_a
-        p = self.get_field(inds)
+        try:
+            p = self.get_field(inds)
+        except:
+            p = self.get_field(self.inds)[inds]
         ps, _, _ = binned_statistic_e(self.freq_use, p, axis=2, bins=freq_bins_c, statistic=bin_stat)
         ps_max, ps_min = np.max(ps, axis=1), np.min(ps, axis=1)
         df = (ps_max - ps_min)/ps_min
@@ -161,11 +171,13 @@ class CheckPCal(CalOnOff):
         """
         check pcal in freq bins
         """
+        # need odd
         n_c = 6
-        assert n_c - n_c//2 <= self.n_off
 
-        n_cbef = n_c//2
-        n_caft = n_c - n_cbef
+        n_add = (int(np.ceil((n_c // 2) / self.n_off)) - 1) * self.n_on
+
+        n_cbef = n_caft = n_c // 2 + n_add
+
         inds_cbef = inds_ton[:,:1] - np.arange(1,n_cbef+1)[::-1]
         inds_caft = inds_ton[:,-1:] + np.arange(1,n_caft+1)
 
@@ -187,6 +199,15 @@ class CheckPCal(CalOnOff):
         # been sorted !
         inds_coff[0].sort()
         inds_coff[-1].sort()
+        # remove cal on if
+        if n_add > 0:
+            # need len(self.inds_ton)>=2
+            is_1_ = ~np.isin(np.arange(self.inds_ton[-1][0]-1, self.inds_ton[-1][0]-1 - n_cbef, -1), self.inds_on)[::-1]
+            is_2_ = ~np.isin(np.arange(self.inds_ton[0][-1]+1, self.inds_ton[0][-1]+1 + n_caft, 1), self.inds_on)
+            inds_coff = inds_coff[:, np.hstack([is_1_, is_2_])]
+            # todo fix first and last
+            inds_coff[inds_coff < 0] = 0
+            inds_coff[inds_coff > self.inds[-1]] = self.inds_off[-1]
 
         # check freq bins
         freq_range = self.freq_use[-1] - self.freq_use[0]
@@ -200,11 +221,23 @@ class CheckPCal(CalOnOff):
         return freq_bins_c, is_bad_fbins
 
     def gen_pcals(self,):
-        freq_bins_c, is_bad_fbins = self.check_pcal(self.inds_ton, self.freq_step_c)
-        is_aband_whole = np.sum(is_bad_fbins, axis=1) / is_bad_fbins.shape[1] > self.pcal_bad_lim_freq
+        if hasattr(self, 'PRE_inds_on_is_use'):
+            self.inds_ton_use = self.inds_ton[self.PRE_inds_on_is_use]
+            self.inds_toff_bef_use = self.inds_toff_bef[self.PRE_inds_on_is_use]
+            self.inds_toff_aft_use = self.inds_toff_aft[self.PRE_inds_on_is_use]
+
+        else:
+            self.inds_ton_use = self.inds_ton
+            self.inds_toff_bef_use = self.inds_toff_bef
+            self.inds_toff_aft_use = self.inds_toff_aft
+
+        freq_bins_c, is_bad_fbins = self.check_pcal(self.inds_ton_use, self.freq_step_c)
+
+        is_aband_whole = np.sum(is_bad_fbins, axis=1) / is_bad_fbins.shape[1] >= self.pcal_bad_lim_freq
         ind_in_bins = np.digitize(self.freq_use, freq_bins_c) - 1
 
-        pcals = self._get_cal_power(self.inds_ton, self.inds_toff_bef, self.inds_toff_aft)
+        pcals = self._get_cal_power(self.inds_ton_use, self.inds_toff_bef_use, self.inds_toff_aft_use)
+
         if getattr(self, 'plot_pcals', False):
             from ..waterfall import plot_im
             fig, axs = plt.subplots(2, 2, figsize=(16,10))
@@ -234,6 +267,32 @@ class CheckPCal(CalOnOff):
         self.is_bad_fbins = is_bad_fbins
         self.ind_in_bins = ind_in_bins
         self.is_aband_whole = is_aband_whole
+        
+    def merge_by_group(self,):
+        """
+        run after self.gen_pcals if needed
+        """
+        import h5py
+        fpath_ref = fpath_inds_on_used
+        with h5py.File(fpath_ref, 'r') as f:
+            inds_ref = f['S']['inds_ref'][:]
+            start_stop_groups = f['S']['start_stop_groups'][:]
+            mjd = f['S']['mjd'][:]
+            assert(len(mjd)==len())
+
+        inds_groups = np.split(self.inds, start_stop_groups.flatten())[1::2]
+        ton_inds = self.inds_ton_use[:, self.inds_ton_use.shape[1]//2]
+        inds_groups_2 = list(map(lambda d:np.where(np.isin(ton_inds, d))[0], inds_groups))
+
+        inds_ton_use = self.inds_ton_use[list([np.median(g).astype('int') for g in inds_groups_2])]
+        pcals = np.stack([np.nanmedian(self.pcals[g], axis=0) for g in inds_groups_2])
+        is_aband_whole = np.stack([np.logical_and.reduce(self.is_aband_whole[g], axis=0) for g in inds_groups_2])
+        is_bad_fbins = np.stack([np.logical_and.reduce(self.is_bad_fbins[g], axis=0) for g in inds_groups_2])
+
+        self.inds_ton_use = inds_ton_use
+        self.pcals = pcals
+        self.is_aband_whole = is_aband_whole
+        self.is_bad_fbins = is_bad_fbins
 
 # Cell
 class CalOnOffSav(CalOnOff):
@@ -282,7 +341,7 @@ class CalOnOffSav(CalOnOff):
 #                 warnings.warn('More than one-third of the Cals are abandoned. Please check your data and ``--pcal_vary_frac``.')
             if save_pcals:
                 print(f"saving pcals in {outname}")
-                fwp_S['inds_ton'] = self.inds_ton
+                fwp_S['inds_ton'] = self.inds_ton_use
                 fwp_S['is_aband_whole'] = self.is_aband_whole
                 for attr in ['pcals_merged',
                              'pcals_merged_s',
@@ -325,7 +384,7 @@ class CalOnOffSav(CalOnOff):
                 res['freq'] = self.freq_use
                 res['Ta'] = MjdChanPolar_to_PolarMjdChan(T)
                 res['Tcal'] = tc_inter
-                res['inds_ton'] = self.inds_ton
+                res['inds_ton'] = self.inds_ton_use
                 res['is_aband_whole'] = self.is_aband_whole
                 for attr in ['pcals_merged',
                              'pcals_merged_s',
@@ -365,7 +424,7 @@ class CalOnOffSav(CalOnOff):
             g['mjd'] = np.hstack(mjds)
             g['freq'] = self.freq_use
             g['Tcal'] = tc_inter
-            g['inds_ton'] = self.inds_ton
+            g['inds_ton'] = self.inds_ton_use
             g['is_aband_whole'] = self.is_aband_whole
             for attr in ['pcals_merged',
                          'pcals_merged_s',
@@ -466,7 +525,7 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
         else:
             raise(ValueError(f"calc_diff_method:{calc_diff_method}"))
         self.pcals_amp_diff = self.squeeze_freq(pcals_diff)
-        self.pcals_amp_diff_inds = np.mean(self.inds_ton, axis=1)
+        self.pcals_amp_diff_inds = np.mean(self.inds_ton_use, axis=1)
         self.calc_diff_method = calc_diff_method
 
     def gen_pcals_amp_diff_interp_values(self,):

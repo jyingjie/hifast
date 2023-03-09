@@ -110,6 +110,10 @@ parser.add_argument('--save_pcals', type=bool_fun, choices=[True, False], defaul
 parser.add_argument('--not_cali', type=bool_fun, choices=[True, False], default='False',
                     help='if True, save power data, no temperature calibration')
 
+
+parser.add_argument('--fpath_inds_on_used',
+                    help='')
+
 # Cell
 if __name__ == '__main__':
     args_ = parser.parse_args()
@@ -219,6 +223,7 @@ if __name__ == '__main__':
         paras['freq_step_c'] = args.freq_step_c
         paras['pcal_vary_lim_bin'] = args.pcal_vary_lim_bin
         paras['pcal_bad_lim_freq'] = args.pcal_bad_lim_freq
+        paras['fpath_inds_on_used'] = args.fpath_inds_on_used
         if args.merge_pcals:
             # check
             if args.method_interp in ['gaussian', 'slinear', 'linear', 'quadratic', 'cubic', 'nearest', 'next', 'previous']:

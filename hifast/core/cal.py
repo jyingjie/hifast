@@ -785,11 +785,13 @@ class CalOnOffA(CalOnOff):
         """
         check cal
         """
+        # need odd
         n_c = 6
-        assert n_c - n_c//2 <= self.n_off
 
-        n_cbef = n_c//2
-        n_caft = n_c - n_cbef
+        n_add = (int(np.ceil((n_c // 2) / self.n_off)) - 1) * self.n_on
+
+        n_cbef = n_caft = n_c // 2 + n_add
+
         inds_cbef = inds_ton[:,:1] - np.arange(1,n_cbef+1)[::-1]
         inds_caft = inds_ton[:,-1:] + np.arange(1,n_caft+1)
 
@@ -811,6 +813,10 @@ class CalOnOffA(CalOnOff):
         # been sorted !
         inds_coff[0].sort()
         inds_coff[-1].sort()
+
+        # remove cal on if
+        if n_add > 0:
+            inds_coff = inds_coff[~np.isin(inds_coff, self.inds_on)]
 
         # check off
         is_use = self._check_diff(inds_coff)
