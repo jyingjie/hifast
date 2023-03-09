@@ -199,15 +199,15 @@ class CheckPCal(CalOnOff):
         # been sorted !
         inds_coff[0].sort()
         inds_coff[-1].sort()
-
         # remove cal on if
         if n_add > 0:
-            is_1_ = ~np.isin(np.arange(self.inds_off[0], self.inds_off[0] + n_caft, 1), self.inds_on)
-            is_2_ = ~np.isin(np.arange(self.inds_on[-1], self.inds_on[-1] - n_cbef, -1)-1, self.inds_on)
+            # need len(self.inds_ton)>=2
+            is_1_ = ~np.isin(np.arange(self.inds_ton[-1][0]-1, self.inds_ton[-1][0]-1 - n_cbef, -1), self.inds_on)[::-1]
+            is_2_ = ~np.isin(np.arange(self.inds_ton[0][-1]+1, self.inds_ton[0][-1]+1 + n_caft, 1), self.inds_on)
             inds_coff = inds_coff[:, np.hstack([is_1_, is_2_])]
-            # need update later
+            # todo fix first and last
             inds_coff[inds_coff < 0] = 0
-            inds_coff[inds_coff > self.inds[-1]] = 0
+            inds_coff[inds_coff > self.inds[-1]] = self.inds_off[-1]
 
         # check freq bins
         freq_range = self.freq_use[-1] - self.freq_use[0]
@@ -232,16 +232,11 @@ class CheckPCal(CalOnOff):
             self.inds_toff_aft_use = self.inds_toff_aft
 
         freq_bins_c, is_bad_fbins = self.check_pcal(self.inds_ton_use, self.freq_step_c)
-        print(freq_bins_c.shape)
 
         is_aband_whole = np.sum(is_bad_fbins, axis=1) / is_bad_fbins.shape[1] >= self.pcal_bad_lim_freq
-        print('here1')
         ind_in_bins = np.digitize(self.freq_use, freq_bins_c) - 1
-        print('here2' )
 
         pcals = self._get_cal_power(self.inds_ton_use, self.inds_toff_bef_use, self.inds_toff_aft_use)
-
-        print('here3')
 
         if getattr(self, 'plot_pcals', False):
             from ..waterfall import plot_im
@@ -272,6 +267,32 @@ class CheckPCal(CalOnOff):
         self.is_bad_fbins = is_bad_fbins
         self.ind_in_bins = ind_in_bins
         self.is_aband_whole = is_aband_whole
+        
+    def merge_by_group(self,):
+        """
+        run after self.gen_pcals if needed
+        """
+        import h5py
+        fpath_ref = fpath_inds_on_used
+        with h5py.File(fpath_ref, 'r') as f:
+            inds_ref = f['S']['inds_ref'][:]
+            start_stop_groups = f['S']['start_stop_groups'][:]
+            mjd = f['S']['mjd'][:]
+            assert(len(mjd)==len())
+
+        inds_groups = np.split(self.inds, start_stop_groups.flatten())[1::2]
+        ton_inds = self.inds_ton_use[:, self.inds_ton_use.shape[1]//2]
+        inds_groups_2 = list(map(lambda d:np.where(np.isin(ton_inds, d))[0], inds_groups))
+
+        inds_ton_use = self.inds_ton_use[list([np.median(g).astype('int') for g in inds_groups_2])]
+        pcals = np.stack([np.nanmedian(self.pcals[g], axis=0) for g in inds_groups_2])
+        is_aband_whole = np.stack([np.logical_and.reduce(self.is_aband_whole[g], axis=0) for g in inds_groups_2])
+        is_bad_fbins = np.stack([np.logical_and.reduce(self.is_bad_fbins[g], axis=0) for g in inds_groups_2])
+
+        self.inds_ton_use = inds_ton_use
+        self.pcals = pcals
+        self.is_aband_whole = is_aband_whole
+        self.is_bad_fbins = is_bad_fbins
 
 # Cell
 class CalOnOffSav(CalOnOff):
