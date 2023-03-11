@@ -34,10 +34,12 @@ except ImportError:
     NANSUM = np.nansum
 
 # Internal Cell
+import re
 def groups_print_fnames(fnames):
     from itertools import groupby
     nBs = [get_nB(fname) for fname in fnames]
-    pairs = [(replace_nB(fname, 0), get_nB(fname)) for fname in fnames]
+    replace_nB = lambda path,s:re.sub(r'[0-9][0-1]M-', f"-M{s}"[::-1], path[::-1], count=1)[::-1]
+    pairs = [(replace_nB(fname, '{Beam}'), get_nB(fname)) for fname in fnames]
     pairs.sort()
     for key, group in groupby(pairs, lambda x:x[0]):
         print(key)

@@ -3,7 +3,6 @@
 __all__ = ['sep_line', 'parser']
 
 # Cell
-from .core.image import Imaging
 from .utils.io import *
 
 # Cell
@@ -86,6 +85,7 @@ parser.add_argument('--scale_beams_file',
 # Cell
 if __name__ == '__main__':
     import os
+    from .core.image import Imaging
     # disable using storage disk in Multiprocessing.Array
     # https://docs.python.org/3/library/tempfile.html#tempfile.gettempdir
     # https://docs.python.org/3/library/tempfile.html#tempfile.tempdir
