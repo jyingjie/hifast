@@ -140,7 +140,7 @@ class Imaging2(Imaging):
         if verbose:
             from tqdm import tqdm
             iter_ = tqdm(iter_, total=len(start_), desc='CPU 0: ', mininterval=2)
-
+        args = obj.args
         for s, e, ii in iter_:
             specs = obj._load_spec(s, e)
             # deal with nan value
