@@ -116,19 +116,22 @@ class Imaging2(Imaging):
         """
         load spec for one grid from `self.specfiles`
         """
+        args = self.args
         ifile_ = self.ifile[s:e]
         ind_ifile_ = self.ind_ifile[s:e]
         # ifile_ and ind_ifile_ is sorted in ifile_ order and then in ind_ifile_ order after
         # self.ind_g and self.ind_cata (and ...) sorted by self.ind_g then by self.ind_cata
         ifile_uni, ifile_num = np.unique(ifile_, return_counts=True)
         ind_ifile_list = np.split(ind_ifile_, np.cumsum(ifile_num)[:-1])
-        specs = np.vstack([self._load_spec_f1(self.specfiles[i], ii, self.args.key, self.args.polar)
+        specs = np.vstack([self._load_spec_f1(self.specfiles[i], ii, args.key, args.polar)
                           for i, ii in zip(ifile_uni,ind_ifile_list)])
 
         return specs
 
     @staticmethod
     def calc(q, obj, start_, stop_, ind_g_uni_, verbose=False):
+        args = obj.args
+
         _MEAN = NANMEAN
         _MEDIAN = NANMEDIAN
         _SUM = NANSUM
@@ -140,7 +143,7 @@ class Imaging2(Imaging):
         if verbose:
             from tqdm import tqdm
             iter_ = tqdm(iter_, total=len(start_), desc='CPU 0: ', mininterval=2)
-        args = obj.args
+
         for s, e, ii in iter_:
             specs = obj._load_spec(s, e)
             # deal with nan value
@@ -169,7 +172,7 @@ class Imaging2(Imaging):
             elif args.method == 'median':
                 spec_g = _MEDIAN(specs.astype('float64'), axis=0)
             # limit nan frac
-            spec_g[num_finite_chan < num*obj.args.frac_finite_min] = np.nan
+            spec_g[num_finite_chan < num*args.frac_finite_min] = np.nan
             # change spec inplace
             obj.pixel_data[ii] = spec_g
             obj.pixel_specs_nums[ii] = num
