@@ -467,9 +467,9 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
         if arr.ndim !=3 :
             raise(ValueError('need 3d'))
         if method == 'median':
-            squ_fun = np.median
+            squ_fun = np.nanmedian
         elif method == 'mean':
-            squ_fun = np.mean
+            squ_fun = np.nanmean
         else:
             raise(ValueError(f'method {method} not supported'))
         arr_s = np.zeros((arr.shape[0], arr.shape[2]), dtype='float64')
@@ -505,7 +505,7 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
             pcals_merged = np.nanmean(pcals, axis=0, dtype='float64', keepdims=True)
 
         self.pcals_merged = pcals_merged
-        self.pcals_merged_s = self._get_smoothed(pcals_merged, use_ndimage=True)
+        self.pcals_merged_s = self._get_smoothed(pcals_merged, check_nan=True)
 
     def gen_pcals_amp_diff(self,):
         """
@@ -744,7 +744,7 @@ class CalOnOff1111(CheckPCal, CalOnOffSav):
         self.gen_pcals()
         self.merge_by_group()
 
-        pcals_s = self._get_smoothed(self.pcals, use_ndimage=True)
+        pcals_s = self._get_smoothed(self.pcals, check_nan=True)
         del self.pcals
 
         segs_be_list = []

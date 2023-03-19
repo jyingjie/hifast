@@ -342,7 +342,7 @@ class FastRawSpec(FastRawData):
         #freq += 0.000476837158203125/2 # using center frequency
         super()._get_freq(center_corr = 0.000476837158203125/2)
 
-    def _get_smoothed(self, power, freq=None, use_ndimage=False):
+    def _get_smoothed(self, power, freq=None, use_ndimage=False, check_nan=False):
         """
         power: ndim 3
         freq: if is None, use self.freq_use
@@ -357,8 +357,15 @@ class FastRawSpec(FastRawData):
             if use_ndimage:
                 from scipy import ndimage
                 s_power = ndimage.gaussian_filter1d(power, sigma=sigma, axis=1)
+            elif check_nan:
+                is_ = np.isfinite(power)
+                power[~is_] = 0
+                s_power = smooth_axis1_d3(power, method=smooth, sigma=sigma)
+                s_power /= smooth_axis1_d3(is_.astype('int'), method=smooth, sigma=sigma)
+                power[~is_] = np.nan
             else:
                 s_power = smooth_axis1_d3(power, method=smooth, sigma=sigma)
+
         elif smooth=='poly':
             s_power = smooth_axis1_d3(power, method=smooth, x=freq, deg= s_para['s_deg'])
         else:
