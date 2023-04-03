@@ -11,6 +11,7 @@ import h5py
 import re
 import os
 from glob import glob
+import json
 
 from ..core.baseline import get_baseline, sub_baseline
 from ..utils import io
@@ -106,6 +107,7 @@ class Test(object):
         self.sub_baseline_para = kwargs
         self.sub_baseline_para['is_excluded'] = self.is_excluded_t
         self.sub_baseline_para['exclude_add'] = exclude_add
+        self.sub_baseline_para['knots'] = json.loads(self.sub_baseline_para['knots'])
 
         self.bld = sub_baseline(self.freq, self.T2p_t, verbose=verbose, **self.sub_baseline_para)
         if self.bld_out is not None:
@@ -147,6 +149,7 @@ def main():
     method = ['PLS-'+r for r in rew_type]
     method += ['poly-'+r for r in rew_type]
     method += ['Gauss-'+r for r in rew_type]
+    method += ['knspline-'+r for r in rew_type]
     method += ['spline-'+r for r in rew_type]
     method += ['masPLS-'+r for r in rew_type]
     method += ['asPLS',]
@@ -176,6 +179,13 @@ def main():
     sliders.update(_FloatSlider(offset=(2, 0.1, 4, 0.1)))
     sliders.update(_FloatSlider(ratio=(0.01, 0.001, 0.015,0.001),
                                 readout_format='.3f'))
+
+    sliders['knots'] = widgets.Text(
+                    value=json.dumps(tes.freq[[1,-2]].tolist()),
+                    description='knots',
+                    layout=widgets.Layout(width=f"{mpl.rcParams['figure.dpi']*figsize[0]*1.2}px",),
+                    disabled=False)
+
 
     bak = w_conf.pop('layout')
     #w_conf['style'] = {'description_width': 'initial'}
@@ -250,16 +260,13 @@ def main():
                       w['s_sigma_t'],
                       w['niter'],
                      ]),
-
-
-
-
         widgets.HBox([w['average_every_freq'],
                       w['s_method_freq'],
                       w['s_sigma_freq'],
                       w['offset']]),
         widgets.HBox([w['method'], w['lam'], w['deg'],
                       w['exclude_add']]),
+        widgets.HBox([w['knots'], ]),
         widgets.HBox([w['frange_excluded'], ]),
     ]
 
