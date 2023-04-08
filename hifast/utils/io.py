@@ -416,7 +416,7 @@ class Path_IO(object):
             args.outdir = os.path.expanduser(args.outdir)
 
         print(f'outdir: {args.outdir}')
-        if not os.path.exists(args.outdir):
+        if args.outdir!='' and (not os.path.exists(args.outdir)):
             print(f'outdir {args.outdir} not exists. Create it now')
             os.makedirs(args.outdir, exist_ok=True)
 
