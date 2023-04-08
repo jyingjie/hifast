@@ -399,18 +399,23 @@ class BL_base(object):
             ratio_fit = norm(w-wt)/norm(w)
             if ratio_fit < self.ratio:
                 break
-
+        exclude2 = None
         if exclude_add == 'auto' or exclude_add == 'auto1':
-            # overwrite self.exclude
-            self.exclude = extend_Trues(w<0.01, axis=-1, ext_frac=1/3)
+            is_ = w<0.01
+            if self.exclude is not None:
+                is_[self.exclude] = False # not extend the input exclude range
+            exclude2 = extend_Trues(is_, axis=-1, ext_frac=1/3)
         elif exclude_add == 'auto2':
-            # overwrite self.exclude
             ds = ndimage.gaussian_filter1d(d, 3)
-            self.exclude = extend_Trues(ds > 3*STD(d[d<0]), axis=-1, ext_frac=1/3)
-
-        if self.exclude is not None and (exclude_add == 'end' or exclude_add[:4] == 'auto'):
+            is_ = ds > 3*STD(d[d<0])
+            if self.exclude is not None:
+                is_[self.exclude] = False # not extend the input exclude range
+            exclude2 = extend_Trues(is_, axis=-1, ext_frac=1/3)
+        if exclude2 is not None:
+            if self.exclude is not None:
+                exclude2 |= self.exclude
             w = wt # use wt
-            w[self.exclude] = 0
+            w[exclude2] = 0
             z = self._fit(x, y, w)
 
         bl = z
