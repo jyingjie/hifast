@@ -142,7 +142,8 @@ class IO(bld_IO):
     def gen_s2p_out(self,):
         args = self.args
 
-        # gen self.s2p_out
+        self._load_is_rfi()
+        # is_excluded
         s2p = self.s2p[:]
         # is_excluded
         self._load_is_excluded()
@@ -186,6 +187,9 @@ class IO(bld_IO):
         if hasattr(self,'is_excluded'):
             # update
             self.dict_out['is_excluded'] = self.is_excluded
+        if hasattr(self, 'is_rfi'):
+            # update
+            self.dict_out['is_rfi'] = self.is_rfi
         # save to hdf5 file
         if save:
             self.save()

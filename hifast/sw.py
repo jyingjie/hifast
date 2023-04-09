@@ -46,7 +46,7 @@ group.add_argument('--s_sigma_freq_T', type=float, default=5,
 
 # method
 group = parser.add_argument_group(f'*select method used to fit standing wave\n{sep_line}')
-group.add_argument('--method', default='sin_poly', choices=['sin_poly', 'fft', 'running_median', 'running_mean'],
+group.add_argument('--method', default='fft', choices=['sin_poly', 'fft', 'running_median', 'running_mean'],
                    help='method to fit standing wave')
 group.add_argument('--nobld', type=bool_fun, choices=[True, False], default='False',
                    help="if True, use the spectra before bld to subtract standing wave and output file name will add 'nobld'")
@@ -89,11 +89,11 @@ group.add_argument('--times_thr', type=float, default=4,
                    help='sparks above ~ times of rms will be set noise (unsmooth)')
 group.add_argument('--times_s_thr', type=float, default=3,
                    help='above ~ times of rms will be replaced (smoothed once)')
-group.add_argument('--times_s_thr2', type=float, default=1.5,
+group.add_argument('--times_s_thr2', type=float, default=2,
                    help='above ~ times of rms will be replaced (smoothed twice)')
 group.add_argument('--ext_freq', type=float, default=1.3,
                    help='extend freq range to replace (mhz)')
-group.add_argument('--rfi_width_lim', type=float, default=30,
+group.add_argument('--rfi_width_lim', type=float, default=20,
                    help='rfi should contain more channels than limit')
 group.add_argument('--ext_sec', type=int, default=20,
                    help='extend channel number of start and end of each section')
@@ -106,18 +106,18 @@ group = parser.add_argument_group(f'phase space')
 # remove which component in fft? (only 4 types now)
 group.add_argument('--sw_base', type=bool_fun, choices=[True, False], default='True',
                    help='if True, remove constant components')
-group.add_argument('--sw_periods', nargs='+', choices=['1mhz', '2mhz', '0_04mhz', 'none'], default=['1mhz', '2mhz', '0_04mhz'],
+group.add_argument('--sw_periods', nargs='+', choices=['1mhz', '2mhz', '0_04mhz', 'none'], default=['1mhz',  '0_04mhz'],
                    help='remove ripple (1mhz: 1.08mhz, 2mhz:1.92mhz, 0_04mhz: 0.039 mhz)')
-group.add_argument('--check_2mhz', type=bool_fun, choices=[True, False], default='True',
+group.add_argument('--check_2mhz', type=bool_fun, choices=[True, False], default='False',
                    help='if True, remove 2mhz from sw_periods except for Beam 6')
 
-group.add_argument('--amp_thr_mean_factor', type=float, nargs=2, default=[1.05, 1.4],
+group.add_argument('--amp_thr_mean_factor', type=float, nargs=2, default=[1.05, 1.3],
                    help='above mean amptitude threshold will be chosed, noise off and on')
 group.add_argument('--amp_thr_solo_factor', type=float, nargs=2, default=[1.4, 1.7],
                    help='above amptitude threshold will be chosed in every spec, noise off and on')
 group.add_argument('--chan_wide', type=int, default=5,
                    help='channel numbers near 1mhz to be chosed (wide)')
-group.add_argument('--chan_narr', type=int, default=3,
+group.add_argument('--chan_narr', type=int, default=2,
                    help='channel numbers near 1mhz to be chosed (narrow)')
 group.add_argument('--choose_method', default='all', choices=['all', 'interpolate'],
                    help='method to choose components in fft')

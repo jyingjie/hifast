@@ -279,7 +279,9 @@ class IO(BaseIO):
             fit_kwargs[key[3:]] = getattr(args, key)
         for key in keys[-2:]:
             fit_kwargs[key] = getattr(args, key)
-        return mask_rfi_p(self.s2p_mask, **fit_kwargs)
+        p_rfi = mask_rfi_p(self.s2p_mask, **fit_kwargs)
+        p_rfi[:,self.protect_use] = False
+        return p_rfi
 
     def get_nr(self):
         """

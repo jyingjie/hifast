@@ -214,7 +214,7 @@ if __name__ == '__main__':
             if args.show:
                 fig.show()
                 input()
-            fig.savefig(f'{outdir}/{key}.19.pdf', rasterized=rasterized)
+            fig.savefig(f'{outdir}/{key}.19.pdf',)
             fig.clear()
     else:
         for fname in tqdm(fnames):
@@ -232,5 +232,5 @@ if __name__ == '__main__':
             if args.show:
                 fig.show()
                 input()
-            fig.savefig(f'{outdir}/{fbasename}.pdf', rasterized=rasterized)
+            fig.savefig(f'{outdir}/{fbasename}.pdf',)
             fig.clear()

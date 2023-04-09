@@ -206,6 +206,14 @@ class IO(BaseIO):
             is_rfi = fs['is_rfi'][:]
             if self.is_use_freq is not None:
                 is_rfi = is_rfi[:, self.is_use_freq]
+                
+                # M06 bandpass is not flat in [1410, 1416]    
+            if self.nB == 6:
+                whole_rfi = np.all(is_rfi, axis=1)
+                freq = self.freq
+                is_use = (freq > 1406) & (freq < 1416)
+                is_rfi[:, is_use] = False
+                is_rfi[whole_rfi] = True
 
             self.is_rfi = is_rfi
 
@@ -217,6 +225,11 @@ class IO(BaseIO):
             is_excluded = fs['is_excluded'][:]
             if self.is_use_freq is not None:
                 is_excluded = is_excluded[:, self.is_use_freq]
+            # M06 bandpass is not flat in [1410, 1416]    
+            if self.nB == 6:
+                freq = self.freq
+                is_use = (freq > 1406) & (freq < 1416)
+                is_excluded[:, is_use] = False
             self.is_excluded = is_excluded
 
     def _load_sources(self):
@@ -234,6 +247,8 @@ class IO(BaseIO):
 
         # gen self.s2p_out
         s2p = self.s2p[:]
+                
+        self._load_is_rfi()
         # is_excluded
         self._load_is_excluded()
 
@@ -270,6 +285,9 @@ class IO(BaseIO):
         if hasattr(self, 'is_excluded'):
             # update
             self.dict_out['is_excluded'] = self.is_excluded
+        if hasattr(self, 'is_rfi'):
+            # update
+            self.dict_out['is_rfi'] = self.is_rfi
 
         # save to hdf5 file
         if save:
