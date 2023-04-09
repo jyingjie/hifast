@@ -211,10 +211,10 @@ class IO(BaseIO):
 
         from .core.regions import read_regions, replace_region
         args = self.args
-        
+
         if args.reg_from is None or args.reg_from == 'none':
             return None
-        
+
         nB = get_nB(args.fpath)
         if args.reg_from == 'default':
             print('try to find the default regions file')
@@ -229,8 +229,8 @@ class IO(BaseIO):
                 fpattern = '/*-19rfi.hdf5.reg'
             else:
                 fpattern = f'/*{args.fpath[-10:]}.reg'
-                
-            fpath_regs = glob(os.path.dirname(args.fpath) + fpattern)    
+
+            fpath_regs = glob(os.path.dirname(args.fpath) + fpattern)
             length = len(fpath_regs)
             if length == 1:
                 fpath_reg = fpath_regs[0]
@@ -239,12 +239,12 @@ class IO(BaseIO):
                 return None
             else:
                 raise FileError('Too many regions file! Beams should share only one.')
-                
+
             if shared_beams != 'all': # string like '1,2,3'
                 beams = [int(i) for i in shared_beams.split(',')]
                 if nB not in beams:
                     return None
-                
+
         else:
             project = get_project(args.fpath)
             date = get_date_from_path(args.fpath)
@@ -252,8 +252,8 @@ class IO(BaseIO):
             if not os.path.exists(fpath_reg):
                 print(f'can not find the specified regions file {fpath_reg}, skipping')
                 return None
-            
-        
+
+
         print(f'read regions from {fpath_reg}')
         regions = read_regions(fpath_reg)
         if regions is None:
@@ -302,7 +302,7 @@ class IO(BaseIO):
         p_rfi = mask_rfi_p(self.s2p_mask, **fit_kwargs)
         p_rfi[:,self.protect_use] = False
         return p_rfi
-    
+
     def get_nr(self):
         """
         Narrowband single channel RFI

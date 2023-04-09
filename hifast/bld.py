@@ -206,8 +206,8 @@ class IO(BaseIO):
             is_rfi = fs['is_rfi'][:]
             if self.is_use_freq is not None:
                 is_rfi = is_rfi[:, self.is_use_freq]
-                
-                # M06 bandpass is not flat in [1410, 1416]    
+
+                # M06 bandpass is not flat in [1410, 1416]
             if self.nB == 6:
                 whole_rfi = np.all(is_rfi, axis=1)
                 freq = self.freq
@@ -225,7 +225,7 @@ class IO(BaseIO):
             is_excluded = fs['is_excluded'][:]
             if self.is_use_freq is not None:
                 is_excluded = is_excluded[:, self.is_use_freq]
-            # M06 bandpass is not flat in [1410, 1416]    
+            # M06 bandpass is not flat in [1410, 1416]
             if self.nB == 6:
                 freq = self.freq
                 is_use = (freq > 1406) & (freq < 1416)
@@ -247,7 +247,7 @@ class IO(BaseIO):
 
         # gen self.s2p_out
         s2p = self.s2p[:]
-                
+
         self._load_is_rfi()
         # is_excluded
         self._load_is_excluded()
