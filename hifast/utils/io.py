@@ -412,9 +412,11 @@ class Path_IO(object):
             project = get_project(args.fpath)
             date = get_date_from_path(args.fpath)
             args.outdir = sub_patten(args.outdir, date=date, nB=f'{nB:02d}', project=project)
+            # expand '~' as outdir may be a string in bash
+            args.outdir = os.path.expanduser(args.outdir)
 
         print(f'outdir: {args.outdir}')
-        if not os.path.exists(args.outdir):
+        if args.outdir!='' and (not os.path.exists(args.outdir)):
             print(f'outdir {args.outdir} not exists. Create it now')
             os.makedirs(args.outdir, exist_ok=True)
 

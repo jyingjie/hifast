@@ -9,6 +9,7 @@ from glob import glob
 import copy
 import os
 import sys
+import copy
 
 from astropy.coordinates import SkyCoord
 from astropy import units as u
@@ -24,11 +25,21 @@ from ..utils.io import replace_nB
 from multiprocessing import RawArray
 from multiprocessing import Process, Queue
 
+try:
+    import bottleneck as bn
+    NANMEAN = bn.nanmean
+    NANSUM = bn.nansum
+except ImportError:
+    NANMEAN = np.nanmean
+    NANSUM = np.nansum
+
 # Internal Cell
+import re
 def groups_print_fnames(fnames):
     from itertools import groupby
     nBs = [get_nB(fname) for fname in fnames]
-    pairs = [(replace_nB(fname, 0), get_nB(fname)) for fname in fnames]
+    replace_nB = lambda path,s:re.sub(r'[0-9][0-1]M-', f"-M{s}"[::-1], path[::-1], count=1)[::-1]
+    pairs = [(replace_nB(fname, '{Beam}'), get_nB(fname)) for fname in fnames]
     pairs.sort()
     for key, group in groupby(pairs, lambda x:x[0]):
         print(key)
@@ -67,8 +78,8 @@ class SpecFile():
             self.mjd = S['mjd'][()]
             self.freq = S['freq'][()]
             self.get_frame(f)
-
-        self.ra = _tight_ra(self.ra)
+        # not here
+        # self.ra = _tight_ra(self.ra)
 
         self.nchan_ori = len(self.freq)
         self.nspec_ori = len(self.ra)
@@ -82,11 +93,13 @@ class SpecFile():
 
     def select_spec(self, ra_range, dec_range, r_add):
         """
-        select spectra in ra and dec range; generate self.is_use_t
+        select spectra in ra and dec range; generate self.is_use_t; also change ra, dec
         """
         if ra_range is not None:
             ra_tmp = self.ra
             is_use_t = (ra_tmp >= (ra_range[0] - 2*r_add)) & (ra_tmp <= (ra_range[1] + 2*r_add))
+            is_use_t |= ((ra_tmp >= (ra_range[0]+360 - 2*r_add)) & (ra_tmp <= (ra_range[1]+360 + 2*r_add)))
+            is_use_t |= ((ra_tmp >= (ra_range[0]-360 - 2*r_add)) & (ra_tmp <= (ra_range[1]-360 + 2*r_add)))
         else:
             is_use_t = np.full(len(self.ra), True)
         if dec_range is not None:
@@ -256,7 +269,7 @@ class Imaging():
         """
         args = self.args
 
-        self.ra_stack = ra_stack = np.hstack([sf.ra for sf in self.specfiles])
+        self.ra_stack = ra_stack = _tight_ra(np.hstack([sf.ra for sf in self.specfiles]))
         self.dec_stack = dec_stack = np.hstack([sf.dec for sf in self.specfiles])
         if args.ra_range is None:
             args.ra_range = ra_stack.min(), ra_stack.max()
@@ -338,18 +351,23 @@ class Imaging():
         print(f'Saving to {args.outname}.')
         hdu.writeto(args.outname, overwrite=args.force)
         # save the spec count in each grid
-        outname_nums = '.'.join(args.outname.split('.')[:-1]) + '-count.fits'
-        hdu = fits.PrimaryHDU(self.nums_cube, header=header_3to2(self.header))
-        hdu.writeto(outname_nums, overwrite=True)
+        _header = copy.deepcopy(self.header)
+        _header['BUNIT'] = ''
+        outname_ = '.'.join(args.outname.split('.')[:-1]) + '-count.fits'
+        hdu = fits.PrimaryHDU(self.nums_chan_cube, header=_header)
+        print(f'Saving to {outname_}.')
+        hdu.writeto(outname_, overwrite=True)
         # save wei
-        self.pixel_weis_tot
-        outname_ = '.'.join(args.outname.split('.')[:-1]) + '-wei.fits'
-        hdu = fits.PrimaryHDU(self.weis_cube, header=header_3to2(self.header))
+        outname_ = '.'.join(args.outname.split('.')[:-1]) + '-weights.fits'
+        hdu = fits.PrimaryHDU(self.weis_chan_cube.astype('float32'), header=_header)
+        print(f'Saving to {outname_}.')
         hdu.writeto(outname_, overwrite=True)
 
     def init_out(self, DataType='float64'):
         args = self.args
         npixel = np.prod(self.ra_grid.shape)
+        # init
+        shape = (npixel, len(self.specfiles[0].arr3))
         if args.share_mem:
             # ctype: https://docs.python.org/3/library/array.html#module-array
             if DataType == 'float64':
@@ -359,14 +377,27 @@ class Imaging():
             else:
                 raise(ValueError('DataType not support'))
             self.DataType = DataType
-            shape = (npixel, len(self.specfiles[0].arr3))
+
             shm = RawArray(shm_dtype, int(np.prod(shape)))
             self.pixel_data = np.frombuffer(shm, dtype=DataType).reshape(shape)
             self.pixel_data[:] = 0
+            #
+            shm = RawArray(shm_dtype, int(np.prod(shape)))
+            self.pixel_weis_sum_chan = np.frombuffer(shm, dtype=DataType).reshape(shape)
+            self.pixel_weis_sum_chan[:] = 0
+            # deal with nan value
+            shm = RawArray('i', int(np.prod(shape)))
+            self.pixel_finite_nums_chan = np.frombuffer(shm, dtype='int32').reshape(shape)
+            self.pixel_finite_nums_chan[:] = 0
+
         else:
-            self.pixel_data = np.full((npixel, len(self.specfiles[0].arr3)), 0, dtype=DataType)
-        self.pixel_weis_tot = np.zeros(npixel, dtype=np.float64)
-        self.pixel_specs_nums = np.zeros(npixel, dtype=np.int32)
+            self.pixel_data = np.zeros(shape, dtype=DataType)
+            #
+            self.pixel_weis_sum_chan = np.zeros(shape, dtype=DataType)
+            #
+            self.pixel_finite_nums_chan = np.zeros(shape, dtype='int32')
+        self.pixel_specs_nums = np.zeros(npixel, dtype='int32')
+
 
     def __call__(self, ):
         """
@@ -400,28 +431,35 @@ class Imaging():
             # select current ind_g, ind_cata, wei,
             is_ = (ind_cata_the < np.sum(nspecs[start:start+step])) & (ind_cata_the >=0)
             ind_cata_the_use = ind_cata_the[is_]
+            # if empty
+            if len(ind_cata_the_use) == 0:
+                # notice: make sure the skip not affect the following steps
+                continue
             ind_g_use = self.ind_g[is_]
             weis_use = weis[is_]
             # check
-            assert (self.ra_stack[self.ind_cata[is_]] == np.hstack([sf.ra for sf in sfs])[ind_cata_the_use]).all()
             assert (self.dec_stack[self.ind_cata[is_]] == np.hstack([sf.dec for sf in sfs])[ind_cata_the_use]).all()
 
             csp = CalcSpecPixel(sfs, key=args.key, polar=args.polar, scale_beams=self.scale_beams, share_mem=args.share_mem)
             res = csp(ind_g_use, ind_cata_the_use, weis_use, n_worker=args.nproc)
             ii = res[0]
             self.pixel_data[ii] += res[1]
-            self.pixel_weis_tot[ii] += res[2]
+            self.pixel_weis_sum_chan[ii] += res[2]
             self.pixel_specs_nums[ii] += res[3]
+            self.pixel_finite_nums_chan[ii] += res[4]
         # normalization
         old_set = np.seterr()
         np.seterr(invalid='ignore')
-        self.pixel_data /= self.pixel_weis_tot[:, None]
-        self.pixel_data[self.pixel_weis_tot==0] = np.nan
+        self.pixel_data /= self.pixel_weis_sum_chan
+        self.pixel_data[self.pixel_weis_sum_chan==0] = np.nan
+        if args.frac_finite_min > 0:
+            self.pixel_data[self.pixel_finite_nums_chan < (self.pixel_specs_nums*args.frac_finite_min)[:, None]] = np.nan
         np.seterr(**old_set)
 
-        self.data_cube = self.pixel_data.reshape(self.ra_grid.shape + self.pixel_data.shape[-1:]).transpose(2,0,1)
-        self.weis_cube = self.pixel_weis_tot.reshape(self.ra_grid.shape)
-        self.nums_cube = self.pixel_specs_nums.reshape(self.ra_grid.shape)
+        _shape = self.ra_grid.shape + self.pixel_data.shape[-1:]
+        self.data_cube = self.pixel_data.reshape(_shape).transpose(2,0,1)
+        self.weis_chan_cube = self.pixel_weis_sum_chan.reshape(_shape).transpose(2,0,1)
+        self.nums_chan_cube = self.pixel_finite_nums_chan.reshape(_shape).transpose(2,0,1)
         self.save()
 
 # Cell
@@ -526,17 +564,23 @@ class CalcSpecPixel():
             specs = np.frombuffer(specs, dtype=specs_dtype).reshape(specs_shape)
         if not isinstance(weis, np.ndarray):
             weis = np.frombuffer(weis, dtype=weis_dtype).reshape(weis_shape)
+
+        _SUM = NANSUM
         val_c = []
         num = []
-        wei_sum = []
+        num_finite_chan = []
+        wei_sum_chan = []
         for s_, e_ in zip(s, e):
             val = specs[inds[s_:e_]]
             wei = weis[s_:e_] # wei is align with inds
             wei = wei.reshape((-1,)+(1,)*(val.ndim-1))
-            val_c += [np.sum(val.astype('float64')*wei, axis=0),]
+            # deal with nan value
+            is_finite = np.isfinite(val)
+            val_c += [_SUM(val.astype('float64')*wei, axis=0),]
             num += [len(wei),]
-            wei_sum += [np.sum(wei),]
-        res = np.vstack(val_c), np.hstack(wei_sum), np.hstack(num)
+            num_finite_chan += [np.sum(is_finite, axis=0),]
+            wei_sum_chan += [_SUM(wei*is_finite, axis=0),]
+        res = np.vstack(val_c), np.vstack(wei_sum_chan), np.hstack(num), np.vstack(num_finite_chan)
 
 #         import time
 #         print('ssssss')
@@ -591,15 +635,16 @@ class CalcSpecPixel():
                 p.join()  # need after q.get()
             print('gathering results')
             pixel_data = np.vstack([r[0] for r in res])
-            pixel_weis_tot = np.hstack([r[1] for r in res])
+            pixel_weis_sum_chan = np.vstack([r[1] for r in res])
             pixel_specs_nums = np.hstack([r[2] for r in res])
+            pixel_finite_nums_chan = np.vstack([r[3] for r in res])
         else:
-            pixel_data, pixel_weis_tot, pixel_specs_nums = self.calc(None, start, stop,
+            pixel_data, pixel_weis_sum_chan, pixel_specs_nums, pixel_finite_nums_chan = self.calc(None, start, stop,
                                                    shm1, shm1_arr.dtype, shm1_arr.shape,
                                                    self.shm_specs, self.specs.dtype, self.specs.shape,
                                                    shm2, shm2_arr.dtype, shm2_arr.shape)
 
-        return ind_g_use_uni, pixel_data, pixel_weis_tot, pixel_specs_nums
+        return ind_g_use_uni, pixel_data, pixel_weis_sum_chan, pixel_specs_nums, pixel_finite_nums_chan
 
 # Cell
 from argparse import Namespace
@@ -631,8 +676,14 @@ args.outname = 'test.fits'
 args.force = True
 
 args.nproc = 5
-args.step = 4
+args.step = 19
 args.share_mem = False
 
 args.key = None
 args.wcs_from = '/home/jyj/jingyj/M33/M33_local_areciob.fits'
+
+args.scale_beams_file = None
+
+args.polar = 'M'
+
+args.frac_finite_min = 0.01

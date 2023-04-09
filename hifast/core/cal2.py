@@ -137,7 +137,7 @@ class CheckPCal(CalOnOff):
                               **kwargs):
         # self.pcal_vary_frac = pcal_vary_frac
         self.pcal_vary_lim_bin = pcal_vary_lim_bin
-        self.pcal_bad_lim_t = pcal_bad_lim_t
+        self.pcal_bad_lim_t = pcal_bad_lim_t # not used now
         self.pcal_bad_lim_freq = pcal_bad_lim_freq
         self.freq_step_c = freq_step_c
         super().__init__(*args, **kwargs)
@@ -201,7 +201,7 @@ class CheckPCal(CalOnOff):
 
     def gen_pcals(self,):
         freq_bins_c, is_bad_fbins = self.check_pcal(self.inds_ton, self.freq_step_c)
-        is_aband_whole = np.sum(is_bad_fbins, axis=1) / is_bad_fbins.shape[1] >= self.pcal_bad_lim_freq
+        is_aband_whole = np.sum(is_bad_fbins, axis=1) / is_bad_fbins.shape[1] > self.pcal_bad_lim_freq
         ind_in_bins = np.digitize(self.freq_use, freq_bins_c) - 1
 
         pcals = self._get_cal_power(self.inds_ton, self.inds_toff_bef, self.inds_toff_aft)
@@ -381,30 +381,39 @@ class CalOnOffSav(CalOnOff):
 # Cell
 class CalOnOffM(CheckPCal, CalOnOffSav):
 
+    def gen_squeeze_freq_is_use(self, ):
+        """selecting channel used to calculate relative amp"""
+        frange = self.squeeze_diff_freq_frange
+        self.squeeze_freq_is_use = []
+        for i in range(self.is_bad_fbins.shape[-1]):
+            # first exclude the whole abandoned
+            is_bad_fbins = self.is_bad_fbins[..., i][~self.is_aband_whole[:,i]]
+            # select fbins with bad frac less than ...
+            frac = np.sum(is_bad_fbins, axis=0)/is_bad_fbins.shape[0]
+            bin_is = frac <= self.squeeze_diff_freq_bad_lim
+            #bin_is = ~np.logical_or.reduce(self.is_bad_fbins[..., i][~self.is_aband_whole[:,i]], axis=0)
+            is_ = bin_is[self.ind_in_bins]
+            if frange is not None:
+                is_ &= (self.freq_use > frange[0]) & (self.freq_use < frange[1])
+            self.squeeze_freq_is_use += [is_,]
+
     def squeeze_freq(self, arr):
         """
         squeeze freq axis
         """
         method = self.squeeze_diff_freq
-        frange = self.squeeze_diff_freq_frange
 
         if arr.ndim !=3 :
             raise(ValueError('need 3d'))
         if method == 'median':
-            squ_fun = np.median
+            squ_fun = np.nanmedian
         elif method == 'mean':
-            squ_fun = np.mean
+            squ_fun = np.nanmean
         else:
             raise(ValueError(f'method {method} not supported'))
         arr_s = np.zeros((arr.shape[0], arr.shape[2]), dtype='float64')
-
         for i in range(arr.shape[2]):
-            if frange is None:
-                # use all the freq bins without any bad pcals
-                bin_is = ~np.logical_or.reduce(self.is_bad_fbins[..., i][~self.is_aband_whole[:,i]], axis=0)
-                is_ = bin_is[self.ind_in_bins]
-            else:
-                is_ = (self.freq_use > frange[0]) & (self.freq_use < frange[1])
+            is_ = self.squeeze_freq_is_use[i]
             arr_s[:,i] = squ_fun(arr[:, is_, i], axis=1)
         return arr_s
 
@@ -435,7 +444,7 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
             pcals_merged = np.nanmean(pcals, axis=0, dtype='float64', keepdims=True)
 
         self.pcals_merged = pcals_merged
-        self.pcals_merged_s = self._get_smoothed(pcals_merged, use_ndimage=True)
+        self.pcals_merged_s = self._get_smoothed(pcals_merged, check_nan=True)
 
     def gen_pcals_amp_diff(self,):
         """
@@ -509,6 +518,7 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
     def set_para_pcals(self, calc_diff_method='div',
                        squeeze_diff_freq='median',
                        squeeze_diff_freq_frange=None,
+                       squeeze_diff_freq_bad_lim=1,
                        method_interp='quadratic',
                        method_interp_edges='nearest',
                        method_interp_sigma_t=600,
@@ -523,6 +533,7 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
         self.calc_diff_method = calc_diff_method # in self.pcals_amp_interp & self.get_count_tcal
         self.squeeze_diff_freq = squeeze_diff_freq
         self.squeeze_diff_freq_frange = squeeze_diff_freq_frange
+        self.squeeze_diff_freq_bad_lim = squeeze_diff_freq_bad_lim
         self.method_interp = method_interp
         self.method_interp_edges = method_interp_edges
         self.method_interp_sigma_t = method_interp_sigma_t
@@ -531,6 +542,7 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
 
     def prepare_pcals(self,):
         self.gen_pcals()
+        self.gen_squeeze_freq_is_use()
         self.merge_pcals()
         self.gen_pcals_amp_diff()
         self.gen_pcals_amp_diff_interp_values()
@@ -570,11 +582,20 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
         ax.plot(self.freq_use, self.pcals_merged_s[0,:,0], 'k', lw=2)
         ax.set_title(f'pcals merged, polar 0')
         ax.set_xlabel(f'Freq')
+        if hasattr(self, 'squeeze_freq_is_use'):
+            ax = ax.twinx()
+            ax.plot(self.freq_use, self.squeeze_freq_is_use[0])
+            ax.set_ylim(-0.3, 14)
         ax = axs[1][1]
         ax.plot(self.freq_use, self.pcals_merged[0,:,1], 'r', alpha=0.5)
         ax.plot(self.freq_use, self.pcals_merged_s[0,:,1], 'k', lw=2)
         ax.set_title(f'pcals merged, polar 1')
         ax.set_xlabel(f'Freq')
+        if hasattr(self, 'squeeze_freq_is_use'):
+            ax = ax.twinx()
+            ax.plot(self.freq_use, self.squeeze_freq_is_use[1])
+            ax.set_ylim(-0.3, 14)
+
         ax = axs[2][0]
         ax.plot(self.inds, self.pcals_amp_diff_interp_values[:,0])
         ax.scatter(self.pcals_amp_diff_inds, self.pcals_amp_diff[:,0], color='r')
@@ -654,7 +675,7 @@ class CalOnOff1111(CheckPCal, CalOnOffSav):
     def prepare_pcals(self, ):
         self.gen_pcals()
 
-        pcals_s = self._get_smoothed(self.pcals, use_ndimage=True)
+        pcals_s = self._get_smoothed(self.pcals, check_nan=True)
         del self.pcals
 
         segs_be_list = []

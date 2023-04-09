@@ -31,6 +31,7 @@ method = ['none']
 method += ['PLS-'+r for r in rew_type]
 method += ['poly-'+r for r in rew_type]
 method += ['Gauss-'+r for r in rew_type]
+method += ['knspline-'+r for r in rew_type]
 method += ['masPLS-'+r for r in rew_type]
 method += ['asPLS', 'arPLS']
 method += ['original']
@@ -57,7 +58,9 @@ group = parser.add_argument_group('fit and subtract the baseline')
 group.add_argument('--lam', type=float, default=1.0e8,
                    help='smooth parameter for `*PLS` methods, larger values make the baseline close to an low-order polynomial. adjust in log scale.')
 group.add_argument('--deg', type=int, default=2,
-                   help='polynomial degree for `*-poly` methods')
+                   help='polynomial degree for `poly-*` methods')
+group.add_argument('--knots', type=str,
+                   help='knots stored in a json file used for `knspline-*` methods')
 group.add_argument('--offset', type=float, default=2,
                    help='baseline fit parameters')
 group.add_argument('--ratio', type=float, default=0.01,
@@ -69,7 +72,7 @@ group.add_argument('--exclude_add', '--exclude_type', default='none', choices=['
 
 
 group = parser.add_argument_group(f'Use pre-determined is_excluded array in input file\n{sep_line}')
-group.add_argument('--use_pre_is_excluded', type=bool_fun, choices=[True, False], default='True',
+group.add_argument('--use_pre_is_excluded', type=bool_fun, choices=[True, False], default='False',
                    help='If True, use pre-determined is_excluded array if existed to mask channels')
 # Exclude files
 group = parser.add_argument_group(f'Exclude known source catalogs\n{sep_line}')
@@ -161,9 +164,15 @@ class IO(BaseIO):
             fit_kwargs[key] = getattr(args, key)
         fit_kwargs['is_excluded'] = is_excluded
 
+        if fit_kwargs['method'].startswith('knspline'):
+            # load knots from knots file
+            import json
+            with open(args.knots, 'r') as f:
+                fit_kwargs['knots'] = json.load(f)
+
         trans = args.trans
         if trans:
-            return sub_baseline(mjd, s2p.transpose((1, 0, 2)), subtract=True, **fit_kwargs).transpose((1, 0, 2))
+            return sub_baseline(np.arange(len(mjd)), s2p.transpose((1, 0, 2)), subtract=True, **fit_kwargs).transpose((1, 0, 2))
         else:
             return sub_baseline(freq, s2p, subtract=True, **fit_kwargs)
 

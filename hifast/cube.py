@@ -3,7 +3,6 @@
 __all__ = ['sep_line', 'parser']
 
 # Cell
-from .core.image import Imaging
 from .utils.io import *
 
 # Cell
@@ -70,6 +69,10 @@ parser.add_argument('--r_cut', type=float,
                         "``--method bessel_gaussian``: 3.8317059702075*bsize/pi;\n"+
                         "``--method sinc_gaussian``: bsize")
 
+parser.add_argument('--frac_finite_min', type=float, default=1,
+                   help='For a grid point having ``n``` spectra in ``r_cut``, if the number of ``finite value``  in a channel is zero ' +
+                        'or smaller than ``frac_finite_min*n``, the output value in the channel will be set as ``nan``')
+
 parser.add_argument('--polar', choices=['XX','YY','M'], default='M',
                        help='polarization')
 
@@ -82,6 +85,7 @@ parser.add_argument('--scale_beams_file',
 # Cell
 if __name__ == '__main__':
     import os
+    from .core.image import Imaging
     # disable using storage disk in Multiprocessing.Array
     # https://docs.python.org/3/library/tempfile.html#tempfile.gettempdir
     # https://docs.python.org/3/library/tempfile.html#tempfile.tempdir

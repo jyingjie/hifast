@@ -74,17 +74,25 @@ group = parser.add_argument_group(f'*Selecting pcal for spectra\n{sep_line}')
 group.add_argument('--merge_pcals', type=bool_fun, choices=[True, False], default='False',
                     help='Whether merge pcal to calculate pcal with frequency.')
 
+
+group = parser.add_argument_group(f'**`--merge_pcals False`: smoothing each pcal separately \n{sep_line}')
+group.add_argument('--cal_dis_lim', type=float, default=1.6,
+                   help='assign the nearest pcal to each spec, if the nearest pcal has been mask as nan, try to find further pcal with distance (measured with number of spec)'
+                        'not exceed \n`--cal_dis_lim`*(`-m`+`-n`).')
+
 group = parser.add_argument_group(f'**`--merge_pcals True`: merging all pcal to get a smoothing shape a pcal with freq \n{sep_line}')
-group.add_argument('--method_merge', choices=['median', 'mean'], default='mean',
+group.add_argument('--method_merge', choices=['median', 'mean'], default='median',
                     help='method used to merge cal along time axis')
 group.add_argument('--merge_cal_pre_process', choices=['scale', 'none'], default='scale',
                     help="if `scale`, scale the pcals to similar amplitude before merge")
 group.add_argument('--calc_diff_method', choices=['div'], default='div',
                     help="used if '--merge_pcals' is not set as 'not'")
-group.add_argument('--squeeze_diff_freq', choices=['median', 'mean',], default='mean',
+group.add_argument('--squeeze_diff_freq', choices=['median', 'mean',], default='median',
                     help="method applied to the difference of pcals with the 'merged-pcals' along freq to get relative amplitude")
 group.add_argument('--squeeze_diff_freq_frange', type=float, nargs=2,
-                    help='freq range used in `--squeeze_diff_freq`, if None, use all the freq without any bad pcals')
+                    help='freq range used in `--squeeze_diff_freq`')
+group.add_argument('--squeeze_diff_freq_bad_lim', type=float, default=0.5,
+                    help='For an channel, if it fraction of nan in pcals remained after `--check_cal` large than this limit, it will not be used in `--squeeze_diff_freq`.')
 group.add_argument('--method_interp', default='quadratic',
                     help="Interpolate the relative amplitude to get pcal for each spectrum."
                          "Choose from 'gaussian', 'slinear', 'quadratic', 'cubic', 'nearest' \nor 'poly1d', poly2d, ..., 'polynd'.\n"
@@ -93,12 +101,6 @@ group.add_argument('--method_interp_sigma_t', type=float, default=300,
                     help='sigma_t in  ``--method_interp gaussian``')
 group.add_argument('--method_interp_edges', choices=['nearest', 'extrapolate'], default='nearest',
                     help="how to deal the edge spetra in interpolating")
-
-group = parser.add_argument_group(f'**`--merge_pcals False`: smoothing each pcal separately \n{sep_line}')
-group.add_argument('--cal_dis_lim', type=float, default=1.6,
-                   help='assign the nearest pcal to each spec, if the nearest pcal has been mask as nan, try to find further pcal with distance (measured with number of spec)'
-                        'not exceed \n`--cal_dis_lim`*(`-m`+`-n`).')
-
 
 # parser.add_argument('--p_cal_fname',
 #                     help='input hdf5 power of cal file')
@@ -127,6 +129,8 @@ if __name__ == '__main__':
     ## use the dirname of the fits file as "date"
     date = os.path.basename(os.path.dirname(os.path.abspath(args.fpath)))
     args.outdir = sub_patten(args.outdir, date=date, nB=f'{nB:02d}', project=project)
+    # expand '~' as outdir may be a string in bash
+    args.outdir = os.path.expanduser(args.outdir)
     print(f'outdir: {args.outdir}')
     if args.outdir is not None:
         if not os.path.exists(args.outdir):
@@ -217,7 +221,7 @@ if __name__ == '__main__':
         paras['pcal_bad_lim_freq'] = args.pcal_bad_lim_freq
         if args.merge_pcals:
             # check
-            if args.method_interp in ['gaussian', 'slinear', 'linear', 'quadratic', 'cubic', 'nearest']:
+            if args.method_interp in ['gaussian', 'slinear', 'linear', 'quadratic', 'cubic', 'nearest', 'next', 'previous']:
                 pass
             elif args.method_interp.startswith('poly'):
                 try:
@@ -238,6 +242,7 @@ if __name__ == '__main__':
         if args.merge_pcals:
             spec.set_para_pcals(calc_diff_method=args.calc_diff_method,
                                 squeeze_diff_freq=args.squeeze_diff_freq,
+                                squeeze_diff_freq_bad_lim=args.squeeze_diff_freq_bad_lim,
                                 squeeze_diff_freq_frange=args.squeeze_diff_freq_frange,
                                 method_merge=args.method_merge,
                                 merge_cal_pre_process=args.merge_cal_pre_process,
