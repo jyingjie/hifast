@@ -71,9 +71,17 @@ class Test(object):
         # also change self.is_excluded
         if self.is_excluded is not None:
             if self.is_excluded.shape == self.T2p.shape:
-                self.is_excluded_t = PolarMjdChan_to_MjdChanPolar(self.is_excluded[polar:polar+1, start:start+length])
+                if self.trans:
+                    self.is_excluded_t = self.is_excluded[polar:polar+1, :, start:start+length]
+                    self.is_excluded_t = PolarMjdChan_to_MjdChanPolar(self.is_excluded_t).transpose((1, 0, 2))
+                else:
+                    self.is_excluded_t = PolarMjdChan_to_MjdChanPolar(self.is_excluded[polar:polar+1, start:start+length])
             elif self.is_excluded.ndim == 2 and self.is_excluded.shape == T2p.shape[1:]:
-                self.is_excluded_t = self.is_excluded[start:start+length][..., None]
+                if self.trans:
+                    self.is_excluded_t = self.is_excluded[:, start:start+length][None,:]
+                    self.is_excluded_t = PolarMjdChan_to_MjdChanPolar(self.is_excluded_t).transpose((1, 0, 2))
+                else:
+                    self.is_excluded_t = self.is_excluded[start:start+length][..., None]
             else:
                 raise(ValueError('shape of ``is_excluded``'))
         else:

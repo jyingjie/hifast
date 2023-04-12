@@ -172,6 +172,8 @@ class IO(BaseIO):
 
         trans = args.trans
         if trans:
+            if fit_kwargs['is_excluded'] is not None:
+                 fit_kwargs['is_excluded'] = fit_kwargs['is_excluded'].transpose((1, 0, 2))
             return sub_baseline(np.arange(len(mjd)), s2p.transpose((1, 0, 2)), subtract=True, **fit_kwargs).transpose((1, 0, 2))
         else:
             return sub_baseline(freq, s2p, subtract=True, **fit_kwargs)
@@ -247,11 +249,11 @@ class IO(BaseIO):
 
         # gen self.s2p_out
         s2p = self.s2p[:]
-
+        # rfi not in is_excluded
         self._load_is_rfi()
         # is_excluded
         self._load_is_excluded()
-
+        # src add to is_excluded
         self._load_sources()
 
         # fit baseline:
