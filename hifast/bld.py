@@ -30,6 +30,7 @@ rew_type = ['asym1', 'asym2', 'asym3', 'sym1',]
 method = ['none']
 method += ['PLS-'+r for r in rew_type]
 method += ['poly-'+r for r in rew_type]
+method += ['knpoly-'+r for r in rew_type]
 method += ['Gauss-'+r for r in rew_type]
 method += ['knspline-'+r for r in rew_type]
 method += ['masPLS-'+r for r in rew_type]
@@ -164,7 +165,7 @@ class IO(BaseIO):
             fit_kwargs[key] = getattr(args, key)
         fit_kwargs['is_excluded'] = is_excluded
 
-        if fit_kwargs['method'].startswith('knspline'):
+        if fit_kwargs['method'].startswith('knspline') or fit_kwargs['method'].startswith('knpoly'):
             # load knots from knots file
             import json
             with open(args.knots, 'r') as f:

@@ -158,6 +158,7 @@ def main():
     method += ['poly-'+r for r in rew_type]
     method += ['Gauss-'+r for r in rew_type]
     method += ['knspline-'+r for r in rew_type]
+    method += ['knpoly-'+r for r in rew_type]
     method += ['spline-'+r for r in rew_type]
     method += ['masPLS-'+r for r in rew_type]
     method += ['asPLS',]
