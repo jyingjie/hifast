@@ -257,6 +257,8 @@ if __name__ == '__main__':
                                )
         else:
             spec.set_para_pcals(cal_dis_lim=args.cal_dis_lim,
+                                method_interp=args.method_interp,
+                                method_interp_edges=args.method_interp_edges,
                                 )
 
     spec(outdir=args.outdir, step=args.step, header=header,

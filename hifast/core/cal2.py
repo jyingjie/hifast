@@ -731,8 +731,14 @@ class CalOnOff1111(CheckPCal, CalOnOffSav):
         fig.tight_layout()
         fig.savefig(self.out_name_base + '-pcals-smoothed.png')
 
-    def set_para_pcals(self, cal_dis_lim=2):
+    def set_para_pcals(self, 
+                       cal_dis_lim=2,
+                       method_interp='nearest',
+                       method_interp_edges='nearest'):
+
         self.delat_t_lim = cal_dis_lim
+        self.method_interp = method_interp
+        self.method_interp_edges = method_interp_edges
 
     def prepare_pcals(self, ):
         self.gen_pcals()
@@ -764,9 +770,8 @@ class CalOnOff1111(CheckPCal, CalOnOffSav):
         self.plot_pcal_s()
         fw = getattr(self, 'fw_pcals', None)
         if fw is not None:
-            fw['pcals_s'] = self.pcals_s.astype('float32')
-
-
+            fw['pcals_s'] = self.pcals_s.astype('float32')                       
+        
     def get_count_tcal(self, inds_on, inds_off):
         delat_t_lim = self.delat_t_lim
         pcals_s = self.pcals_s
@@ -775,6 +780,8 @@ class CalOnOff1111(CheckPCal, CalOnOffSav):
         c_off = self.get_field(inds_off, 'DATA', close_file=True).astype('float64')
 
         inds_ton_m = self.inds_ton_m
+        method_interp = self.method_interp
+        method_interp_edges = self.method_interp_edges # to do later
 
         for polar in range(pcals_s.shape[-1]):
             is_use_in_segs = self.is_use_in_segs_list[polar]
@@ -783,17 +790,37 @@ class CalOnOff1111(CheckPCal, CalOnOffSav):
                 inds_ton_m_use = inds_ton_m[is_use_in_segs[i]]
                 # on
                 inds_close = np.argmin(abs(inds_ton_m_use - inds_on[:, None]), axis=1)
-                c_on[:, b:e+1, polar] /= pcals_s[:, b:e+1, polar][is_use_in_segs[i]][inds_close]
+                fun = interp.interp1d(inds_ton_m_use, pcals_s[:, b:e+1, polar][is_use_in_segs[i]], fill_value="extrapolate", kind=method_interp, axis=0)
+                c_on[:, b:e+1, polar] /= fun(inds_on)
+                x = inds_ton_m_use
+                inds = inds_on
+                if edges == "nearest":
+                    if (inds < x [0]).any():
+                        c_on[:, b:e+1, polar][self.inds < x [0], i] = fun(x[0])
+                    if (inds > x [-1]).any():
+                        c_on[:, b:e+1, polar][self.inds > x [-1], i] = fun(x[-1])
+                
                 ## mask as nan if cal and spec not close enough
                 is_too_far = abs(inds_on - inds_ton_m_use[inds_close]) > (self.n_on + self.n_off)*delat_t_lim
                 c_on[is_too_far, b:e+1, polar] = np.nan
 
-                # on
+                # off
                 inds_close = np.argmin(abs(inds_ton_m_use - inds_off[:, None]), axis=1)
-                c_off[:, b:e+1, polar] /= pcals_s[:, b:e+1, polar][is_use_in_segs[i]][inds_close]
+                fun = interp.interp1d(inds_ton_m_use, pcals_s[:, b:e+1, polar][is_use_in_segs[i]], fill_value="extrapolate", kind=method_interp, axis=0)
+                c_off[:, b:e+1, polar] /= fun(inds_off)
+                x = inds_ton_m_use
+                inds = inds_off
+                if edges == "nearest":
+                    if (inds < x [0]).any():
+                        c_off[:, b:e+1, polar][self.inds < x [0], i] = fun(x[0])
+                    if (inds > x [-1]).any():
+                        c_off[:, b:e+1, polar][self.inds > x [-1], i] = fun(x[-1])
+                
                 ## mask as nan if cal and spec not close enough
                 is_too_far = abs(inds_off - inds_ton_m_use[inds_close]) > (self.n_on + self.n_off)*delat_t_lim
                 c_off[is_too_far, b:e+1, polar] = np.nan
+
+
         c_on -= 1  # have subtracted cal
         return c_on, c_off
 
