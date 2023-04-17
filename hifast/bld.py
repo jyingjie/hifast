@@ -339,11 +339,15 @@ def interact(args):
 
 # Cell
 class IO_i(IO):
+
+    def set_interact_spec(self, interact_spec):
+        self.interact_spec = interact_spec
+
     def gen_s2p_out(self,):
         args = self.args
         if args.interact:
             print('Please ensure you have adjusted the parameters for each `polar`, otherwise you will get nan vaules in the file')
-            self.s2p_out = interact_spec.bld_out
+            self.s2p_out = self.interact_spec.bld_out
             return
 
 # Cell
@@ -352,6 +356,7 @@ if __name__ == '__main__':
     if args_.interact:
         interact_spec, widgets = interact(args_)[0:2]
         save = IO_i(args_, HistoryAdd={'interact':str(widgets)})
+        save.set_interact_spec(interact_spec)
         if interact_spec.save:
             print('Please run \'save()\' in the notebook cell to save your results')
     else:
