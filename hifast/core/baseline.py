@@ -24,7 +24,7 @@ from ..utils.misc import average_every_n, smooth1d, smooth1d_fft, extend_Trues
 import os
 import warnings
 warnings.filterwarnings("ignore", r'overflow encountered in exp')
-warnings.simplefilter('ignore', np.RankWarning)
+warnings.filterwarnings("ignore", r'The fit may be poorly conditioned')
 
 try:
     import bottleneck as bn
