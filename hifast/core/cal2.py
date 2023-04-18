@@ -279,6 +279,9 @@ class CheckPCal(CalOnOff):
         fpath_ref = self.fpath_inds_on_used
 
         with h5py.File(fpath_ref, 'r') as f:
+            if 'start_stop_groups' not in f['S'].keys():
+                print('no `start_stop_groups` in the file, skip...')
+                return
             inds_ref = f['S']['inds_ref'][:]
             start_stop_groups = f['S']['start_stop_groups'][:]
 
@@ -753,7 +756,7 @@ class CalOnOff1111(CheckPCal, CalOnOffSav):
             bools_2d = np.isnan(pcals_s[:, :, polar])
             segs_be = self.split_along_a1d2(bools_2d)
             if len(segs_be[0]) > 2*len(self.freq_bins_c):
-                raise(ValueError('something is wrong'))
+                warnings.warn('too many segments')
             segs_be_list.append(segs_be)
             is_use_in_segs = []
             for b, e in zip(*segs_be):
@@ -781,24 +784,28 @@ class CalOnOff1111(CheckPCal, CalOnOffSav):
 
         inds_ton_m = self.inds_ton_m
         method_interp = self.method_interp
-        method_interp_edges = self.method_interp_edges # to do later
-
+        method_interp_edges = self.method_interp_edges
+                  
         for polar in range(pcals_s.shape[-1]):
             is_use_in_segs = self.is_use_in_segs_list[polar]
             segs_be = self.segs_be_list[polar]
             for i, (b, e) in enumerate(zip(*segs_be)):
                 inds_ton_m_use = inds_ton_m[is_use_in_segs[i]]
+                if len(inds_ton_m_use) < 2:
+                    c_on[:, b:e+1, polar] = np.nan
+                    c_off[:, b:e+1, polar] = np.nan
+                    continue
                 # on
                 inds_close = np.argmin(abs(inds_ton_m_use - inds_on[:, None]), axis=1)
                 fun = interp.interp1d(inds_ton_m_use, pcals_s[:, b:e+1, polar][is_use_in_segs[i]], fill_value="extrapolate", kind=method_interp, axis=0)
                 c_on[:, b:e+1, polar] /= fun(inds_on)
                 x = inds_ton_m_use
                 inds = inds_on
-                if edges == "nearest":
+                if method_interp_edges == "nearest" and method_interp not in ['nearest','previous','next']:
                     if (inds < x [0]).any():
-                        c_on[:, b:e+1, polar][self.inds < x [0], i] = fun(x[0])
+                        c_on[:, b:e+1, polar][inds < x [0]] = fun(x[0])
                     if (inds > x [-1]).any():
-                        c_on[:, b:e+1, polar][self.inds > x [-1], i] = fun(x[-1])
+                        c_on[:, b:e+1, polar][inds > x [-1]] = fun(x[-1])
                 
                 ## mask as nan if cal and spec not close enough
                 is_too_far = abs(inds_on - inds_ton_m_use[inds_close]) > (self.n_on + self.n_off)*delat_t_lim
@@ -810,11 +817,11 @@ class CalOnOff1111(CheckPCal, CalOnOffSav):
                 c_off[:, b:e+1, polar] /= fun(inds_off)
                 x = inds_ton_m_use
                 inds = inds_off
-                if edges == "nearest":
+                if method_interp_edges == "nearest" and method_interp not in ['nearest','previous','next']:
                     if (inds < x [0]).any():
-                        c_off[:, b:e+1, polar][self.inds < x [0], i] = fun(x[0])
+                        c_off[:, b:e+1, polar][inds < x[0]] = fun(x[0])
                     if (inds > x [-1]).any():
-                        c_off[:, b:e+1, polar][self.inds > x [-1], i] = fun(x[-1])
+                        c_off[:, b:e+1, polar][inds > x [-1]] = fun(x[-1])
                 
                 ## mask as nan if cal and spec not close enough
                 is_too_far = abs(inds_off - inds_ton_m_use[inds_close]) > (self.n_on + self.n_off)*delat_t_lim
