@@ -191,7 +191,10 @@ class CheckPCal(CalOnOff):
         # check freq bins
         freq_range = self.freq_use[-1] - self.freq_use[0]
         freq_delta = self.freq_use[1] - self.freq_use[0]
-        freq_bins_c = np.linspace(self.freq_use[0]-freq_delta/2, self.freq_use[-1]+freq_delta/2, int(np.round(freq_range/freq_step_c)))
+        bins_num = 1 + int(np.round(freq_range/freq_step_c))
+        if bins_num < 2:
+            bins_num = 2
+        freq_bins_c = np.linspace(self.freq_use[0]-freq_delta/10, self.freq_use[-1]+freq_delta/10, bins_num)
         # check off
         is_bad_fbins = self._get_vary_frac(inds_coff, freq_bins_c) > self.pcal_vary_lim_bin
         # check on
