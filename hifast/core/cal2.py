@@ -769,7 +769,7 @@ class CalOnOff1111(CheckPCal, CalOnOffSav):
         self.pcals_s = pcals_s
         self.segs_be_list = segs_be_list
         self.is_use_in_segs_list = is_use_in_segs_list
-        self.inds_ton_m = np.mean(self.inds_ton, axis=1)
+        self.inds_ton_m = np.mean(self.inds_ton_use, axis=1)
         self.plot_pcal_s()
         fw = getattr(self, 'fw_pcals', None)
         if fw is not None:
