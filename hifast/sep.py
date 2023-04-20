@@ -140,6 +140,15 @@ if __name__ == '__main__':
         if not os.path.exists(args.outdir):
             print(f'outdir {args.outdir} not exists. Create it now')
             os.makedirs(args.outdir, exist_ok=True)
+    
+    # replace patten in fpath_inds_on_used
+    if args.fpath_inds_on_used is not None:
+        args.fpath_inds_on_used = sub_patten(args.fpath_inds_on_used, date=date, nB=f'{nB:02d}', project=project)
+        # expand '~'
+        args.fpath_inds_on_used = os.path.expanduser(args.fpath_inds_on_used)
+        # check if the file exists
+        if not os.path.exists(args.fpath_inds_on_used):
+            raise(OSError(f'File {args.fpath_inds_on_used} not exists.'))
 
     ## check out file
     fname_add = date
