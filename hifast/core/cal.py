@@ -142,7 +142,7 @@ class FastRawData(object):
             _inds= _inds.flatten()
         # make sure flattened _inds is monotone increasing
         if (np.diff(_inds)<0).any():
-            raise('input index must be increasing')
+            raise(ValueError('input index must be increasing'))
         # determine the file and index of the spec in
         lens_cum = np.hstack([0,np.cumsum(self.lens)])
         ifile =  np.searchsorted(lens_cum, _inds + 1, side='left') - 1
@@ -361,7 +361,9 @@ class FastRawSpec(FastRawData):
                 is_ = np.isfinite(power)
                 power[~is_] = 0
                 s_power = smooth_axis1_d3(power, method=smooth, sigma=sigma)
-                s_power /= smooth_axis1_d3(is_.astype('int'), method=smooth, sigma=sigma)
+                s_power /= smooth_axis1_d3(is_.astype('float64'), method=smooth, sigma=sigma)
+                s_power[np.isinf(s_power)] = np.nan
+                s_power[~is_] = np.nan
                 power[~is_] = np.nan
             else:
                 s_power = smooth_axis1_d3(power, method=smooth, sigma=sigma)
