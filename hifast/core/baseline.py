@@ -53,8 +53,8 @@ def get_baseline(x, ys, axis=None, *,
     average_every: int; if set as n and n>1, then average ys along axis every n points
     return_f: If Fasle, return baseline, else return (basline, ys_processed, x_processed, weights)
     """
-    x = x.astype('float')
-
+    if x is not None:
+        x = np.array(x, dtype='float')
     if exclude is not None:
         if exclude.shape != ys.shape:
             raise(ValueError('exclude should has same shape with ys'))
