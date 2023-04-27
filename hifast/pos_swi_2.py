@@ -129,10 +129,10 @@ class IO(BaseIO):
         """
         args = self.args
 
-        Ta_on_src = np.mean(self.p_on_src, axis=0, keepdims=True)
-        Ta_off_src = np.mean(self.p_off_src, axis=0, keepdims=True)
-        Ta_on_ref = np.mean(self.p_on_ref, axis=0, keepdims=True)
-        Ta_off_ref = np.mean(self.p_off_ref, axis=0, keepdims=True)
+        Ta_on_src = np.nanmean(self.p_on_src, axis=0, keepdims=True)
+        Ta_off_src = np.nanmean(self.p_off_src, axis=0, keepdims=True)
+        Ta_on_ref = np.nanmean(self.p_on_ref, axis=0, keepdims=True)
+        Ta_off_ref = np.nanmean(self.p_off_ref, axis=0, keepdims=True)
 
         # use interaged time as weight
         if not args.only_off:
