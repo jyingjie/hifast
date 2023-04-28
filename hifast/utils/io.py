@@ -677,7 +677,7 @@ class HFDataT:
             pass
         elif isinstance(arg_in, tuple):
             ell_ind = None
-            for i, a in enumerate(arg):
+            for i, a in enumerate(arg_in):
                 if isinstance(a, type(Ellipsis)):
                     ell_ind = i
                     break
