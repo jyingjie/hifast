@@ -30,6 +30,7 @@ rew_type = ['asym1', 'asym2', 'asym3', 'sym1',]
 method = ['none']
 method += ['PLS-'+r for r in rew_type]
 method += ['poly-'+r for r in rew_type]
+method += ['knpoly-'+r for r in rew_type]
 method += ['Gauss-'+r for r in rew_type]
 method += ['knspline-'+r for r in rew_type]
 method += ['masPLS-'+r for r in rew_type]
@@ -164,7 +165,7 @@ class IO(BaseIO):
             fit_kwargs[key] = getattr(args, key)
         fit_kwargs['is_excluded'] = is_excluded
 
-        if fit_kwargs['method'].startswith('knspline'):
+        if fit_kwargs['method'].startswith('knspline') or fit_kwargs['method'].startswith('knpoly'):
             # load knots from knots file
             import json
             with open(args.knots, 'r') as f:
@@ -172,6 +173,8 @@ class IO(BaseIO):
 
         trans = args.trans
         if trans:
+            if fit_kwargs['is_excluded'] is not None:
+                 fit_kwargs['is_excluded'] = fit_kwargs['is_excluded'].transpose((1, 0, 2))
             return sub_baseline(np.arange(len(mjd)), s2p.transpose((1, 0, 2)), subtract=True, **fit_kwargs).transpose((1, 0, 2))
         else:
             return sub_baseline(freq, s2p, subtract=True, **fit_kwargs)
@@ -206,8 +209,8 @@ class IO(BaseIO):
             is_rfi = fs['is_rfi'][:]
             if self.is_use_freq is not None:
                 is_rfi = is_rfi[:, self.is_use_freq]
-                
-                # M06 bandpass is not flat in [1410, 1416]    
+
+                # M06 bandpass is not flat in [1410, 1416]
             if self.nB == 6:
                 whole_rfi = np.all(is_rfi, axis=1)
                 freq = self.freq
@@ -225,7 +228,7 @@ class IO(BaseIO):
             is_excluded = fs['is_excluded'][:]
             if self.is_use_freq is not None:
                 is_excluded = is_excluded[:, self.is_use_freq]
-            # M06 bandpass is not flat in [1410, 1416]    
+            # M06 bandpass is not flat in [1410, 1416]
             if self.nB == 6:
                 freq = self.freq
                 is_use = (freq > 1406) & (freq < 1416)
@@ -247,11 +250,11 @@ class IO(BaseIO):
 
         # gen self.s2p_out
         s2p = self.s2p[:]
-                
+        # rfi not in is_excluded
         self._load_is_rfi()
         # is_excluded
         self._load_is_excluded()
-
+        # src add to is_excluded
         self._load_sources()
 
         # fit baseline:
@@ -336,11 +339,15 @@ def interact(args):
 
 # Cell
 class IO_i(IO):
+
+    def set_interact_spec(self, interact_spec):
+        self.interact_spec = interact_spec
+
     def gen_s2p_out(self,):
         args = self.args
         if args.interact:
             print('Please ensure you have adjusted the parameters for each `polar`, otherwise you will get nan vaules in the file')
-            self.s2p_out = interact_spec.bld_out
+            self.s2p_out = self.interact_spec.bld_out
             return
 
 # Cell
@@ -349,6 +356,7 @@ if __name__ == '__main__':
     if args_.interact:
         interact_spec, widgets = interact(args_)[0:2]
         save = IO_i(args_, HistoryAdd={'interact':str(widgets)})
+        save.set_interact_spec(interact_spec)
         if interact_spec.save:
             print('Please run \'save()\' in the notebook cell to save your results')
     else:

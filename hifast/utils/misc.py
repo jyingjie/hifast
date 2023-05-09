@@ -129,33 +129,7 @@ def down_sample(data,dfactor):
     data_d= [binned_statistic(np.arange(length)+0.5,data[:,:,i],'mean',bins=bins)[0] for i in range(data.shape[2])]
     data_d= np.stack(data_d,axis=2)
     return data_d
-
-
-    
-def freq2vlsr(freq, ra, dec, mjd):
-    '''
-    HI freq to velocity under LSR
-    ------------
-    ra, dec: deg; array or scalar
-       len(ra)==len(mjd)
-    '''
-    from .ugdopplerfast import ugdopplerfast
-    mjd= np.asarray([mjd]) if np.isscalar(mjd) else np.asarray(mjd)
-    ra= np.asarray([ra]) if np.isscalar(ra) else np.asarray(ra)
-    dec= np.asarray([dec]) if np.isscalar(dec) else np.asarray(dec)
-    
-    restfreq = np.array([1420.405751])
-    c        =  2.99792458e5  # km/s
-    velo     =  c*(restfreq[0]- freq)/ restfreq[0] 
-    
-    jd = mjd+2400000.5
-
-    vlsrcor  = ugdopplerfast(ra,dec,jd)
-    vlsr  = np.vstack([velo-ii for ii in vlsrcor])
-    if len(vlsrcor)==1:
-        vlsr= vlsr[0]
-    return vlsr
-    
+   
 
 def gaussian_smooth1d(vals, sigma, axis=0):
     '''

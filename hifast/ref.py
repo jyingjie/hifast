@@ -85,7 +85,6 @@ group.add_argument('--post_niter', type=int, default=100,
 group.add_argument('--post_exclude_add', '--post_exclude_type', default='none', choices=['none', 'auto1', 'auto2'],
                    help='baseline fit parameters')
 
-
 # Cell
 class IO(bld_IO):
 
