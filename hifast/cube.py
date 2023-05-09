@@ -86,13 +86,15 @@ parser.add_argument('--scale_beams_file',
 if __name__ == '__main__':
     import os
     from .core.image import Imaging
+    args_ = parser.parse_args()
+
     # disable using storage disk in Multiprocessing.Array
     # https://docs.python.org/3/library/tempfile.html#tempfile.gettempdir
     # https://docs.python.org/3/library/tempfile.html#tempfile.tempdir
     # os.environ['TMPDIR'] = '/dev/shm'
-    import tempfile
-    tempfile.tempdir = '/dev/shm'
+    if sys.platform == 'linux' and args_.share_mem:
+        import tempfile
+        tempfile.tempdir = '/dev/shm'
 
-    args_ = parser.parse_args()
     img = Imaging(args_)
     img()
