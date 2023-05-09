@@ -277,6 +277,7 @@ class IO(BaseIO):
                 data = self.s2p[~is_lf]
             else:
                 data = self.s2p
+                is_excluded = None
             spec = np.nanmean(np.nanmean(data, axis = 0),axis = -1)
             self.args.rms_frange = get_rms_frange(spec,self.freq,rms_step=5,is_excluded = is_excluded)
         else:
