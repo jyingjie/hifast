@@ -19,6 +19,7 @@ dependencies:
   - jupyterlab=3.0.16
   - ipympl=0.7.0
   - ipywidgets=7.6.3
+  - jupyterlab_widgets=1.1.1
   - nbresuse
   - jupyterlab-system-monitor
   - pip:
