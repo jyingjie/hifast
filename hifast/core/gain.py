@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 # Author: Ziming liu zmliu@nao.cas.cn
-
+# Yingjie Jing
 import numpy as np
 import scipy.interpolate as interp
 
@@ -14,6 +14,7 @@ from astropy.time import Time
 
 import os
 
+from . import conf
 
 def Gain_para():
     gain_para= pd.read_csv(os.path.dirname(__file__)+'/data/FAST_gain_curve.txt', header=None, sep='\s+')
@@ -31,10 +32,7 @@ def Get_ZA(ra, dec, mjd):
     -------------------
     return ZA: deg
     """
-    lat = 25.652944444 #FAST lat in deg
-    lon = 106.856666667 #FAST lon in deg
-    alt = 1110.0288 #FAST altitude in meter
-    obs_location = EarthLocation.from_geodetic(lon*u.deg, lat*u.deg, height = alt*u.m)
+    obs_location = EarthLocation.from_geodetic(lat=conf.lat*u.rad, lon=conf.long*u.rad, height=conf.height*u.m)
     aa_frame =  coord.AltAz(obstime = Time(mjd,format='mjd'), location=obs_location)
 
     crd= SkyCoord(ra, dec,unit='deg',)
@@ -47,6 +45,7 @@ def ZA2gain(ZA, nB):
     nB: Beam number
     ZA: zenith angle; deg
     """
+    # get eta
     gain_para= Gain_para()
     freq_key= np.array(gain_para.columns)
     
@@ -56,6 +55,8 @@ def ZA2gain(ZA, nB):
         a,b,c= gain_para.loc[f'M{nB:02d}'][fre][['a','b','c']]
         gain[is_use,i]= c * ZA[is_use] + b + 26.4*(a - c)
         gain[~is_use,i]= a * ZA[~is_use] + b
+    # 25.6*eta
+    gain *= 25.6
     return gain, freq_key
 
 def Get_gain(ra, dec, mjd, nB, freq=None):

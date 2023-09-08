@@ -14,7 +14,7 @@ import scipy.interpolate as interp
 from astropy.time import Time
 from astropy import units
 
-from .gain import Get_gain as Get_gain_eta
+from .gain import Get_gain
 
 # Cell
 def get_ratio(nB, freq=None):
@@ -194,7 +194,7 @@ class FluxCali:
 
     def get_gain_tabled(self,):
 
-        K_Jy = Get_gain_eta(self.ra, self.dec, self.mjd, self.nB, self.freq)[0] * 25.6  # K/Jy
+        K_Jy = Get_gain(self.ra, self.dec, self.mjd, self.nB, self.freq)[0]  # K/Jy
 
         return K_Jy[:, :, None]
 
