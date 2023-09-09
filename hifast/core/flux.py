@@ -14,7 +14,7 @@ import scipy.interpolate as interp
 from astropy.time import Time
 from astropy import units
 
-from .gain import Get_gain
+from .gain import Get_gain, gain_diff_from_ZA, Get_ZA
 
 # Cell
 def get_ratio(nB, freq=None):
@@ -34,6 +34,8 @@ class Calibrator:
 
     def __init__(self, mjd, nB, cbr_store, cbr_name='*', use_counts=True, only_use_19beams=False):
         """
+        mjd: used to find nearest cbr
+        nB: beam number
         cbr_store: str
            where quasar calibrator stored in, a file path or a directory including several files
            If None, use the gain depended on Zenith angle (arxiv:2002.01786) and need input ra, dec and mjd.
@@ -103,37 +105,60 @@ class Calibrator:
                 raise(ValueError(f"can not find calibrator file"))
             self.cbr_fpath = self.get_date_nearest(fpaths_cand, self.mjd)
 
-    def __call__(self, freq_new=None):
+    def get_ZA_cbr(self, fs, nB):
+        if f'ZA{nB}_cbr' in fs.keys():
+            ZA = fs[f'ZD{nB}_cbr'][()]
+        else:
+            ZAs = fs[f'ZD{nB}'][()]
+            ZA = np.mean(ZAs)
+        # need deg
+        ZA = np.rad2deg(ZA)
+        return ZA
 
+    def __call__(self, freq_new=None, ZAs_obs=None):
+        """
+        freq_new: if not None, will interplate
+        ZAs_obs: ZA of obs spec. If not None, will fix the gain diff from ZA diff
+        """
         print(f'loading gain from {self.cbr_fpath}')
         with h5py.File(self.cbr_fpath) as fs:
             freq = fs['freq'][()]
             key_ = f'M{self.nB:02d}'
+            if freq_new is None:
+                freq_new = freq
+            # fix ZA diff
             if key_ in fs.keys():
-                gain = fs[key_][0] # K/Jy
+                gain = fs[key_][()] # K/Jy, shape:(1, chan, 2)
+                gain = interp.CubicSpline(freq, gain, axis=1, extrapolate=True)(freq_new)
+                if ZAs_obs is not None:
+                    diff = gain_diff_from_ZA(self.get_ZA_cbr(fs, self.nB), ZAs_obs, self.nB, freq_new)
+                    gain = gain + diff[..., None]
                 if self.use_counts:
-                    gain /= fs[f'Tcal{self.nB}'][0] # to count of tcal i.e. Counts/Jy
+                    tcal = fs[f'Tcal{self.nB}'][()]
+                    tcal = interp.CubicSpline(freq, tcal, axis=1, extrapolate=True)(freq_new)
+                    gain /= tcal # to count of tcal i.e. Counts/Jy
             else:
                 # use M01 or relative gain ratio
-                gain_nB1 = fs[f'M01'][()][0] # K/Jy
+                gain_nB1 = fs[f'M01'][()] # K/Jy
+                gain_nB1 = interp.CubicSpline(freq, gain_nB1, axis=1, extrapolate=True)(freq_new)
+                if ZAs_obs is not None:
+                    diff = gain_diff_from_ZA(self.get_ZA_cbr(fs, 1), ZAs_obs, 1, freq_new)
+                    gain_nB1 = gain_nB1 + diff[..., None]
                 if self.use_counts:
-                    gain_nB1 /= fs[f'Tcal1'][0] # Counts/Jy
+                    tcal = fs[f'Tcal1']
+                    tcal = interp.CubicSpline(freq, tcal, axis=1, extrapolate=True)(freq_new)
+                    gain_nB1 /= tcal # Counts/Jy
                 freq_ratio, ratio = self.get_ratio()
-                if not np.allclose(freq, freq_ratio):
-                    ratio = interp.CubicSpline(freq_ratio, ratio, extrapolate=True)(freq)
-                gain = gain_nB1 * ratio
-        if freq_new is None:
-            return freq, gain
-        else:
-            gain = interp.CubicSpline(freq, gain, extrapolate=True)(freq_new)
-            return freq_new, gain
+                ratio = interp.CubicSpline(freq_ratio, ratio, extrapolate=True)(freq_new)
+                gain = gain_nB1 * ratio[None,:]
+        return freq_new, gain
 
 # Cell
 
 class FluxCali:
 
     def __init__(self, nB, freq, cbr_store=None, cbr_name='*', tcal_spec=None,  only_use_19beams=False,
-                           mjd=None, ra=None, dec=None,):
+                           mjd=None, ra=None, dec=None, ZAs=None, fix_diff_ZA=False):
         """
 
         flux calibration using Calibator or Table Gain
@@ -172,6 +197,8 @@ class FluxCali:
 
         self.ra = ra
         self.dec = dec
+        self.ZAs = ZAs
+        self.fix_diff_ZA = fix_diff_ZA
 
         if cbr_store is None or cbr_store=='none':
             self.K_Jy = self.get_gain_tabled()
@@ -185,10 +212,16 @@ class FluxCali:
         CBR = Calibrator(np.mean(self.mjd), self.nB, self.cbr_store,
                          use_counts=use_counts,
                          only_use_19beams=self.only_use_19beams)
-        _, gain = CBR(self.freq)
+        if self.fix_diff_ZA:
+            if self.ZAs is not None:
+                ZAs = self.ZAs
+            else:
+                ZAs = Get_ZA(self.ra, self.dec, self.mjd)
+        else:
+            ZAs = None
+        _, gain = CBR(self.freq, ZAs)
         self.cbr_fpath = CBR.cbr_fpath
-        K_Jy = gain * self.tcal_spec[0] if use_counts else gain
-        K_Jy = K_Jy[None,...] # mjd axis
+        K_Jy = gain * self.tcal_spec if use_counts else gain
         return K_Jy
 
 
