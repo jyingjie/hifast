@@ -24,6 +24,20 @@ from hifast.utils.io import PolarMjdChan_to_MjdChanPolar
 from hifast.utils.misc import smooth1d
 from hifast.utils.io import save_dict_hdf5
 from hifast.utils.io import replace_nB
+from hifast.utils.io import ArgumentParser, bool_fun, formatter_class
+import sys
+
+
+global nB
+global radec
+global fit_k
+global rlim_src # max allowed radius[arcsec] to src
+global freq
+global obsdate
+global outname
+global flux
+global nproc
+nproc = 1
 
 def load_crd(obj,crds):
     if crds==None:
@@ -188,11 +202,14 @@ def load_Tsc(spec,T,mjd):
     global fit_k
     global rlim_src # max allowed radius[arcsec] to src
     if nB==1:
-        radec = get_radec(mjd, guess_str=fname,tol=30,nBs=list(nBs))
+        radec = get_radec(mjd, guess_str=fname,tol=5,nBs=list(nBs),nproc=nproc)
         save_dict_hdf5(outname+'-radec.hdf5',radec) 
         print('Saved to '+outname+'-radec.hdf5')
     else:
-        radec = get_radec(mjd, guess_str=fname,tol=30,nBs=[nB,])
+        try:
+            _,_ = radec[f'ra{nB}'], radec[f'dec{nB}']
+        except:
+            radec = get_radec(mjd, guess_str=fname,tol=5,nBs=[nB,])
     ra0,dec0 = radec[f'ra{nB}'], radec[f'dec{nB}']
     if obsmode in ['Drift','DriftWithAngle','DecDriftWithAngle','MultiBeamOTF']:
         T= smooth1d(T,'gaussian_fft',sigma,axis=1)
@@ -256,7 +273,8 @@ def radec_select(T,crds,seprange):
         print(f'Input {T.shape[0]} points, used {num_used} points')
     return T[is_use],is_use
 
-def load_data(fname,nB):
+def load_data(fname):
+    global nB
     dataname = replace_nB(fname, nB)
     spec= sep_spe(dataname,d,m,n)
     global freq
@@ -301,60 +319,55 @@ def load_data(fname,nB):
     K_Jy= K_Jy[np.newaxis,:]
     return K_Jy,Tcal_s,spec.tcal_file,mjd_off,ONp,OFFp,TMAX
 
-def bool_fun(s):
-    """
-    used as the type of parser.add_argument
-    """
-    s = str(s)
-    if s == 'True' or s.lower() == 'yes':
-        return True
-    elif s == 'False' or s.lower() == 'no':
-        return False
-    else:
-        raise(ValueError("input must be 'True'('yes') or 'False'('no')"))
+
+sep_line = '##'+'#'*70+'##'
+parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}", formatter_class=formatter_class, 
+                        allow_abbrev=False,
+                        description='Processing the calibrator data', )
+parser.add_argument('fname',
+                    help='file name')
+parser.add_argument('--outdir', type=str,
+                   help='output path',default=None)
+group = parser.add_argument_group(f'*Parameters same with hifast.sep\n{sep_line}')
+group.add_argument('-d','--d', '--n_delay', type=int, required=True,
+                   help='time of delay divided by sampling time')
+group.add_argument('-m','--m', '--n_on', type=int, required=True,
+                   help='time of Tcal_on divided by sampling time')
+group.add_argument('-n','--n', '--n_off', type=int, required=True,
+                    help='time of Tcal_off divided by sampling time')
+group.add_argument('--frange', type=float, nargs=2,
+                   help='freq range',default= [1000,1500] )
+group.add_argument('--noise_mode', default='high', choices=['high','low'],
+                    help='noise_mode, high or low')
+group.add_argument('--noise_date', default='auto',type=str,
+                    help='noise obs date, default auto')
+group.add_argument('--smt_sigma', type=float,
+                   help='smooth sigma',default= 1)
+group = parser.add_argument_group(f'*Calibrator setting\n{sep_line}')
+group.add_argument('--obsmode',type=str,
+                    help='observation mode',)
+group.add_argument('--nBs', type=int, nargs='*',
+                    help='beam numbers',default=None)
+group.add_argument('--calname', type=str, required=True,
+                   help='calibrator name',)
+group.add_argument('--crd', type=float, nargs=2,
+                   help='calibrator coordinate in deg',default=None)
+group.add_argument('--fluxProfilePara', type=float, nargs=4,
+                   help='calibrator flux',default= None)
+group = parser.add_argument_group(f'*Parameters in MultiBeamCalibration or OnOff\n{sep_line}')
+group.add_argument('--t_src', type=int,
+                   help='tracking time of On Source',default=60)
+group.add_argument('--n_cir', type=int,default=1,
+                   help='tracking time of On Source')
+group.add_argument('--T_select', type=bool_fun, choices=[True, False], default='True',
+                   help='Select T with radec if `--obsmode MultiBeamCalibration`')
+group.add_argument('--rlim_src', type=float, default=16,
+                   help='if `--T_select`, maximum allowed offset (in arcsec) to calibrator. Default is 16.', )
+group = parser.add_argument_group(f'*Others\n{sep_line}')
+group.add_argument('--saveT', type=bool_fun, choices=[True, False], default='True',
+                   help='Save T files or not',)
 
 if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('fname',
-                        help='file name')
-    parser.add_argument('-d','--d', '--n_delay', type=int, required=True,
-                       help='time of delay divided by sampling time')
-    parser.add_argument('-m','--m', '--n_on', type=int, required=True,
-                       help='time of Tcal_on divided by sampling time')
-    parser.add_argument('-n','--n', '--n_off', type=int, required=True,
-                        help='time of Tcal_off divided by sampling time')
-    parser.add_argument('--frange', type=float, nargs=2,
-                       help='freq range',default= [1000,1500] )
-    parser.add_argument('--noise_mode', default='high', choices=['high','low'],
-                        help='noise_mode, high or low')
-    parser.add_argument('--noise_date', default='auto',type=str,
-                        help='noise obs date, default auto')
-    parser.add_argument('--smt_sigma', type=float,
-                       help='smooth sigma',default= 1)
-    parser.add_argument('--obsmode',type=str,
-                        help='observation mode',)
-    parser.add_argument('--nBs', type=int, nargs='*',
-                        help='beam numbers',default=None)
-    parser.add_argument('--outdir', type=str,
-                       help='output path',default=None)
-
-    parser.add_argument('--calname', type=str, required=True,
-                       help='calibrator name',)
-    parser.add_argument('--crd', type=float, nargs=2,
-                       help='calibrator coordinate in deg',default=None)
-    parser.add_argument('--fluxProfilePara', type=float, nargs=4,
-                       help='calibrator flux',default= None)
-    parser.add_argument('--t_src', type=int,
-                       help='tracking time of On Source',default=60)
-    parser.add_argument('--n_cir', type=int,default=1,
-                       help='tracking time of On Source')
-    parser.add_argument('--T_select', type=bool_fun, choices=[True, False], default='True',
-                       help='Select T with radec if `--obsmode MultiBeamCalibration`')
-    parser.add_argument('--rlim_src', type=float, default=16,
-                       help='if `--T_select`, maximum allowed offset (in arcsec) to calibrator. Default is 16.', )
-    parser.add_argument('--saveT', type=bool_fun, choices=[True, False], default='True',
-                       help='Save T files or not',)
 
     args = parser.parse_args()
     fname= args.fname
@@ -397,7 +410,7 @@ if __name__ == '__main__':
     for i in nBs:
         global nB
         nB= i
-        K_Jy,Tcal_s,tcal_file,mjd,ONp,OFFp,TMAX= load_data(fname,i)
+        K_Jy,Tcal_s,tcal_file,mjd,ONp,OFFp,TMAX= load_data(fname)
         ra,dec,ZD = radec[f'ra{i}'], radec[f'dec{i}'],radec[f'ZD{i}']
         outdata[f'M{nB:02d}']= K_Jy
         outdata[f'Tcal{nB}']= Tcal_s
