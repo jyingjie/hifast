@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 # Author: Nekomata  zmliu@nao.cas.cn
-#修改nBs获取方式，修改gain参数为K_Jy+count_Jy
+#修改nBs获取方式
 
 from ast import arg
 import numpy as np
@@ -23,6 +23,7 @@ from hifast.utils.io import MjdChanPolar_to_PolarMjdChan
 from hifast.utils.io import PolarMjdChan_to_MjdChanPolar
 from hifast.utils.misc import smooth1d
 from hifast.utils.io import save_dict_hdf5
+from hifast.utils.io import replace_nB
 
 def load_crd(obj,crds):
     if crds==None:
@@ -48,7 +49,7 @@ def load_flux_profile(calname,freq_key,fpparas):
         a0,a1,a2,a3= fpparas
     else:
         import pandas as pd
-        fpf= pd.read_csv('./FluxProfiles.csv')
+        fpf= pd.read_csv(os.path.dirname(__file__) + '/data/FluxProfiles.csv')
         try:
             narg= np.where(fpf['name']==calname)[0][0]
             a0,a1,a2,a3= fpf['a0'][narg],fpf['a1'][narg],fpf['a2'][narg],fpf['a3'][narg]
@@ -154,13 +155,13 @@ def rfi_mask_pcal(p_cal,plot=False):
 
 # separate spectrum of calibrator
 def sep_spe(fname,d,m,n):
-    fname_part= re.sub('[0-9]{4}\.fits\Z','',fname)
+    fname_part= fname
     para = {}
     para['n_delay'] = d
     para['n_on'] = m
     para['n_off'] = n
     para['start'] = 1
-    para['stop'] = len(glob(fname_part+'*.fits'))
+    para['stop'] = None
     para['frange'] = (frange[0], frange[1])
     para['verbose'] = True
     para['smooth'] ='gaussian'
@@ -256,7 +257,7 @@ def radec_select(T,crds,seprange):
     return T[is_use],is_use
 
 def load_data(fname,nB):
-    dataname = fname.replace('M01',f'M{nB:02d}')
+    dataname = replace_nB(fname, nB)
     spec= sep_spe(dataname,d,m,n)
     global freq
     freq= spec.freq_use
@@ -297,8 +298,8 @@ def load_data(fname,nB):
     flux= load_flux_profile(calname,freq,fpparas)
     flux= flux[:,np.newaxis]
     K_Jy= Tsc_rfi/flux
-    count_Jy= Tsc_rfi/(flux*Tcal_s)
-    return K_Jy,count_Jy,spec.tcal_file,mjd_off,ONp,OFFp,TMAX
+    K_Jy= K_Jy[np.newaxis,:]
+    return K_Jy,Tcal_s,spec.tcal_file,mjd_off,ONp,OFFp,TMAX
 
 def bool_fun(s):
     """
@@ -396,10 +397,10 @@ if __name__ == '__main__':
     for i in nBs:
         global nB
         nB= i
-        K_Jy,count_Jy,tcal_file,mjd,ONp,OFFp,TMAX= load_data(fname,i)
+        K_Jy,Tcal_s,tcal_file,mjd,ONp,OFFp,TMAX= load_data(fname,i)
         ra,dec,ZD = radec[f'ra{i}'], radec[f'dec{i}'],radec[f'ZD{i}']
-        outdata[f'K_Jy{nB}']= K_Jy
-        outdata[f'count_Jy{nB}']= count_Jy
+        outdata[f'M{nB:02d}']= K_Jy
+        outdata[f'Tcal{nB}']= Tcal_s
         outdata[f'ra{i}']= ra
         outdata[f'dec{i}']= dec
         outdata[f'ZD{i}']= ZD
