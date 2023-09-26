@@ -75,11 +75,19 @@ def load_flux_profile(calname,freq_key,fpparas):
     return flux
 
 #fitting method of Scan modes
-def fit_curve(T,ra,):
+def fit_curve(T,ra,figname=None):
     rcon= (ra>-0.025)&(ra<0.025)
-    rcoff= ~((ra>-0.18)&(ra<0.18))
+    rcoff= ~((ra>-0.1)&(ra<0.1))
     tmax= np.max(T)
     tsys= np.mean(T[rcoff])
+    if figname is not None:
+        from matplotlib import pyplot as plt
+        plt.figure(figsize=(8,4))
+        plt.plot(ra, T, color='k')
+        plt.scatter(ra[rcon], T[rcon], marker='.',color='r')
+        plt.scatter(ra[rcoff],T[rcoff], marker='.',color='b')
+        plt.savefig(figname)
+    
     onbound=([tmax-0.05*np.abs(tmax)-tsys,-0.01,0,tsys-0.05*np.abs(tsys),],[tmax+0.05*np.abs(tmax)-tsys,0.01,1,tsys+0.05*np.abs(tsys),])
     onp,oncon = curve_fit(fit_scon,ra[rcon],T[rcon],bounds=onbound)
     offbound= ([-1,tsys-0.1*np.abs(tsys)],[1,tsys+0.1*np.abs(tsys)])
@@ -227,8 +235,12 @@ def load_Tsc(spec,T,mjd):
             f_cut= (freq>freq_key[i]-1)&(freq<freq_key[i]+1)
             T_fit= np.mean(Tuse[:,f_cut,:],axis=1)
             try:
-                tmaxXX, onpXX, offpXX  = fit_curve(T_fit[:,0],rause,)
-                tmaxYY, onpYY, offpYY  = fit_curve(T_fit[:,1],rause,)
+                if i==0:
+                    figname = outname + f'-M{nB:02d}-freq_{freq_key[i]:.2f}.pdf'
+                else:
+                    figname = None
+                tmaxXX, onpXX, offpXX  = fit_curve(T_fit[:,0],rause,figname=figname)
+                tmaxYY, onpYY, offpYY  = fit_curve(T_fit[:,1],rause,figname=figname)
             except:                
                 print('Fit failed in '+str(int(freq_key[i]))+'MHz, please check.')
                 tmaxXX, onpXX, offpXX= np.nan,[np.nan]*4,[np.nan]*2
