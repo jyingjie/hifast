@@ -19,21 +19,30 @@ from copy import deepcopy
 from tqdm import tqdm
 
 # Cell
-def rms(data,vel,rms_vrange=None):
+def rms(data,vel,rms_vrange=None,):
     """
     data: 1D or 2D numpy array
     vel: velocity or frequency
     rms_vrange: [a,b], calculate rms from a to b
     """
+    if len(data.shape) == 1:
+        ax = -1
+    elif len(data.shape) == 2:
+        ax = -1
+    elif len(data.shape) == 3:
+        ax = 1
+            
     if rms_vrange is not None:
         rms_vrange.sort()
         is_use = (vel > rms_vrange[0])&(vel < rms_vrange[1])
         if len(data.shape) == 1:
             data = data[is_use]
-        elif len(data.shape) ==2:
+        elif len(data.shape) == 2:
             data = data[:,is_use]
+        elif len(data.shape) == 3:
+            data = data[:,is_use,:]
 
-    ans = np.sqrt(np.nanmean((data)**2,axis = -1))
+    ans = np.sqrt(np.nanmean((data)**2,axis = ax))
     return ans
 
 def get_rms_frange(spec,freq,rms_step=None,is_excluded = None):
