@@ -556,7 +556,7 @@ class IO(BaseIO):
             else:
                 raise FileNotFoundError(f"Can't find {self._19name}. Did it run hifast.rfi_multi?")
 
-        is_rfi = np.isnan(self.s2p_mean)
+        is_rfi = np.isnan(self.s2p_mean) | np.isinf(self.s2p_mean)
 
 #         is_rfi = np.full(self.s2p.shape[:2], False, dtype=bool)
 

@@ -138,6 +138,14 @@ class Test(object):
         start, stop = start_stop
         res = np.mean(self.bld[int(start):int(stop)+1, :, 0], axis=0)
         return np.vstack([res, ndimage.gaussian_filter1d(res, 3)]).T
+    
+    def get_ori_mean(self, x, start_stop,  **kwargs):
+        start, stop = start_stop
+        ori = np.mean(self.T2p_t[int(start):int(stop)+1, :, 0], axis=0)
+        bld = np.mean(self.bld[int(start):int(stop)+1, :, 0], axis=0)
+        
+        res = ori - bld
+        return np.vstack([ori, ndimage.gaussian_filter1d(ori, 3), res]).T
 
 # Cell
 def phrase_ylim(ylim, vals):
@@ -203,7 +211,7 @@ def main():
     w_conf['layout'] = bak
 
     plt.ioff()
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=figsize)
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=figsize)
     fig.canvas.header_visible = False
 
     # ylim xlim in plot
@@ -241,15 +249,21 @@ def main():
 
     controls4 = iplt.plot(tes.freq, tes.get_bld_mean, start_stop=('r', 0, length, 11),
                           controls=controls, xlim=xlim, ylim=ylim2, ax=ax3)
+    plt.axhline(y=0,)
+    
+    controls5 = iplt.plot(tes.freq, tes.get_ori_mean, 
+                          controls=controls, xlim=xlim, ylim=ylim2, ax=ax4, display_controls=False, play_buttons=True)
 
     plt.axhline(y=0, )
     ax1.set_title('orange line: gaussian smoothed for better view. \n origial spectra', fontsize=8)
     ax2.set_title('spectra after baseline removed', fontsize=8)
+    ax3.set_title('mean spectra after baseline removed', fontsize=8)
+    ax4.set_title('mean spectra before baseline removed', fontsize=8)
 
     def return_v(*args, **kwargs): return tes.frange_excluded[0]
-    [iplt.axvline(return_v, controls=controls, ax=ax, color='r') for ax in [ax1, ax2, ax3]]
+    [iplt.axvline(return_v, controls=controls, ax=ax, color='r') for ax in [ax1, ax2, ax3, ax4]]
     def return_v(*args, **kwargs): return tes.frange_excluded[1]
-    [iplt.axvline(return_v, controls=controls, ax=ax, color='r') for ax in [ax1, ax2, ax3]]
+    [iplt.axvline(return_v, controls=controls, ax=ax, color='r') for ax in [ax1, ax2, ax3, ax4]]
 
     fig.tight_layout()
 
