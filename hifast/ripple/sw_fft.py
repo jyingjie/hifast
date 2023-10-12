@@ -231,8 +231,8 @@ def repalce_near(data_in, freq, time_rfi, mw_use=None, times_thr=None, times_s_t
     from ..utils.misc import smooth1d
     MAX = np.nanmax(data)*20
     
-    if np.sum(np.isnan(data)) > 0:
-        data[np.isnan(data)] = MAX
+#     if np.sum(np.isnan(data)) > 0:
+#         data[np.isnan(data)] = MAX
         
     if verbose:
         iter_ = tqdm(range(data.shape[0]), desc='CPU 0: ', mininterval=2)
@@ -245,6 +245,10 @@ def repalce_near(data_in, freq, time_rfi, mw_use=None, times_thr=None, times_s_t
             include = mw_use #| time_rfi[tn]
             if np.sum(include) > 0:
                 spec[include] = MAX * 20
+                
+            RMSr = real_rms(spec, freq, sigma=rms_sigma, rms_vrange=rms_frange)
+            nan = np.where(np.isnan(spec))[0]
+            if len(nan) > 0: spec[nan] = np.random.normal(scale=RMSr, size=len(nan))
 
             find = ex_sm = data_find[tn]
             # find used to define replace area
@@ -272,9 +276,11 @@ def repalce_near(data_in, freq, time_rfi, mw_use=None, times_thr=None, times_s_t
             newspec = replace_spec(tn, spec, freq, exceed_use, restrict_use, rfi_width_lim, ext_sec,
                                    ext, STD, MAX, sm = trough, **kwargs)
 
-            RMS = real_rms(spec, freq, sigma=rms_sigma, rms_vrange=rms_frange)
-            strange = np.where(np.abs(newspec) > times_thr * RMS)[0]
-            newspec[strange] = np.random.normal(scale=RMS, size=len(strange))
+            strange = np.where(np.abs(newspec) > times_thr * RMSr)[0]
+            newspec[strange] = np.random.normal(scale=RMSr, size=len(strange))
+            
+            nan = np.where(np.isnan(newspec))[0]
+            if len(nan) > 0: newspec[nan] = np.random.normal(scale=RMSr, size=len(nan))
 
             data_rep[tn, :] = newspec
 
