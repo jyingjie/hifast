@@ -57,7 +57,7 @@ class IO(BaseIO):
 #             print(f'using {args.cbr_store} ...')
 
         fcali = FluxCali(self.nB, self.freq, cbr_store=args.cbr_store, cbr_name=args.cbr_name, tcal_spec=tcal_spec,  only_use_19beams=args.only_use_19beams,
-                           mjd=self.mjd, ra=self.ra, dec=self.dec, fix_diff_ZA=self.fix_diff_ZA)
+                           mjd=self.mjd, ra=self.ra, dec=self.dec, fix_diff_ZA=args.fix_diff_ZA)
         self.s2p_out = fcali(s2p)
 
         if args.cbr_store is not None and args.cbr_store != 'none':
