@@ -37,6 +37,7 @@ global obsdate
 global outname
 global flux
 global nproc
+global outdir
 nproc = 1
 
 def load_crd(obj,crds):
@@ -86,6 +87,10 @@ def fit_curve(T,ra,figname=None):
         plt.plot(ra, T, color='k')
         plt.scatter(ra[rcon], T[rcon], marker='.',color='r')
         plt.scatter(ra[rcoff],T[rcoff], marker='.',color='b')
+        plt.xlabel('RA [deg]')
+        plt.ylabel('T')
+        plt.grid()
+        plt.tight_layout()
         plt.savefig(figname)
     
     onbound=([tmax-0.05*np.abs(tmax)-tsys,-0.01,0,tsys-0.05*np.abs(tsys),],[tmax+0.05*np.abs(tmax)-tsys,0.01,1,tsys+0.05*np.abs(tsys),])
@@ -205,6 +210,22 @@ def load_pcal(pcal_s,mjd):
     pcal_smt= smooth1d(pcal_smt,'gaussian_fft',sigma,axis=0)
     return pcal_smt
 
+def plot_radec_near_cbr(ra, dec, ra_cbr, dec_cbr, figname, r_max=0.15):
+
+    from matplotlib import pyplot as plt
+    plt.figure(figsize=(5,5))
+    
+    is_use = (ra < ra_cbr+r_max ) & (ra > ra_cbr-r_max)
+    is_use &= (dec < dec_cbr+r_max ) & (dec > dec_cbr-r_max)
+    
+    plt.scatter(ra[is_use], dec[is_use], marker='.', s=1, color='k')
+    plt.scatter(ra_cbr, dec_cbr, marker='.', s=5, color='r')
+    plt.xlabel('RA [deg]')
+    plt.ylabel('DEC [deg]')
+    plt.grid()
+    plt.tight_layout()
+    plt.savefig(figname)
+
 def load_Tsc(spec,T,mjd):
     global radec
     global fit_k
@@ -219,6 +240,10 @@ def load_Tsc(spec,T,mjd):
         except:
             radec = get_radec(mjd, guess_str=fname,tol=5,nBs=[nB,])
     ra0,dec0 = radec[f'ra{nB}'], radec[f'dec{nB}']
+    
+    radec_figname = outname + f'-M{nB:02d}-radec_near_src.png'
+    plot_radec_near_cbr(ra0, dec0, ccrd.ra.deg, ccrd.dec.deg, figname=radec_figname, r_max=0.15)
+    
     if obsmode in ['Drift','DriftWithAngle','DecDriftWithAngle','MultiBeamOTF']:
         T= smooth1d(T,'gaussian_fft',sigma,axis=1)
         ra= ra0-ccrd.ra.deg
@@ -242,12 +267,12 @@ def load_Tsc(spec,T,mjd):
                 tmaxXX, onpXX, offpXX  = fit_curve(T_fit[:,0],rause,figname=figname)
                 tmaxYY, onpYY, offpYY  = fit_curve(T_fit[:,1],rause,figname=figname)
             except:                
-                print('Fit failed in '+str(int(freq_key[i]))+'MHz, please check.')
+                print('Fit failed in '+str(int(freq_key[i])) + f'MHz in beam {nB}, please check.')
                 tmaxXX, onpXX, offpXX= np.nan,[np.nan]*4,[np.nan]*2
                 tmaxYY, onpYY, offpYY= np.nan,[np.nan]*4,[np.nan]*2
                 fit_k+=1
                 if fit_k>=int(0.1*len(freq_key)):
-                    print(f'Fit failed at too many Freq. Please check input parameters!')
+                    print(f'Fit failed at too many Freq in beam {nB}. Please check input parameters!')
                     os._exit(0)
             ONp.append(np.array([onpXX,onpYY],dtype='float64'))
             OFFp.append(np.array([offpXX,offpYY],dtype='float64'))
@@ -301,6 +326,8 @@ def load_data(fname):
     mjd_off = mjd[spec.inds_off]
     
     Tcal_s= spec.get_Tcal_s()
+    spec.gen_out_name_base(outdir)
+    spec.plot = True
     spec.sep_on_off_inds()
     p_on = spec.get_field(spec.inds_on, 'DATA',)
     p_off= spec.get_field(spec.inds_off, 'DATA', close_file=False)

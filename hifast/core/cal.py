@@ -550,7 +550,7 @@ class CalOnOff(FastRawSpec):
                 plot_sep(inds_ton.flatten(), np.hstack([inds_toff_bef.reshape(-1),inds_toff_aft.reshape(-1)]),
                          p_ton.reshape(new_shape),
                          np.vstack([p_toff_bef.reshape(new_shape),p_toff_aft.reshape(new_shape)]),
-                         figname=figname, n_max=80, re_tick=True)
+                         figname=figname, n_max=1000, re_tick=True)
         except:
             pass
 
