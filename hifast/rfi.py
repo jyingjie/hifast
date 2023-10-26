@@ -137,6 +137,13 @@ group.add_argument('--sf_ext_add',type = int,default=3,
 group.add_argument('--sf_mask_rms_times',type = float, default=2,
                    help='mask from peak to 2 sides, until RMS drops to 2 times of RMS')
 
+################## invoking aoflagger #####################
+group = parser.add_argument_group(f'*Invoke aoflagger \n{sep_line}')
+group.add_argument('--aoflagger', '--af', type=bool_fun, choices=[True, False], default='False',
+                   help='Using aoflagger to mask rfi')
+group.add_argument('--af_strategy_file', '--afsf', type=str,
+                   help='path of strategy file')
+
 ################## Period 8 MHZ RFI #######################
 parser.add_argument('--rms_sigma', type=float, default =6,
                    help='gauss filter sigma to compute real rms')
@@ -452,6 +459,12 @@ class IO(BaseIO):
 
         return pd_rfi
 
+    def get_aoflagger(self):
+        args = self.args
+        from .core.aoflagger import flag_data
+        is_rfi = flag_data(self.s2p, args.af_strategy_file)
+        return is_rfi
+
     def protect_mw(self):
         args = self.args
         freq = self.freq
@@ -609,6 +622,9 @@ class IO(BaseIO):
         if args.pr:
             print('finding pr')
             is_rfi |= self.get_pr()
+
+        if args.aoflagger:
+            is_rfi |= self.get_aoflagger()
 
         # existing RFI
         if 'is_rfi' in self.fs.keys():
