@@ -24,6 +24,8 @@ from .interaction import sw_i as interact_sw
 
 from .utils.io import HFDataT
 
+from .utils import obs_log
+
 # Internal Cell
 import h5py
 import warnings

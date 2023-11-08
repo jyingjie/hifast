@@ -5,6 +5,7 @@
 
 from ast import arg
 import numpy as np
+import pandas as pd
 import h5py
 import os
 from glob import glob
@@ -25,6 +26,8 @@ from hifast.utils.misc import smooth1d
 from hifast.utils.io import save_dict_hdf5
 from hifast.utils.io import replace_nB
 from hifast.utils.io import ArgumentParser, bool_fun, formatter_class
+from hifast.utils.io import sub_patten
+
 import sys
 
 
@@ -47,8 +50,8 @@ def load_crd(obj,crds):
             sbo = Simbad.query_object(obj)
             crd = SkyCoord((sbo['RA'][0]+sbo['DEC'][0]),unit=(u.hourangle,u.deg))
         except:
-            print('Calibrator can not find in Simbad.query_object(), please input coordinates! ')
-            os._exit(0)
+            print('Calibrator can not find in Simbad.query_object, please input coordinates using ``--crd``.')
+            sys.exit(1)
     else:
         crd= SkyCoord(*crds,unit=(u.deg))
     return crd
@@ -60,7 +63,7 @@ def load_flux_profile(calname,freq_key,fpparas):
     
     """
     freq_key= freq_key/1000
-    if fpparas!= None:
+    if fpparas is not None:
         a0,a1,a2,a3= fpparas
     else:
         import pandas as pd
@@ -69,8 +72,8 @@ def load_flux_profile(calname,freq_key,fpparas):
             narg= np.where(fpf['name']==calname)[0][0]
             a0,a1,a2,a3= fpf['a0'][narg],fpf['a1'][narg],fpf['a2'][narg],fpf['a3'][narg]
         except:
-            print('Can not find calibrator name in FluxProfile.csv. Please check calname or input flux profile parameters!')
-            os._exit()
+            print('Can not find calibrator name in FluxProfile.csv. Please check calname or input flux profile parameters.')
+            sys.exit(1)
     logS = a0+a1*np.log10(freq_key)+a2*(np.log10(freq_key))**2+a3*(np.log10(freq_key))**3
     flux= 10**(logS)
     return flux
@@ -119,7 +122,7 @@ def load_track_time(mjd,t_src,nB,obsmode,n_cir):
         if nB==1:
             mjd_src,mjd_ref= is_src,is_ref
         else:
-            mjd_src,mjd_ref= is_ref,is_src,
+            mjd_src,mjd_ref= is_ref,is_src
     elif obsmode=='MultiBeamCalibration':
         t_change = 40/60/60/24
         t_cir= t_src+t_change
@@ -134,7 +137,7 @@ def load_track_time(mjd,t_src,nB,obsmode,n_cir):
 
 #mask rfi roughly
 def rfi_mask(T,plot=False):
-    Tsmt= smooth1d(T,'gaussian_fft',sigma,axis=0)
+    Tsmt= smooth1d(T,'gaussian_fft',sigma_nchan,axis=0)
     Tdiff= np.abs(np.diff(Tsmt,axis=0))
     is_rfi= np.full(T.shape,False)
     dlimit= 0.015
@@ -155,7 +158,7 @@ def rfi_mask(T,plot=False):
         T_tmp.append(Ttmpitp[:,np.newaxis])
         is_rfi[:,i]= is_rfi_use
     T_itp= np.concatenate(T_tmp,axis=1)
-    T_itpsmt= smooth1d(T_itp,'gaussian_fft',sigma*10,axis=0)
+    T_itpsmt= smooth1d(T_itp,'gaussian_fft',sigma_nchan*10,axis=0)
     return T_itpsmt
 def rfi_mask_pcal(p_cal,plot=False):
     pdiff= np.abs(np.diff(p_cal,axis=0))
@@ -192,7 +195,7 @@ def sep_spe(fname,d,m,n):
     para['frange'] = (frange[0], frange[1])
     para['verbose'] = True
     para['smooth'] ='gaussian'
-    para['s_para'] = {'s_sigma':1}
+    para['s_para'] = {'s_sigma':sigma}
     para['dfactor'] = None
     para['med_filter_size'] = None
     para['noise_mode'] = noise_mode
@@ -207,7 +210,7 @@ def load_pcal(pcal_s,mjd):
     else:
         ptime= load_track_time(mjd,t_src,nB,obsmode,n_cir=ncir)
         pcal_smt= np.mean(pcal_s[ptime[1]],axis=0)
-    pcal_smt= smooth1d(pcal_smt,'gaussian_fft',sigma,axis=0)
+    pcal_smt= smooth1d(pcal_smt,'gaussian_fft',sigma_nchan,axis=0)
     return pcal_smt
 
 def plot_radec_near_cbr(ra, dec, ra_cbr, dec_cbr, figname, r_max=0.15):
@@ -233,7 +236,7 @@ def load_Tsc(spec,T,mjd):
     if nB==1:
         radec = get_radec(mjd, guess_str=fname,tol=5,nBs=list(nBs),nproc=nproc)
         save_dict_hdf5(outname+'-radec.hdf5',radec) 
-        print('Saved to '+outname+'-radec.hdf5')
+        print('Saved RA-DEC to '+outname+'-radec.hdf5')
     else:
         try:
             _,_ = radec[f'ra{nB}'], radec[f'dec{nB}']
@@ -245,7 +248,7 @@ def load_Tsc(spec,T,mjd):
     plot_radec_near_cbr(ra0, dec0, ccrd.ra.deg, ccrd.dec.deg, figname=radec_figname, r_max=0.15)
     
     if obsmode in ['Drift','DriftWithAngle','DecDriftWithAngle','MultiBeamOTF']:
-        T= smooth1d(T,'gaussian_fft',sigma,axis=1)
+        T= smooth1d(T,'gaussian_fft',sigma_nchan,axis=1)
         ra= ra0-ccrd.ra.deg
         dec= dec0-ccrd.dec.deg
         data_cut= (ra>-0.5)&(ra<0.5)&(dec<0.05)&(dec>-0.05)
@@ -272,8 +275,8 @@ def load_Tsc(spec,T,mjd):
                 tmaxYY, onpYY, offpYY= np.nan,[np.nan]*4,[np.nan]*2
                 fit_k+=1
                 if fit_k>=int(0.1*len(freq_key)):
-                    print(f'Fit failed at too many Freq in beam {nB}. Please check input parameters!')
-                    os._exit(0)
+                    print(f'Fit failed at too many Freq in beam {nB}. Please check')
+                    sys.exit(1)
             ONp.append(np.array([onpXX,onpYY],dtype='float64'))
             OFFp.append(np.array([offpXX,offpYY],dtype='float64'))
             TMAX.append(np.array([tmaxXX,tmaxYY],dtype='float64'))
@@ -287,10 +290,13 @@ def load_Tsc(spec,T,mjd):
         crds= SkyCoord(ra0,dec0,unit=u.deg)          
         mjd_src,mjd_ref= load_track_time(mjd,t_src,nB,obsmode,n_cir=ncir)
         T_src,T_ref= T[mjd_src],T[mjd_ref]
-        if T_select==True:
-            Tsrc,_= radec_select(T_src,crds[mjd_src],[0., rlim_src])
+        T_select = True
+        if T_select:
+            print(f'Further restrict the on-source spectra within {args.src_drange}')
+            Tsrc,_= radec_select(T_src,crds[mjd_src], args.src_drange)
             fit_k= 1- Tsrc.shape[0]/T_src.shape[0]
-            Tref,_= radec_select(T_ref,crds[mjd_ref],[180,36000])
+            print(f'Further restrict the off-source spectra within {args.ref_drange}')
+            Tref,_= radec_select(T_ref,crds[mjd_ref], args.ref_drange)
         else:
             Tsrc,Tref= T_src,T_ref
             fit_k= 1
@@ -301,13 +307,13 @@ def load_Tsc(spec,T,mjd):
 
 def radec_select(T,crds,seprange):
     seps= ccrd.separation(crds).to_value(u.arcsec)
-    is_use= (seps>seprange[0])&(seps<seprange[1])
+    is_use= (seps>=seprange[0])&(seps<=seprange[1])
     num_used= T[is_use].shape[0]
     if num_used==0:
-        print('No point inside source area, please check input parameters!')
-        os._exit(0)
+        print(f'Beam {nB:02d}: No spectra inside {seprange}, please check input parameters.')
+        sys.exit(1)
     else:
-        print(f'Input {T.shape[0]} points, used {num_used} points')
+        print(f'Beam {nB:02d}: Input {T.shape[0]} spectra, {num_used} spectra is in {seprange}')
     return T[is_use],is_use
 
 def load_data(fname):
@@ -315,13 +321,23 @@ def load_data(fname):
     dataname = replace_nB(fname, nB)
     spec= sep_spe(dataname,d,m,n)
     global freq
+    global sigma_nchan
     freq= spec.freq_use
+    sigma_nchan =  int(sigma/(np.max(freq) - np.min(freq))*(len(freq)-1))
     mjd= spec.get_mjds()
     global obsdate
     obsdate= (Time(np.median(mjd),format='mjd').to_value('iso','date_hm'))
     obsdate= re.sub('\D','',obsdate)
+    
+    global outdir
+    outdir = sub_patten(outdir, date=obsdate+'UTC', project=calname)
+    outdir = os.path.expanduser(outdir)
+    if outdir!='' and (not os.path.exists(outdir)):
+        print(f'outdir {outdir} not exists. Create it now')
+        os.makedirs(outdir, exist_ok=True)
     global outname
-    outname= oname+obsdate
+    outname= f"{outdir}/{calname}-{obsmode}-{obsdate}UTC"
+    
     mjd_on = mjd[spec.inds_on]
     mjd_off = mjd[spec.inds_off]
     
@@ -346,7 +362,7 @@ def load_data(fname):
         odata['Tcal']= Tcal_s
         odata['Tcal_file']= spec.tcal_file
         save_dict_hdf5(outname+f'-M{nB:02d}_T.hdf5',odata) 
-        print('Saved to '+outname+f'-M{nB:02d}_T.hdf5')
+        print('Saved the temperature data to '+outname+f'-M{nB:02d}_T.hdf5')
 
     Tsrc,Tref,ONp,OFFp,TMAX= load_Tsc(spec,T_off,mjd_off,)
     Tsc= Tsrc-Tref
@@ -364,9 +380,30 @@ parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:
                         allow_abbrev=False,
                         description='Processing the calibrator data', )
 parser.add_argument('fname',
-                    help='file name')
+                    help="File path of raw data, to be used with the `--nBs` parameter: '*M01*-0001.fits'.")
+parser.add_argument('--nBs', type=int, nargs='*',
+                    help='beam numbers. Input int number, seperated by space, such as `1 3 11`. \
+                    If no numbers are provided, process all beams when the `--obsmode` is `MultiBeamCalibration` or `MultiBeamOTF`, otherwise only beam 1 will be processed.', default=None)
 parser.add_argument('--outdir', type=str,
-                   help='output path',default=None)
+                   help='output directory',default=None)
+
+group = parser.add_argument_group(f'*Calibrator setting\n{sep_line}')
+group.add_argument('--obsmode',type=str, choices=['MultiBeamCalibration', 'OnOff', 'MultiBeamOTF','DriftWithAngle','DecDriftWithAngle','Drift'],
+                    help='Observation mode. Supports `MultiBeamCalibration`, `OnOff`, and some special scanning.',)
+group.add_argument('--calname', type=str, required=True,
+                   help='calibrator name. e.g. 3C48',)
+group.add_argument('--crd', type=float, nargs=2,
+                   help='Calibrator coordinates in deg. Two float numbers, for RA and DEC. \
+                   If None, use Simbad.query_object to query by `--calname`.', default=None)
+
+fpf= pd.read_csv(os.path.dirname(__file__) + '/data/FluxProfiles.csv')
+calnames = ','.join(fpf['name'])
+group.add_argument('--fluxProfilePara', type=float, nargs=4,
+                   help=f'The function of calibrator flux with respect to frequency. Function of {calnames} are already embeded in code.\
+                   Others must be specified and include four floating-point numbers: a0, a1, a2, and a3. \
+                   The function will be represented by the equation `a0 + a1*log10(f) + a2*log10(f)**2 + a3*log10(f)**3`.',default= None)
+
+
 group = parser.add_argument_group(f'*Parameters same with hifast.sep\n{sep_line}')
 group.add_argument('-d','--d', '--n_delay', type=int, required=True,
                    help='time of delay divided by sampling time')
@@ -381,29 +418,23 @@ group.add_argument('--noise_mode', default='high', choices=['high','low'],
 group.add_argument('--noise_date', default='auto',type=str,
                     help='noise obs date, default auto')
 group.add_argument('--smt_sigma', type=float,
-                   help='smooth sigma',default= 1)
-group = parser.add_argument_group(f'*Calibrator setting\n{sep_line}')
-group.add_argument('--obsmode',type=str,
-                    help='observation mode',)
-group.add_argument('--nBs', type=int, nargs='*',
-                    help='beam numbers',default=None)
-group.add_argument('--calname', type=str, required=True,
-                   help='calibrator name',)
-group.add_argument('--crd', type=float, nargs=2,
-                   help='calibrator coordinate in deg',default=None)
-group.add_argument('--fluxProfilePara', type=float, nargs=4,
-                   help='calibrator flux',default= None)
+                   help='smooth sigma (in MHz) of gaussian smooth along frequency',default=1)
+
 group = parser.add_argument_group(f'*Parameters in MultiBeamCalibration or OnOff\n{sep_line}')
 group.add_argument('--t_src', type=int,
-                   help='tracking time of On Source',default=60)
-group.add_argument('--n_cir', type=int,default=1,
-                   help='tracking time of On Source')
-group.add_argument('--T_select', type=bool_fun, choices=[True, False], default='True',
-                   help='Select T with radec if `--obsmode MultiBeamCalibration`')
-group.add_argument('--rlim_src', type=float, default=16,
-                   help='if `--T_select`, maximum allowed offset (in arcsec) to calibrator. Default is 16.', )
+                   help='Tracking time of On-Source in second. (It is used in conjunction with Off-Source and change time to determine the On/Off source spectra. \
+                   In the `OnOff` mode, the Off-Source time used is identical to the On-Source time, with a change time of 30 seconds. \
+                   In the `MultiBeamCalibration` mode, the change time is 40 seconds.)', default=60)
+group.add_argument('--n_cir', '--n_repeat', type=int, default=1,
+                   help='The number of on-source off-source cycles in `OnOff`. It is 1 in `MultiBeamCalibration`')
+# group.add_argument('--T_select', type=bool_fun, choices=[True, False], default='True',
+#                    help='Select spectra within `--rlim_src` from calibrater source if `--obsmode MultiBeamCalibration`')
+group.add_argument('--src_drange', nargs=2, type=float, default=[0., 20.],
+                   help='Further limit the distance of On-Source spectra to the Calibrator coordinates in this range. unit is arcsecond',)
+group.add_argument('--ref_drange', nargs=2, type=float, default=[180., 3600.],
+                   help='Further limit the distance of Off-Source spectra to the Calibrator coordinates in this range. unit is arcsecond',)
 group = parser.add_argument_group(f'*Others\n{sep_line}')
-group.add_argument('--saveT', type=bool_fun, choices=[True, False], default='True',
+group.add_argument('--saveT', type=bool_fun, choices=[True, False], default='False',
                    help='Save T files or not',)
 
 if __name__ == '__main__':
@@ -416,12 +447,12 @@ if __name__ == '__main__':
     frange= args.frange
     noise_mode = args.noise_mode
     noise_date = args.noise_date
-    sigma= int(args.smt_sigma*65536/500)
+    sigma= args.smt_sigma
     obsmode= args.obsmode
     modes= ['Drift','MultiBeamCalibration','OnOff','MultiBeamOTF','DriftWithAngle','DecDriftWithAngle']
     if obsmode not in modes:
-        print('Please check observation mode!')
-        os._exit(0) 
+        print('Please check observation mode.')
+        sys.exit(1) 
     CalinBs= args.nBs 
     if CalinBs== None:
         if obsmode in ['MultiBeamCalibration','MultiBeamOTF',]:
@@ -459,7 +490,7 @@ if __name__ == '__main__':
         outdata[f'ONp{i}']= ONp
         outdata[f'OFFp{i}']= OFFp
         outdata[f'Tmax{i}']= TMAX
-        print(f'Finished calibration of M{nB:02d}, {fit_k*100}% input data has bean ignored.')
+        print(f'Finished calibration of M{nB:02d}, {fit_k*100:.3f}% input data has bean ignored.')
         print('#'*50)
         
     outdata['Tcal_file']= tcal_file
