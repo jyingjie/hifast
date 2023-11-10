@@ -222,7 +222,7 @@ def plot_radec_near_cbr(ra, dec, ra_cbr, dec_cbr, figname, r_max=0.15):
     is_use &= (dec < dec_cbr+r_max ) & (dec > dec_cbr-r_max)
     
     plt.scatter(ra[is_use], dec[is_use], marker='.', s=1, color='k')
-    plt.scatter(ra_cbr, dec_cbr, marker='.', s=5, color='r')
+    plt.scatter(ra_cbr, dec_cbr, marker='.', s=7, color='r')
     plt.xlabel('RA [deg]')
     plt.ylabel('DEC [deg]')
     plt.grid()
@@ -234,6 +234,7 @@ def load_Tsc(spec,T,mjd):
     global fit_k
     global rlim_src # max allowed radius[arcsec] to src
     if nB==1:
+        print(f'Calculating RA-DEC for Beam {list(nBs)}')
         radec = get_radec(mjd, guess_str=fname,tol=5,nBs=list(nBs),nproc=nproc)
         save_dict_hdf5(outname+'-radec.hdf5',radec) 
         print('Saved RA-DEC to '+outname+'-radec.hdf5')
@@ -241,6 +242,7 @@ def load_Tsc(spec,T,mjd):
         try:
             _,_ = radec[f'ra{nB}'], radec[f'dec{nB}']
         except:
+            print(f'Calculating RA-DEC for Beam {nB:02d}')
             radec = get_radec(mjd, guess_str=fname,tol=5,nBs=[nB,])
     ra0,dec0 = radec[f'ra{nB}'], radec[f'dec{nB}']
     
@@ -347,7 +349,9 @@ def load_data(fname):
     spec.sep_on_off_inds()
     p_on = spec.get_field(spec.inds_on, 'DATA',)
     p_off= spec.get_field(spec.inds_off, 'DATA', close_file=False)
-    c_on, c_off, pcal_s,_= spec.get_count_tcal(spec.inds_on,spec.inds_off)
+    #c_on, c_off, pcal_s,_= spec.get_count_tcal(spec.inds_on,spec.inds_off)
+    # used power of cal not smoothed
+    pcal_s = spec._get_cal_power(spec.inds_ton, spec.inds_toff_bef, spec.inds_toff_aft)
     p_cal= load_pcal(pcal_s,mjd_on[::m])
     p_cal= rfi_mask_pcal(p_cal)
     T_off= p_off*Tcal_s/p_cal
