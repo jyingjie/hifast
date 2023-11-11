@@ -783,14 +783,10 @@ class FASTRawCut(FastRawData):
     def write_fits_header(self, g, **kwargs):
         """
         g: h5py group
-        kwargs: header new field pair: name:value
+        kwargs: header field pair: name:value
         """
-        import copy
-        header = copy.deepcopy(self.fits_header)
         for key in kwargs.keys():
-            header[key] = kwargs[key]
-        for key2 in header.keys():
-            g.attrs[key2] = header[key2]
+            g.attrs[key] = kwargs[key]
 
 
     def load_all_fields(self, inds, chan_fix=True, polar_trans=True):
@@ -863,11 +859,15 @@ class FASTRawCut(FastRawData):
                 outname = self.out_name_base + f"{i+1:04d}.hdf5"
                 fout_sep = h5py_write(outname)
                 write_header(fout_sep, header)
-                g_sep = fout_sep.create_group('1') # table
+                g_sep_0 = fout_sep.create_group('0') # table 0
+                self.write_fits_header(g_sep_0, **dict(self.hd0s[i*step].items()))
+                g_sep = fout_sep.create_group('1') # table 1
                 for key in dict1.keys():
                     g_sep[key] = dict1[key]
                 g_sep.create_dataset(stype, data=T, chunks=True, compression=h5_compression)
                 # NAXIS1=self.NCHAN_new*self.2 ?
+                self.write_fits_header(g_sep, **self.fits_header)
+                # update new
                 self.write_fits_header(g_sep,
                                        NAXIS2=len(inds),
                                        TDIM21=f"(2, {self.NCHAN_new})",
@@ -882,6 +882,8 @@ class FASTRawCut(FastRawData):
                 if i == 0:
                     outname = self.out_name_base + f"0001.hdf5"
                     fout = h5py_write(outname)
+                    g_0 = fout.create_group('0') # table 0
+                    self.write_fits_header(g_0, **dict(self.hd0s[0].items()))
                     fout.create_group('1')
                     g = fout['1']
                     # prepare writing spec
@@ -897,6 +899,8 @@ class FASTRawCut(FastRawData):
             dict1 = self.dict_stack(*dict1_list)
             for key in dict1.keys():
                 g[key] = dict1[key]
+            self.write_fits_header(g, **self.fits_header)
+                # update new
             self.write_fits_header(g,
                                    NAXIS2=len(self.inds),
                                    TDIM21=f"(2, {self.NCHAN_new})",

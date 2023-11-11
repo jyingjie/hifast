@@ -176,7 +176,7 @@ def save_dict_hdf5(fname, dict_in, mode='w', spec2float32=False):
 
 def gen_carta_group(f, data_shape, wcs_data_name, axis1=None, axis2=None,
                     wcs_data_group='S',
-                    image_group='0'):
+                    image_group='Waterfall'):
     import h5py
     import numpy as np
     wcs = {'SIMPLE': 1,
