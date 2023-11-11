@@ -18,9 +18,11 @@ if __name__ == '__main__':
     parser.add_argument('-f', dest='force', action='store_true',
                         help='overwriting file if out file exists')
     parser.add_argument('--ky_files', nargs='*',
-                        help='KY files, if not given, guessing from fname')
+                        help='KY files, if not given, try to search in `--ky_dir`.')
+    parser.add_argument('--ky_dir',
+                        help="The directory for seraching KY file. If not specified, utilize `~/KY` if it exists. Otherwise, use `/data31/KY`.")
     parser.add_argument('--backend', choices=['erfa', 'astropy'], default='astropy',
-                       help='using erfa or astropy. The astropy consider dUT1, xp, yp')
+                       help='using erfa or astropy. The astropy will consider dUT1, xp, yp automatically.')
     parser.add_argument('--tol', type=float, default=1,
                        help='max allowed extrapolate time; unit: second')
     parser.add_argument('--ky_fixed', action='store_true',
@@ -77,6 +79,10 @@ if __name__ == '__main__':
             sys.exit()
             
     from .core.radec import plot_radec, get_radec
+    if args.ky_dir is not None:
+        from .core import radec as radec_py
+        radec_py.ky_dir_default = [args.ky_dir]
+    
     env_para = {}
     env_para['phpa'] = args.phpa
     env_para['temperature'] = args.temperature
@@ -87,6 +93,9 @@ if __name__ == '__main__':
         dUT1 = args.dUT1
     radec = get_radec(fname, ky_files=ky_files, tol=tol, ky_fixed=ky_fixed, use_cache=use_cache, nproc=nproc, 
                       backend=args.backend, env_para=env_para, dUT1=dUT1)
+    if radec is None:
+        raise(ValueError('The attempt to process RA-DEC was unsuccessful. Exiting the procedure...'))
+        sys.exit(1)
     #saving
     ##record history
     from .utils.io import *
