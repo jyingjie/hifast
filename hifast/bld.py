@@ -10,19 +10,19 @@ from .utils.io import *
 sep_line = '##'+'#'*70+'##'
 parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}",
                         formatter_class=formatter_class, allow_abbrev=False,
-                        description='Fit and subtract the baseline', )
+                        description='Fit and subtract the baseline',)
 add_common_argument(parser)
 parser.add_argument('fpath',
-                    help='input the file including spectra with temperature or flux')
+                    help='Path to the input file containing spectra data with temperature or flux.')
 parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
-                    help='Limit frequence range')
+                    help='Specify the frequency range to limit the analysis to. Expects two float values: start and end frequencies.')
 parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
-                    help="don't check or add ra dec")
+                    help="If enabled, skips the verification or addition of right ascension (RA) and declination (Dec) information.")
 parser.add_argument('--show_prog', type=bool_fun, choices=[True, False], default='True', env_var='HIFAST_SHOW_PROG',
-                    help='')
+                    help='Set to True to display progress during the fitting of spectra; otherwise set to False.')
 
 parser.add_argument('--nproc', '-n', type=int, default=1,
-                   help='number of process used in fitting baseline')
+                   help='Specifies the number of processes to use during baseline fitting.')
 # baseline fitting
 group = parser.add_argument_group(f'*BaseLine fitting {sep_line}')
 
@@ -38,89 +38,89 @@ method += ['asPLS', 'arPLS']
 method += ['original']
 
 group.add_argument('--method', default='arPLS', choices=method,
-                   help='method used to fit baseline')
+                   help='Select the baseline fitting method to use from the available options.')
 group = parser.add_argument_group('preprocessing before baseline fitting')
 group.add_argument('-T', '--trans', type=bool_fun, choices=[True, False], default='False',
-                   help='if set True, fitting the baseline along time instead of frequency.')
-group.add_argument('--njoin', type=int, default=0,
-                   help='join spectra (average) to fit a common baseline')
+                   help='Set to True to fit the baseline along the time axis instead of the frequency axis.\
+                    The parameters `--njoin_t` and `--njoin_freq`, `--s_method_t` and `--s_method_freq`, along with  `--s_sigma_t` and `--s_sigma_freq`, are correspondingly interchanged.\
+                    The parameters for post low-order polynomial fitting are similarly exchanged.')
+group.add_argument('--njoin', '--njoin_t', type=int, default=0,
+                   help='Combine (average) a specified number of spectra to fit a common baseline.')
 group.add_argument('--s_method_t', default='none', choices=['none', 'gaussian', 'boxcar', 'median'],
-                   help='method used to smooth each channel along time axis')
+                   help='Choose the smoothing method to apply to each channel along the time axis.')
 group.add_argument('--s_sigma_t', type=int, default=5,
-                   help='used with --s_method_t')
-group.add_argument('--s_method_freq', default='none', choices=['none', 'median', 'gaussian', 'boxcar', 'PLS', 'fft'],
-                   help='method used to smooth each spectrum along frequency axis')
+                   help='Used with `--s_method_t`. Standard deviation of Gaussian smoothing or 2*`s_sigma_t`+1 for boxcar/median smoothing window width.')
+group.add_argument('--s_method_freq', default='none', choices=['none', 'gaussian', 'boxcar', 'median', 'PLS', 'fft'],
+                   help='Select the smoothing method to apply to each spectrum along the frequency axis.')
 group.add_argument('--s_sigma_freq', type=float, default=5,
-                   help='used with --s_method_freq')
-group.add_argument('--average_every_freq', type=int, default=0,
-                   help='bin the channels by this factor')
+                   help='Used with `--s_method_freq`. Standard deviation of Gaussian smoothing or 2*`s_sigma_t`+1 for boxcar/median smoothing window width.')
+group.add_argument('--average_every_freq', '--njoin_freq', type=int, default=0,
+                   help='Factor by which to bin (average) the channels along the frequency axis.')
 
 group = parser.add_argument_group('fit and subtract the baseline')
 group.add_argument('--lam', type=float, default=1.0e8,
-                   help='smooth parameter for `*PLS` methods, larger values make the baseline close to an low-order polynomial. adjust in log scale.')
+                   help='Set the smoothing parameter for `*PLS` methods. Larger values result in a baseline closer to a low-order polynomial. Adjust using a logarithmic scale.')
 group.add_argument('--deg', type=int, default=2,
-                   help='polynomial degree for `poly-*` methods')
+                   help='Specify the polynomial degree for `poly-*` methods.')
 group.add_argument('--knots', type=str,
-                   help='knots stored in a json file used for `knspline-*` methods')
+                   help='Path to a JSON file containing predefined knots for `knspline-*` methods.')
 group.add_argument('--offset', type=float, default=2,
-                   help='baseline fit parameters')
+                   help='Offset parameter for baseline fitting.')
 group.add_argument('--ratio', type=float, default=0.01,
-                   help='baseline fit parameters')
+                   help='Ratio parameter for baseline fitting.')
 group.add_argument('--niter', type=int, default=100,
-                   help='baseline fit parameters')
+                   help='Maximum number of iterations for baseline fitting.')
 group.add_argument('--exclude_add', '--exclude_type', default='none', choices=['none', 'auto1', 'auto2'],
-                   help='baseline fit parameters')
-
+                   help='Additional exclusion parameters for baseline fitting.')
 
 group = parser.add_argument_group(f'Use pre-determined is_excluded array in input file\n{sep_line}')
 group.add_argument('--use_pre_is_excluded', type=bool_fun, choices=[True, False], default='False',
-                   help='If True, use pre-determined is_excluded array if existed to mask channels')
+                   help='Use a pre-determined is_excluded array from the input file to mask channels, if available.')
 # Exclude files
 group = parser.add_argument_group(f'Exclude known source catalogs\n{sep_line}')
-# group.add_argument('--continumm_file',
-#                    help='txt catalog with #ra[deg], dec[deg], R[arcmin], freq_min[MHz], freq_max[MHz]')
 group.add_argument('--src_file',
-                   help='txt catalog with #ra[deg], dec[deg], R[arcmin], freq_min[MHz], freq_max[MHz]. This will also add the region to is_excluded array.')
+                   help='Path to a text catalog with columns for RA [deg], Dec [deg], radius [arcmin], minimum frequency [MHz], and maximum frequency [MHz]. Identified sources will be added to the is_excluded array.')
 group.add_argument('--frame', choices=['BARYCENT', 'HELIOCEN', 'LSRK', 'LSRD'], default='LSRK',
-                   help='Velocity Rest Frames. Used in excluding the source freq ranges.')
+                   help='Specify the velocity rest frame for excluding source frequency ranges.')
 
 # low-order polynomial on individual spectrum
-group = parser.add_argument_group(f'*Post-applying low-order polynomial fitting on individual spectrum if `--s_method_t` or `--njoin` used [optional]\n{sep_line}')
+group = parser.add_argument_group(f'*Post-applying low-order polynomial fitting on *individual* spectrum if `--s_method_t` or `--njoin` used [optional]\n{sep_line}')
 
 rew_type = ['asym1', 'asym2', 'asym3', 'sym1',]
 method = ['none']
 method += ['poly-'+r for r in rew_type]
 
 group.add_argument('--post_method', default='none', choices=method,
-                   help='method used to fit baseline')
-group.add_argument('--post_s_method_freq', default='none', choices=['none', 'median', 'gaussian', 'boxcar', 'PLS', 'fft'],
-                   help='method used to smooth each spectrum along frequency axis')
+                   help='Select the method for post-application baseline fitting.')
+group.add_argument('--post_s_method_freq', default='none', choices=['none', 'gaussian', 'boxcar', 'median', 'PLS', 'fft'],
+                   help='Smoothing method for each spectrum along the frequency axis after baseline subtraction.')
 group.add_argument('--post_s_sigma_freq', type=float, default=5,
-                   help='used with --post_s_method_freq')
+                   help='Standard deviation for Gaussian smoothing along the frequency axis after baseline subtraction.')
 group.add_argument('--post_average_every_freq', type=int, default=0,
-                   help='bin the channels by this factor')
+                   help='Bin the channels by this factor after baseline subtraction.')
 group.add_argument('--post_deg', type=int, default=2,
-                   help='polynomial degree for `*-poly` methods')
+                   help='Polynomial degree for `*-poly` methods used after baseline subtraction.')
 group.add_argument('--post_offset', type=float, default=2,
-                   help='baseline fit parameters')
+                   help='Offset parameter for baseline fitting after baseline subtraction.')
 group.add_argument('--post_ratio', type=float, default=0.01,
-                   help='baseline fit parameters')
+                   help='Ratio parameter for baseline fitting after baseline subtraction.')
 group.add_argument('--post_niter', type=int, default=100,
-                   help='baseline fit parameters')
+                   help='Number of iterations for baseline fitting after baseline subtraction.')
 group.add_argument('--post_exclude_add', '--post_exclude_type', default='none', choices=['none', 'auto1', 'auto2'],
-                   help='baseline fit parameters')
+                   help='Additional exclusion parameters for baseline fitting after baseline subtraction.')
 # interaction
 group = parser.add_argument_group(f'*Interaction\n{sep_line}')
 group.add_argument('-i', '--interact', action='store_true', not_in_write_out_config_file=True,
-                   help='interaction')
+                   help='Enable interactive mode for additional manual control and visualization.')
 group.add_argument('--ylim', nargs='+', default=['auto'], not_in_write_out_config_file=True,
-                   help='ylim')
+                   help='Set the y-axis limits for the plots. Use "auto" for automatic scaling or provide two float values for the lower and upper limits.')
 group.add_argument('--figsize', type=float, nargs=2, default=(10, 7), not_in_write_out_config_file=True,
-                   help='figsize')
+                   help='Specify the figure size for plots as a tuple of width and height in inches.')
 group.add_argument('--length', type=int, default=20, not_in_write_out_config_file=True,
-                   help='spetra numbers used to test')
+                   help='Number of spectra to use for testing purposes.')
 group.add_argument('--start_init', type=int, default=0, not_in_write_out_config_file=True,
-                   help='the index of the spectrum shown at start')
+                   help='Index of the first spectrum to display when starting the program.')
+
 
 # Cell
 class IO(BaseIO):
@@ -200,6 +200,12 @@ class IO(BaseIO):
         fit_kwargs['s_sigma_t'] = 0
         fit_kwargs['lam'] = 0
         fit_kwargs['is_excluded'] = is_excluded
+
+        trans = args.trans
+        if trans:
+            if fit_kwargs['is_excluded'] is not None:
+                 fit_kwargs['is_excluded'] = fit_kwargs['is_excluded'].transpose((1, 0, 2))
+            return sub_baseline(np.arange(len(mjd)), s2p.transpose((1, 0, 2)), subtract=True, **fit_kwargs).transpose((1, 0, 2))
 
         return sub_baseline(freq, s2p, subtract=True, **fit_kwargs)
 
