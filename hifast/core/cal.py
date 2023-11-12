@@ -339,6 +339,7 @@ class FastRawSpec(FastRawData):
         self.noise_date = noise_date
 
     def _get_freq(self,):
+        # only for W,F,N band
         #freq += 0.000476837158203125/2 # using center frequency
         super()._get_freq(center_corr = 0.000476837158203125/2)
 

@@ -768,7 +768,7 @@ class FASTRawCut(FastRawData):
         self.fits_header = dict(self.hd1s[0].items())
 
     def _get_freq(self,):
-        # make sure
+        # make sure not correct to process 'FREQ_new'
         super()._get_freq(center_corr=None)
 
     def gen_out_name_base(self, outdir):
@@ -819,6 +819,20 @@ class FASTRawCut(FastRawData):
         for key in args[0].keys():
             res[key] = np.hstack([d[key] for d in args])
         return res
+
+    def add_S_group(self, f):
+        """
+        add a hdf5 group for spcetra type. add 'freq', hdf5 softlink to 'DATA', 'UTOBS' in '/1'
+        f: file handle
+        """
+        g = f.create_group('S')
+        # for W,N,F. also see FastRawSpec._get_freq
+        center_corr = 0.000476837158203125/2.
+        g['freq'] = self.freq_use + center_corr
+        g['DATA'] = h5py.SoftLink('/1/DATA')
+        g['Ta'] = h5py.SoftLink('/1/DATA')
+        g['mjd'] = h5py.SoftLink('/1/UTOBS')
+
 
     def __call__(self, outdir='./', step=1, header=None, sep_save=False, h5_compression='none'):
         """
@@ -875,6 +889,8 @@ class FASTRawCut(FastRawData):
                 # waterfall
                 mjd = dict1['UTOBS']
                 gen_carta_group(fout_sep, g_sep[stype].shape, wcs_data_name=stype, axis1=self.freq_use, axis2=mjd, wcs_data_group='1')
+                # add S group
+                self.add_S_group(fout_sep)
                 fout_sep.close()
                 print(f"Saved to {outname}")
             else:
@@ -908,5 +924,7 @@ class FASTRawCut(FastRawData):
             # waterfall
             mjd = dict1['UTOBS']
             gen_carta_group(fout, g[stype].shape, wcs_data_name=stype, axis1=self.freq_use, axis2=mjd, wcs_data_group='1')
+            # add S group
+            self.add_S_group(fout)
             fout.close()
             print(f"Saved to {outname}")
