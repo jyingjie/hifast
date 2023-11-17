@@ -26,6 +26,10 @@ def plot(info, frange=[1050, 1450], suptitle=''):
     for key in f.keys():
         if key.startswith('M'):
             keys.append(key)
+    if len(keys) == 0:
+        for key in f.keys():
+            if key.startswith('K_Jy'):
+                keys.append(key)
     if len(key) > 19:
         raise(ValueError('find more than 19beams?'))
     # plot
