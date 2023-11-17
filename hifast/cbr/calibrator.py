@@ -42,6 +42,7 @@ global flux
 global nproc
 global outdir
 nproc = 1
+ 
 
 def load_crd(obj,crds):
     if crds==None:
@@ -379,6 +380,7 @@ def load_data(fname):
     return K_Jy,Tcal_s,spec.tcal_file,mjd_off,ONp,OFFp,TMAX
 
 
+
 sep_line = '##'+'#'*70+'##'
 parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}", formatter_class=formatter_class, 
                         allow_abbrev=False,
@@ -409,11 +411,11 @@ group.add_argument('--fluxProfilePara', type=float, nargs=4,
 
 
 group = parser.add_argument_group(f'*Parameters same with hifast.sep\n{sep_line}')
-group.add_argument('-d','--d', '--n_delay', type=int, required=True,
+group.add_argument('-d','--d', '--n_delay', type=int,
                    help='time of delay divided by sampling time')
-group.add_argument('-m','--m', '--n_on', type=int, required=True,
+group.add_argument('-m','--m', '--n_on', type=int,
                    help='time of Tcal_on divided by sampling time')
-group.add_argument('-n','--n', '--n_off', type=int, required=True,
+group.add_argument('-n','--n', '--n_off', type=int,
                     help='time of Tcal_off divided by sampling time')
 group.add_argument('--frange', type=float, nargs=2,
                    help='freq range',default= [1000,1500] )

@@ -8,6 +8,7 @@ __all__ = ['parser', 'args', 'fname', 'obsfile', 'frange', 'noise_mode', 'noise_
 from . import calibrator as cbr
 from ..utils.io import save_dict_hdf5, replace_nB
 from ..utils.io import bool_fun
+from ..utils import obs_log
 import numpy as np
 import os
 import sys
@@ -21,9 +22,34 @@ parser.add_argument('--cache', type=bool_fun, choices=[True, False], default='Fa
                        help='If set to True, will cache/load the results of all beams except for the initial one.')
 parser.add_argument('--plot', action='store_true',
                        help='plot FluxGain with frequency.')
+parser.add_argument('--obs_log',
+                       help='If set, will use the obs_log to get `-d`, `-m`, `-n`, `--noise_mode`.\
+                        It requires a file path ending in `.log` or `.txt`, or a directory path where the log file can be searched for.')
 
 # Cell
 args = parser.parse_args()
+
+# Cell
+if args.obs_log is not None:
+    if not os.path.exists(args.obs_log):
+        raise ValueError(f'`--obs_log` not exists: `{args.obs_log}`.')
+    if os.path.isfile(args.obs_log):
+        obs_log_path = args.obs_log
+    elif os.path.isdir(args.obs_log):
+        print(f'try to search for log file in the directory: `{args.obs_log}`.')
+        obs_log_path = obs_log.search_log_fpath(args.fname, args.obs_log)
+    else:
+        raise ValueError(f'`--obs_log` should be a file path ending in `.log` or `.txt`, or a directory path where the log file can be searched for.\
+        \nBut got `{args.obs_log}`.')
+    print(f'Use obs_log file: `{obs_log_path}`.')
+    paras = obs_log.get_sep_para_from_log(obs_log_path)[0]
+    print(f'got paras: {paras}')
+    args.d = paras['n_delay']
+    args.m = paras['n_on']
+    args.n = paras['n_off']
+    args.noise_mode = paras['noise_mode']
+elif args.d is None or args.m is None or args.n is None or args.noise_mode is None:
+    raise ValueError(f'`--obs_log` is not set, but `--d`, `--m`, `--n`, `--noise_mode` are not set either.')
 
 # Cell
 fname= args.fname
