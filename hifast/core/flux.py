@@ -54,9 +54,10 @@ class Calibrator:
 
     @staticmethod
     def get_date_nearest(fpath_list, mjd):
-        dates_have = [os.path.basename(fpath).split('-', 2)[1] for fpath in fpath_list]
+        dates_have = [os.path.basename(fpath).rsplit('-FluxGain', 1)[0].rsplit('-', 1)[-1] for fpath in fpath_list]
         dates_have = [f'{s[:4]}-{s[4:6]}-{s[6:8]} {s[8:10]}:{s[10:12]}:00.000' for s in dates_have]
-        mjds_h = (Time(dates_have, format='iso', scale='utc') - 8*units.hour).mjd
+        # date of file name is UTC
+        mjds_h = Time(dates_have, format='iso', scale='utc').mjd
 ## use mjd
 #         mjds_h = np.empty(len(fpath_list), dtype='float64')
 #         for i, fpath in enumerate(fpath_list):
@@ -69,26 +70,23 @@ class Calibrator:
         """calc gain ratio to beam 1"""
         with h5py.File(fpath, 'r') as fs:
             freq = fs['freq'][()]
-            K_Jy = fs[f'M{self.nB:02d}'][0]
-            K_Jy_nB1 = fs[f'M01'][0]
+            K_Jy = fs[f'K_Jy{self.nB}'][0] if not self.use_counts else fs[f'count_Jy{self.nB}'][0]
+            K_Jy_nB1 = fs[f'K_Jy1'][0] if not self.use_counts else fs[f'count_Jy1'][0]
 #             print(K_Jy,K_Jy_nB1)
             ratio = K_Jy/K_Jy_nB1
-            if self.use_counts:
-                Tcal = fs[f'Tcal{self.nB}'][0]
-                Tcal_nB1 = fs[f'Tcal1'][0]
-                ratio /= (Tcal/Tcal_nB1)
-        return freq, ratio
+            ZA_nB = self.get_ZA_cbr(fs, self.nB)
+        return freq, ratio, ZA_nB
 
     def get_ratio(self):
         # cbr_store is directory
-        fpaths_nB_all = glob(os.path.join(self.cbr_store, f"{self.cbr_name}-20*-FluxGain-All.hdf5"))
+        fpaths_nB_all = glob(os.path.join(self.cbr_store, f"**/{self.cbr_name}-20*-FluxGain-All.hdf5"), recursive=True)
         if len(fpaths_nB_all) == 0:
             raise(ValueError('can not find 19-beams calibration file to calculate relative gain'))
         else:
             fpath = self.get_date_nearest(fpaths_nB_all, self.mjd)
             print(f"using {fpath} to calculate relative gain to M01")
-            freq, ratio = self._calc_ratio(fpath)
-        return freq, ratio
+            freq, ratio, ZA_nB = self._calc_ratio(fpath)
+        return freq, ratio, ZA_nB
 
     def parser_cbr(self,):
         """assign or serach fpath from self.cbr_store"""
@@ -98,16 +96,16 @@ class Calibrator:
             self.cbr_fpath = self.cbr_store
         else:
             if self.only_use_19beams:
-                fpaths_cand = glob(os.path.join(self.cbr_store, f"{self.cbr_name}-20*-FluxGain-All.hdf5"))
+                fpaths_cand = glob(os.path.join(self.cbr_store, f"**/{self.cbr_name}-20*-FluxGain-All.hdf5"), recursive=True)
             else:
-                fpaths_cand = glob(os.path.join(self.cbr_store, f"{self.cbr_name}-20*-FluxGain*.hdf5"))
+                fpaths_cand = glob(os.path.join(self.cbr_store, f"**/{self.cbr_name}-20*-FluxGain*.hdf5"), recursive=True)
             if len(fpaths_cand) == 0:
                 raise(ValueError(f"can not find calibrator file"))
             self.cbr_fpath = self.get_date_nearest(fpaths_cand, self.mjd)
 
     def get_ZA_cbr(self, fs, nB):
-        if f'ZA{nB}_cbr' in fs.keys():
-            ZA = fs[f'ZD{nB}_cbr'][()]
+        if f'ZA_cbr{nB}' in fs.keys():
+            ZA = fs[f'ZD_cbr{nB}'][()]
         else:
             ZAs = fs[f'ZD{nB}'][()]
             ZA = np.mean(ZAs)
@@ -115,7 +113,7 @@ class Calibrator:
         ZA = np.rad2deg(ZA)
         return ZA
 
-    def __call__(self, freq_new=None, ZAs_obs=None):
+    def __call__(self, freq_new=None, ZAs_obs=None, tcal_spec=None):
         """
         freq_new: if not None, will interplate
         ZAs_obs: ZA of obs spec. If not None, will fix the gain diff from ZA diff
@@ -123,34 +121,30 @@ class Calibrator:
         print(f'loading gain from {self.cbr_fpath}')
         with h5py.File(self.cbr_fpath) as fs:
             freq = fs['freq'][()]
-            key_ = f'M{self.nB:02d}'
+            key_ = f'K_Jy{self.nB}' if not self.use_counts else f'count_Jy{self.nB}'
             if freq_new is None:
                 freq_new = freq
-            # fix ZA diff
             if key_ in fs.keys():
                 gain = fs[key_][()] # K/Jy, shape:(1, chan, 2)
                 gain = interp.CubicSpline(freq, gain, axis=1, extrapolate=True)(freq_new)
-                if ZAs_obs is not None:
-                    diff = gain_diff_from_ZA(self.get_ZA_cbr(fs, self.nB), ZAs_obs, self.nB, freq_new)
-                    gain = gain + diff[..., None]
-                if self.use_counts:
-                    tcal = fs[f'Tcal{self.nB}'][()]
-                    tcal = interp.CubicSpline(freq, tcal, axis=1, extrapolate=True)(freq_new)
-                    gain /= tcal # to count of tcal i.e. Counts/Jy
             else:
-                # use M01 or relative gain ratio
-                gain_nB1 = fs[f'M01'][()] # K/Jy
+                # use M01 or relative gain  ratio
+                gain_nB1 = fs[f'K_Jy1'][()] if not self.use_counts else fs[f'count_Jy1'][()]
                 gain_nB1 = interp.CubicSpline(freq, gain_nB1, axis=1, extrapolate=True)(freq_new)
-                if ZAs_obs is not None:
-                    diff = gain_diff_from_ZA(self.get_ZA_cbr(fs, 1), ZAs_obs, 1, freq_new)
-                    gain_nB1 = gain_nB1 + diff[..., None]
-                if self.use_counts:
-                    tcal = fs[f'Tcal1']
-                    tcal = interp.CubicSpline(freq, tcal, axis=1, extrapolate=True)(freq_new)
-                    gain_nB1 /= tcal # Counts/Jy
-                freq_ratio, ratio = self.get_ratio()
+
+                freq_ratio, ratio, ZA_cbr_nB_ratio = self.get_ratio()
                 ratio = interp.CubicSpline(freq_ratio, ratio, extrapolate=True)(freq_new)
                 gain = gain_nB1 * ratio[None,:]
+
+            if self.use_counts:
+                # multiply count with spectra's tcal
+                gain *= tcal_spec # to K/Jy
+
+            if ZAs_obs is not None:
+                # fix ZA diff
+                ZA_cbr = self.get_ZA_cbr(fs, self.nB) if key_ in fs.keys() else ZA_cbr_nB_ratio
+                diff = gain_diff_from_ZA(ZA_cbr, ZAs_obs, self.nB, freq_new)
+                gain = gain + diff[..., None]
         return freq_new, gain
 
 # Cell
@@ -219,9 +213,9 @@ class FluxCali:
                 ZAs = Get_ZA(self.ra, self.dec, self.mjd)
         else:
             ZAs = None
-        _, gain = CBR(self.freq, ZAs)
+        _, gain = CBR(self.freq, ZAs, self.tcal_spec)
         self.cbr_fpath = CBR.cbr_fpath
-        K_Jy = gain * self.tcal_spec if use_counts else gain
+        K_Jy = gain
         return K_Jy
 
 
