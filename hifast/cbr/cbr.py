@@ -731,7 +731,7 @@ class Mapping(Calibrator):
                 else:
                     figname = None
                 tmaxXX, onpXX, offpXX  = self.fit_along_ra(T_fit[:,0], rause, figname=figname)
-                tmaxYY, onpYY, offpYY  = self.fit_along_ra(T_fit[:,1], rause, figname=figname)
+                tmaxYY, onpYY, offpYY  = self.fit_along_ra(T_fit[:,1], rause, figname=None)
             except:
                 print('Fit failed in '+str(int(freq_key[i])) + f'MHz in beam {nB}, please check.')
                 tmaxXX, onpXX, offpXX= np.nan,[np.nan]*4,[np.nan]*2
@@ -781,7 +781,7 @@ class Mapping(Calibrator):
         is_fit, dra, _, = self.get_is_fit(spec.inds_off)
         self.ZD_cbr = np.nanmedian(self.ZD[spec.inds_off[is_fit]])
         _, count_fit = spec.get_count_tcal(spec.inds_on[0:0], spec.inds_off[is_fit])
-        self.res_count_fit = res_count_fit = self.fit_scan(count_fit, dra[is_fit], 1)
+        self.res_count_fit = res_count_fit = self.fit_scan(count_fit, dra[is_fit], nB)
 
         self.count = count = (res_count_fit[0] - res_count_fit[1])[None,]
         self.Tcal_s = Tcal_s = spec.get_Tcal_s()
