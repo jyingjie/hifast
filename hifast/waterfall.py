@@ -140,6 +140,20 @@ def plot(fname, ax, polar=0, ytick1='index', ytick2=None, replace_rfi = False, *
         ax.axes.set_yticklabels(labels_new)
     return im
 
+def _check_fout(args, fpath_out):
+    """
+    check whether fout exists
+    """
+    ret = None
+    if os.path.exists(fpath_out):
+        if args.force:
+            print(f"will overwrite the existing output file {fpath_out}")
+        else:
+            print(f"File exists {fpath_out}")
+            print("exit... Use ' -f ' to overwrite it.")
+            ret = "exit"
+    return ret
+
 # Cell
 if __name__ == '__main__':
     import argparse
@@ -153,6 +167,8 @@ if __name__ == '__main__':
                        help='default is ./')
     parser.add_argument('-s', '--single', action='store_true',
                        help="")
+    parser.add_argument('-f', action='store_true', dest='force',
+                        help='if set, overwriting file if output file exists')
     parser.add_argument('--xrange', type=float, nargs=2,
                        help='x axis range')
     parser.add_argument('--vmin', type=str, default='per0.1',
@@ -197,6 +213,10 @@ if __name__ == '__main__':
         keys = list(map(lambda x: re.sub('-M[0-1][0-9]','-M00', os.path.basename(x)), fnames))
         files = pd.DataFrame({'key':keys, 'fname':fnames})
         for key, _files in tqdm(files.groupby('key')):
+            fpath_out = f'{outdir}/{key}.19.pdf'
+            ret = _check_fout(args, fpath_out)
+            if ret == "exit": continue
+            
             nrows=4
             ncols=5
             fig, axs = plt.subplots(nrows, ncols, figsize=(160/3,90/3), sharex=True, sharey=True)
@@ -214,11 +234,15 @@ if __name__ == '__main__':
             if args.show:
                 fig.show()
                 input()
-            fig.savefig(f'{outdir}/{key}.19.pdf',)
+            fig.savefig(fpath_out)
             fig.clear()
     else:
         for fname in tqdm(fnames):
             fbasename = os.path.basename(fname)
+            fpath_out = f'{outdir}/{fbasename}.pdf'
+            ret = _check_fout(args, fpath_out)
+            if ret == "exit": continue
+            
             nrows=1
             ncols=1
             fig, ax = plt.subplots(nrows, ncols, figsize=(15,12), sharex=True, sharey=True)
@@ -232,5 +256,5 @@ if __name__ == '__main__':
             if args.show:
                 fig.show()
                 input()
-            fig.savefig(f'{outdir}/{fbasename}.pdf',)
+            fig.savefig(fpath_out)
             fig.clear()

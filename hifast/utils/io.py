@@ -519,10 +519,12 @@ class BaseIO(Path_IO):
 
         self.mjd = fs['mjd'][:]
         self.freq = fs['freq'][:]
+        if 'vel' in fs.keys(): self.vel = fs['vel'][:] 
         self.freq_ori = self.freq
         if getattr(args, 'frange', False) and (args.frange[0] > 0. or args.frange[1] < float('inf')):
             self.is_use_freq = (self.freq >= args.frange[0]) & (self.freq <= args.frange[1])
             self.freq = self.freq[self.is_use_freq]
+            if 'vel' in fs.keys(): self.vel = self.vel[self.is_use_freq] 
         else:
             self.is_use_freq = None
 
@@ -589,12 +591,13 @@ class BaseIO(Path_IO):
         dict_out = {}
         dict_out['mjd'] = self.mjd
         dict_out['freq'] = self.freq
+        if hasattr(self, 'vel'): dict_out['vel'] = self.vel
         if self.ver == 'old':
             self.s2p_out = MjdChanPolar_to_PolarMjdChan(self.s2p_out)
         dict_out[self.outfield] = self.s2p_out
         # add field in add_fields and args from self.fs
         if not hasattr(self, 'add_fields'):
-            self.add_fields = ['is_on', 'next_to_cal', 'is_delay', 'Tcal', 'is_extrapo', 'vel', 'is_rfi']
+            self.add_fields = ['is_on', 'next_to_cal', 'is_delay', 'Tcal', 'is_extrapo',  'is_rfi']
             self.add_fields += ['is_excluded']
         self.add_fields += args
         for field in self.add_fields:
@@ -604,15 +607,22 @@ class BaseIO(Path_IO):
         if self.is_use_freq is not None:
             if 'vel' in dict_out.keys():
                 dict_out['vel'] = dict_out['vel'][self.is_use_freq]
+            
+            if hasattr(self, 'is_use_freq2'):
+                dict_out['freq'] = dict_out['freq'][self.is_use_freq2]
+            
             if 'Tcal' in dict_out.keys():
                 # use ``try`` for backwards compatible
                 try:
                     dict_out['Tcal'] = dict_out['Tcal'][:, self.is_use_freq]
                 except:
-                    pass
+                    print(f"will not save 'Tcal'")
             for key in ['is_excluded', 'is_rfi']:
                 if key in dict_out.keys():
-                    dict_out[key] = dict_out[key][:, self.is_use_freq]
+                    try:
+                        dict_out[key] = dict_out[key][:, self.is_use_freq]
+                    except IndexError as e:
+                        print(f"will not save {key}")
         # add ra dec
         for key in ['ra', 'dec', 'is_extrapo']:
             if hasattr(self, key):

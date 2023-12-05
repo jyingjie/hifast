@@ -178,7 +178,7 @@ class Read_hdf5(BaseIO):
     
     def plot_waterfall(self,data = None,xtype = 'freq', cmap = 'rainbow',per_vmin_max = None, polar = None, 
                        vmin_max = None,xylim = None,outdir = './',xrange = None,interp_method = 'nearest',
-                       plot = True,pdf = None,time_label = False, figsize=(15,4),title = None,**kwargs):
+                       plot = True,pdf = None,time_label = False, figsize=(15,4),title = None, extent = None, **kwargs):
         from matplotlib import pyplot as plt
         #import matplotlib
         #matplotlib.rcParams['image.interpolation'] = 'none'
@@ -215,11 +215,12 @@ class Read_hdf5(BaseIO):
             xrange = [x[0],x[-1]]
 
         if plot:
-            if time_label:
-                mjds = self.mjd
-                extent = (xrange[0],xrange[1],mjds[0],mjds[-1]) 
-            else:
-                extent = (xrange[0],xrange[1],0,data.shape[0])            
+            if extent is None:
+                if time_label:
+                    mjds = self.mjd
+                    extent = (xrange[0],xrange[1],mjds[0],mjds[-1]) 
+                else:
+                    extent = (xrange[0],xrange[1],0,data.shape[0])            
 
             fig,ax = plt.subplots(figsize=figsize)
 
