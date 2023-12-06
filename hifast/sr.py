@@ -30,9 +30,6 @@ parser.add_argument('--fitspath', required=True,
                    help='the path of the FITS file.')
 # parser.add_argument('--pat', '--pattern_fpath', 
 #                    help='path of the file stored pattern of 19-beams.')
-
-parser.add_argument('--angle', type=float, choices=[23.4, 53.4, 0.], required=True,
-                   help='19-beams receiver rotational angle.(unit: deg)')
 parser.add_argument('--ra_range', type=float,nargs=2, default=[0, float('inf')],
                    help='ra range; unit: deg')
 parser.add_argument('--dec_range', type=float,nargs=2, default=[0, float('inf')],
@@ -70,11 +67,42 @@ class pattern_ita(object):
 class IO(BaseIO):
     ver = 'old'
     def _get_fpart(self,):
-        return '-sr'
- 
+        return '-srmod'
+    
+    def _get_rotate_angle(self):
+        args = self.args
+        # use M01 M08
+        m01_path = args.fpath.replace(f'M{self.nB:02d}', 'M01')
+        m08_path = args.fpath.replace(f'M{self.nB:02d}', 'M08')
+
+        from .ripple.util import Read_hdf5, Args
+        h1 = Read_hdf5(Args(m01_path))
+        h8 = Read_hdf5(Args(m08_path))
+
+        from astropy.coordinates import SkyCoord
+        from astropy import units as u
+        coord1 = SkyCoord(h1.ra[0], h1.dec[0], unit = (u.deg, u.deg))
+        coord8 = SkyCoord(h8.ra[0], h8.dec[0], unit = (u.deg, u.deg))
+        
+        # position_angle is the angle with N longitude
+        rot_angle = 90 - coord1.position_angle(coord8).deg
+        
+        self.angle = None
+        for a in [23.4, 53.4, 0. ]:
+            if np.abs(rot_angle - a) < 1:
+                self.angle = a
+        
+        if self.angle is None:
+            raise ValueError("Only support multibeam rotation angle 23.4, 53.4 and 0.")
+        else:
+            print("Rotation angle:", self.angle)
+         
     def rotate(self,img):
         args = self.args
-        angle = (90+args.angle)*np.pi/180  #23.4&53.4//53.4 is the true direction. 180 deg is for substraction
+        
+        self._get_rotate_angle()
+        
+        angle = (90+self.angle)*np.pi/180  #23.4&53.4//53.4 is the true direction. 180 deg is for substraction
         # 读取库图片 Attention 转换 默认为int8 运算时可能会溢出
         # 设置新的图像大小
         h,w = img.shape[0],img.shape[1]
