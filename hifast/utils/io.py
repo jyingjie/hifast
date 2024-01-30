@@ -167,7 +167,7 @@ def save_dict_hdf5(fname, dict_in, mode='w', spec2float32=False):
         else:
             if isinstance(dict_in[key], h5py.Dataset):
                 f[key] = dict_in[key][:]
-            elif spec2float32 and isinstance(dict_in[key], np.ndarray) and key in ['Ta', 'flux', 'T']:
+            elif spec2float32 and isinstance(dict_in[key], np.ndarray) and key in ['Ta', 'flux', 'T', 'Power']:
                 f[key] = dict_in[key].astype('float32')
             else:
                 f[key] = dict_in[key]
@@ -256,7 +256,7 @@ def save_specs_hdf5(fname, dict_in, mode='w', spec2float32=True, wcs_data_name=N
         else:
             if isinstance(dict_in[key], h5py.Dataset):
                 f['S'][key] = dict_in[key][:]
-            elif spec2float32 and isinstance(dict_in[key], np.ndarray) and key in ['Ta', 'flux', 'T']:
+            elif spec2float32 and isinstance(dict_in[key], np.ndarray) and key in ['Ta', 'flux', 'T', 'Power']:
                 f['S'][key] = dict_in[key].astype('float32')
             else:
                 f['S'][key] = dict_in[key]
@@ -534,6 +534,10 @@ class BaseIO(Path_IO):
             s2p = fs['Ta']
             infield = 'Ta'
             outfield = 'Ta'
+        elif 'Power' in fs.keys():
+            s2p = fs['Power']
+            infield = 'Power'
+            outfield = 'Power'
         elif 'flux' in fs.keys():
             s2p = fs['flux']
             infield = 'flux'

@@ -621,6 +621,7 @@ class CalOnOff(FastRawSpec):
             if True, save file every step.
         """
         #
+        outfield = 'Ta' if cali else 'Power'
         self.gen_out_name_base(outdir)
         n_step= self.lens[0]*step if step is not None else len(self.inds)
         inds_range= np.append(np.arange(0, self.inds[-1], n_step), self.inds[-1]+1)
@@ -648,7 +649,7 @@ class CalOnOff(FastRawSpec):
             else:
                 count_tcal_res = [self.get_field(inds_on, 'DATA',), self.get_field(inds_off, 'DATA', close_file=True)]
             T = np.vstack(count_tcal_res[:2])
-            if save_pcals:
+            if save_pcals and cali:
                 p_cal_s_list += [count_tcal_res[2]]
                 inds_ton_list += [count_tcal_res[3]]
             else:
@@ -670,12 +671,12 @@ class CalOnOff(FastRawSpec):
                     res[key] = extra[key][inds[sort]]
                 res['mjd'] = mjd
                 res['freq'] = self.freq_use
-                res['Ta'] = MjdChanPolar_to_PolarMjdChan(T)
+                res[outfield] = MjdChanPolar_to_PolarMjdChan(T)
                 res['Tcal'] = tc_inter
                 #print(res)
                 outname= self.out_name_base + f"-specs_T_{i:04d}_{i+1:04d}.hdf5"
                 res['Header'] = header
-                save_specs_hdf5(outname, res, wcs_data_name='Ta')
+                save_specs_hdf5(outname, res, wcs_data_name=outfield)
                 print(f"Saved to {outname}")
                 del res
             else:
@@ -687,13 +688,13 @@ class CalOnOff(FastRawSpec):
             res.update(extra)
             res['mjd'] = np.hstack(mjds)
             res['freq'] = self.freq_use
-            res['Ta'] = MjdChanPolar_to_PolarMjdChan(np.vstack(Ts))
+            res[outfield] = MjdChanPolar_to_PolarMjdChan(np.vstack(Ts))
             res['Tcal'] = tc_inter
             outname= self.out_name_base + f"-specs_T.hdf5"
             res['Header'] = header
-            save_specs_hdf5(outname, res, wcs_data_name='Ta')
+            save_specs_hdf5(outname, res, wcs_data_name=outfield)
             print(f"Saved to {outname}")
-        if save_pcals:
+        if save_pcals and cali:
             p_cal_s_res = {}
             inds_ton = np.vstack(inds_ton_list)
             _, ind_uni = np.unique(inds_ton[:,0],return_index=True)
