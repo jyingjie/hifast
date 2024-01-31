@@ -88,6 +88,8 @@ class FastRawData(object):
         if isinstance(dfactor, str):
             if dfactor.upper() == 'W':
                 dfactor = 16
+            elif dfactor.isdigit():
+                dfactor = int(dfactor)
             else:
                 raise(ValueError("dfactor should be 'W' or an int"))
         # adjust frange

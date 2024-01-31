@@ -171,7 +171,7 @@ class IO(BaseIO):
             with open(args.knots, 'r') as f:
                 fit_kwargs['knots'] = json.load(f)
 
-        trans = args.trans
+        trans = getattr(args, 'trans', False)
         if trans:
             if fit_kwargs['is_excluded'] is not None:
                  fit_kwargs['is_excluded'] = fit_kwargs['is_excluded'].transpose((1, 0, 2))
@@ -201,7 +201,7 @@ class IO(BaseIO):
         fit_kwargs['lam'] = 0
         fit_kwargs['is_excluded'] = is_excluded
 
-        trans = args.trans
+        trans = getattr(args, 'trans', False)
         if trans:
             if fit_kwargs['is_excluded'] is not None:
                  fit_kwargs['is_excluded'] = fit_kwargs['is_excluded'].transpose((1, 0, 2))
