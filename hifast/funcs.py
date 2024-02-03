@@ -27,7 +27,7 @@ try:
     from .interaction import sw_i as interact_sw
 except ImportError as err:
     print(err)
-    warnings.warn(f"{err}. Import interaction modules failed")
+    warnings.warn(f"{err}. Failed to import interactive modules")
 
 from .utils.io import HFDataT
 
@@ -57,7 +57,7 @@ class HFSpec:
 
 
     def _gen_DATA(self,):
-        _DATA = None
+        self._DATA = None
         keys_ = self._group.keys()
         if 'DATA' in keys_:
             self._DATA = 'DATA'
@@ -66,12 +66,12 @@ class HFSpec:
                 if key in keys_:
                     self._DATA = key
                     break
-        if self._DATA is None:
-            raise(KeyError('can not find spec data'))
+        # if self._DATA is None:
+        #     raise(KeyError('can not find spec data'))
 
     def keys(self,):
         keys = list(self._group.keys())
-        if 'DATA' not in keys:
+        if self._DATA is not None and 'DATA' not in keys:
             keys.append('DATA')
         return tuple(keys)
 
@@ -91,7 +91,7 @@ class HFSpec:
         return r
 
     def __repr__(self,):
-        return f"keys: {self.keys()}"
+        return f"keys:\n{repr(self.keys())}"
 
     def _set_attrs(self,):
         keys_forbid = ['keys', 'fin']
