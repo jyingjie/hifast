@@ -20,8 +20,8 @@ formatter_class = argparse.ArgumentDefaultsHelpFormatter
 
 #nbdev_comment _all_ = ['os', 'sys', 'c', 're', 'copy', 'ArgumentParser', 'argparse']
 
-# Cell
-def sub_patten(string, **kwargs):
+# Internal Cell
+def sub_patten_1(string, **kwargs):
     """
     substitute '%(...)s' in string with value in kwargs
     """
@@ -31,6 +31,28 @@ def sub_patten(string, **kwargs):
             raise ValueError(f'can not find value to replace %({key})s')
         string = re.sub(r"%\("+ key + r"\)s", str(kwargs[key]), string)
     return string
+
+def sub_patten_2(string, **kwargs):
+    """
+    substitute '%[...]s' in string with value in kwargs
+    """
+    keys = re.findall(r"%\[(.*?)\]s", string)
+    for key in keys:
+        if key not in kwargs.keys():
+            raise ValueError(f'can not find value to replace %[{key}]s')
+        string = re.sub(r"%\[" + key + r"\]s", str(kwargs[key]), string)
+    return string
+
+# Cell
+
+# export
+def sub_patten(string, **kwargs):
+    if '%(' in string:
+        return sub_patten_1(string, **kwargs)
+    elif '%[' in string:
+        return sub_patten_2(string, **kwargs)
+    else:
+        return string
 
 # Cell
 def bool_fun(s):

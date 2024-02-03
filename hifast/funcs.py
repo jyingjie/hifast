@@ -2,6 +2,10 @@
 
 __all__ = []
 
+# Internal Cell
+import h5py
+import warnings
+
 # Cell
 from .core.cal import CalOnOff
 from .core.cal import FastRawSpec
@@ -18,27 +22,26 @@ from .utils.io import get_nB
 from .utils.io import replace_nB
 from .utils.io import load_hdf5_to_dict
 
-from .interaction import bld_i as interact_bld
-from .interaction import sw_i as interact_sw
-
+try:
+    from .interaction import bld_i as interact_bld
+    from .interaction import sw_i as interact_sw
+except ImportError as err:
+    print(err)
+    warnings.warn(f"{err}. Import interaction modules failed")
 
 from .utils.io import HFDataT
 
 from .utils import obs_log
 
 # Internal Cell
-import h5py
-import warnings
-
-# Internal Cell
 class HFSpec:
 
     def __init__(self, s, *,
-                 kT=('Ta', 'flux', 'DATA'),
-                 DATA_cand=('Ta', 'flux')):
+                 kT=('Ta', 'flux', 'Power', 'DATA'),
+                 DATA_cand=('Ta', 'flux', 'Power')):
         """
         s: str
-        kT: key need transpose: PolarMjdChan_to_MjdChanPolar
+        kT: field needed to be transposed by PolarMjdChan_to_MjdChanPolar
         DATA_cand: key candidates as 'DATA'
         """
         if isinstance(s, str):
