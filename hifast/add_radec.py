@@ -28,7 +28,6 @@ def gen_radec_file(file_spec, paras=[]):
 # Cell
 import h5py
 
-
 def get_radec(file_spec, mjd, nB_radec=1, file_radec = None):
     """
     load the ra dec of spectra in file_spec (*specs_T.hdf5)
@@ -115,8 +114,16 @@ if __name__ == '__main__':
     args = parser.parse_args()
     f = h5py.File(args.fname, 'r+')
     g = f['S']
-    if 'ra' not in g.keys():
-        g['ra'], g['dec'], g['is_extrapo'] = get_radec(args.fname, g['mjd'][:], args.nB_radec, args.file_radec)
-    else:
-        g['ra'][:], g['dec'][:], g['is_extrapo'][:] = get_radec(args.fname, g['mjd'][:], args.nB_radec, args.file_radec)
+
+    values = get_radec(args.fname, g['mjd'][:], args.nB_radec, args.file_radec)
+
+    keys = ['ra', 'dec', 'is_extrapo']
+
+    for key, value in zip(keys, values):
+        if value is None:
+            continue
+        if key in g.keys():
+            g[key][:] = value
+        else:
+            g[key] = value
     f.close()
