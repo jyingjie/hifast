@@ -219,8 +219,11 @@ class Imaging():
                     args.key = 'flux'
                 elif 'Ta' in f['S'].keys():
                     args.key = 'Ta'
+                elif 'Power' in f['S'].keys():
+                    args.key = 'Power'
                 else:
                     raise(ValueError('no flux or temperature information'))
+            print(f"Use field `{args.key}`")
 
     def check_axis3(self,):
         """"""
@@ -228,9 +231,9 @@ class Imaging():
         #check channel align
         arr3_stack = np.vstack([sf.arr3 for sf in self.specfiles])
         std_ = np.std(arr3_stack, axis=0, dtype=np.float64) # single precision can be inaccurate
-        print(f'{args.type3} dispersion (std) at same Ta order is between {np.nanmin(std_)} and {np.nanmax(std_)}.')
+        print(f'{args.type3} dispersion (std) at the same channel is between {np.nanmin(std_)} and {np.nanmax(std_)}.')
         if np.nanmax(std_)>0.1:
-            raise(ValueError('vel dispersion (std) at same Ta order is two large'))
+            raise(ValueError('vel dispersion (std) at the same channel is two large'))
 
     def get_history(self,):
         args = self.args

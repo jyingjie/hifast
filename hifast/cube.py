@@ -45,7 +45,7 @@ parser.add_argument('--bwidth', type=float, default=[60.],nargs='+',
                    help='unit: arc second')
 parser.add_argument('-p', '--proj', default='AIT', #choices=['AIT', 'SIN', 'TAN'],
                    help='wcs projection. See arXiv:astro-ph/0207413, Section 7.2. Choice of projection')
-parser.add_argument('-k', '--key', choices=['flux', 'Ta'],
+parser.add_argument('-k', '--key', choices=['flux', 'Ta', 'Power'],
                        help='')
 
 parser.add_argument('-m', '--method', default='gaussian', choices=['gaussian', 'bessel_gaussian', 'sinc_gaussian'],
