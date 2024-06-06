@@ -114,7 +114,7 @@ def mask_srcs(fpath, is_exclued, ra, dec, freq, mjd=None, inplace=True, rest_fra
     """
     if not inplace:
         is_exclued = np.copy(is_exclued)
-    srcs = np.loadtxt(fpath, comments='#', delimiter=',')
+    srcs = np.loadtxt(fpath, comments='#', delimiter=',', ndmin=2)
     cata = SkyCoord(ra=ra, dec=dec, unit='deg')
     for src in srcs:
         c = SkyCoord(src[0], src[1], unit='deg')
