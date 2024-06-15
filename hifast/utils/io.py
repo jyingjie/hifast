@@ -425,14 +425,17 @@ class Path_IO(object):
         add self.fpath_out
         """
         args = self.args
+        nB = get_nB(args.fpath)
+        project = get_project(args.fpath)
+        date = get_date_from_path(args.fpath)
+        self.nB = nB
+        self.project = project
+        self.date = date
 
         if args.outdir is None or args.outdir == 'default':
             args.outdir = os.path.dirname(args.fpath)
         else:
             # replace patten in outdir
-            nB = get_nB(args.fpath)
-            project = get_project(args.fpath)
-            date = get_date_from_path(args.fpath)
             args.outdir = sub_patten(args.outdir, date=date, nB=f'{nB:02d}', project=project)
             # expand '~' as outdir may be a string in bash
             args.outdir = os.path.expanduser(args.outdir)
@@ -466,6 +469,24 @@ class Path_IO(object):
             disable = not args.show_prog if args.show_prog is not None else None
             tqdm.__init__ = partialmethod(tqdm.__init__, disable=disable)
 
+    def _set_pre_output(self,):
+        from .output import set_output
+        pre_str = f'[hifast.{os.path.basename(sys.argv[0])[:-3]}]['
+        try:
+            pre_str += self.project
+        except:
+            pass
+        try:
+            pre_str += f"-M{self.nB:02d}"
+        except:
+            pass
+        try:
+            pre_str += f"-{self.date}"
+        except:
+            pass
+        pre_str += '] '
+        set_output(pre_str)
+
 
 class BaseIO(Path_IO):
     """
@@ -494,6 +515,7 @@ class BaseIO(Path_IO):
         self.load_specs()
         self.load_radec()
         self.load_and_add_Header()
+        self._set_pre_output()
 
     def _import_m(self,):
         """

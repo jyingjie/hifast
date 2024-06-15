@@ -137,6 +137,24 @@ if __name__ == '__main__':
             print(f'outdir {args.outdir} not exists. Create it now')
             os.makedirs(args.outdir, exist_ok=True)
 
+    ## add pre info to the print output
+    from .utils.output import set_output
+    pre_str = f'[hifast.{os.path.basename(sys.argv[0])[:-3]}]['
+    try:
+        pre_str += project
+    except:
+        pass
+    try:
+        pre_str += f"-M{nB:02d}"
+    except:
+        pass
+    try:
+        pre_str += f"-{date}"
+    except:
+        pass
+    pre_str += '] '
+    set_output(pre_str)
+
     ## check out file
     fname_add = date
     fname_part = re.sub('[0-9]{4}\.fits\Z', '', args.fpath)
