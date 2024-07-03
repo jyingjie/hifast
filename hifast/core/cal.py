@@ -142,9 +142,15 @@ class FastRawData(object):
         if _input_ndim > 1:
             _in_shape= _inds.shape
             _inds= _inds.flatten()
-        # make sure flattened _inds is monotone increasing
-        if (np.diff(_inds)<0).any():
-            raise(ValueError('input index must be increasing'))
+        # h5py needs flattened _inds is monotone increasing
+        if self.ftype == 'hdf5':
+            if (np.diff(_inds) <= 0).any():
+                # load all data to the numpy array first
+                load_all_first = True
+            else:
+                load_all_first = False
+        else:
+            load_all_first = False
         # determine the file and index of the spec in
         lens_cum = np.hstack([0,np.cumsum(self.lens)])
         ifile =  np.searchsorted(lens_cum, _inds + 1, side='left') - 1
@@ -171,9 +177,15 @@ class FastRawData(object):
                 is_use = (self.freq <= self.frange[1] ) & (self.freq >= self.frange[0]) # can't use self.freq_use
                 ind_use= np.where(is_use)[0]
                 # freq axis (ind_use) need use "slice" to index, coz ii is already a array; ind_use is continuous
-                data = np.vstack([self.hduls[i][1].data[field][ii, ind_use[0]:ind_use[-1]+1, :2] for i, ii in zip(ifile_uni,ind_ifile_list)])
+                if not load_all_first:
+                    data = np.vstack([self.hduls[i][1].data[field][ii, ind_use[0]:ind_use[-1]+1, :2] for i, ii in zip(ifile_uni,ind_ifile_list)])
+                else:
+                    data = np.vstack([self.hduls[i][1].data[field][:][ii, ind_use[0]:ind_use[-1]+1, :2] for i, ii in zip(ifile_uni,ind_ifile_list)])
             else:
-                data = np.vstack([self.hduls[i][1].data[field][ii, :, :2] for i, ii in zip(ifile_uni,ind_ifile_list)])
+                if not load_all_first:
+                    data = np.vstack([self.hduls[i][1].data[field][ii, :, :2] for i, ii in zip(ifile_uni,ind_ifile_list)])
+                else:
+                    data = np.vstack([self.hduls[i][1].data[field][:][ii, :, :2] for i, ii in zip(ifile_uni,ind_ifile_list)])
             #
             if self.med_filter_size is not None:
                 data = median_filter_axis1_d3(data, self.med_filter_size)
