@@ -239,7 +239,7 @@ class CheckPCal(CalOnOff):
         self.is_aband_whole = is_aband_whole
 
 # Cell
-class CalOnOffSav(CalOnOff):
+class CalOnOffSav():
     def __call__(self, outdir='./', step=None, header=None, sep_save=False, save_pcals=False, cali=True):
         """
         get T, mjd etc, and save in hdf5 file
@@ -382,7 +382,7 @@ class CalOnOffSav(CalOnOff):
             fout.close()
 
 # Cell
-class CalOnOffM(CheckPCal, CalOnOffSav):
+class CalOnOffM(CheckPCal, CalOnOffSav, CalOnOff):
 
     def gen_squeeze_freq_is_use(self, ):
         """selecting channel used to calculate relative amp"""
@@ -643,7 +643,7 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
         return c_on, c_off
 
 # Cell
-class CalOnOff1111(CheckPCal, CalOnOffSav):
+class CalOnOff1111(CheckPCal, CalOnOffSav, CalOnOff):
     @staticmethod
     def split_along_a1d2(bools_2d):
         """

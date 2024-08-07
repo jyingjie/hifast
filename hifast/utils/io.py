@@ -754,7 +754,7 @@ class HFDataT:
 
 class HFGroup:
 
-    def __init__(self, group, kT):
+    def __init__(self, group, kT, DATA_key=None):
         """
         group: input h5py group
         kT: key need transpose
@@ -762,8 +762,14 @@ class HFGroup:
         self.group = group
         self._key_trans_ = kT
         self.keys = group.keys
+        self.DATA_key = DATA_key
 
     def __getitem__(self, arg):
+        if arg == 'DATA' and 'DATA' not in self.group.keys():
+            if self.DATA_key is None:
+                raise(ValueError('no DATA in HFGroup'))
+            else:
+                arg = self.DATA_key
         r = self.group.__getitem__(arg)
         if arg == self._key_trans_:
             r = HFDataT(r)
@@ -782,22 +788,26 @@ class H5HDU:
 
 class H5FitsRead:
 
-    def __init__(self, fpath, kT='DATA'):
+    def __init__(self, fpath, kT='DATA', hdu_names=['0', '1'], DATA_key=None):
         import h5py
         f = h5py.File(fpath, 'r')
         self.f = f
         self.close = f.close
 
         self.hdus = {}
-        for name in ['0', '1']:
+        for name in hdu_names:
             try:
-                self.hdus[int(name)] = self._read_hdu(name, kT)
-            except:
+                if name.isdigit():
+                    self.hdus[int(name)] = self._read_hdu(name, kT, DATA_key)
+                else:
+                    self.hdus[name] = self._read_hdu(name, kT, DATA_key)
+            except exception as e:
+                print(e)
                 pass
 
-    def _read_hdu(self, hdu_name, kT):
+    def _read_hdu(self, hdu_name, kT, DATA_key=None):
         return H5HDU(hdu_name,
-                     HFGroup(self.f[hdu_name], kT),
+                     HFGroup(self.f[hdu_name], kT, DATA_key),
                      dict(self.f[hdu_name].attrs.items())
                      )
 
