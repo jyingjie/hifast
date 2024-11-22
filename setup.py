@@ -39,7 +39,7 @@ setuptools.setup(
               'hifast.cbr'],
     package_data={
         "hifast.core": ["data/*.txt", "data/*.json"],
-        "hifast.cbr": ["data/*.csv"],
+        "hifast.cbr": ["data/*.json"],
     },
     scripts = glob.glob('scripts/*.sh'),
     install_requires=['numpy>=1.12',
