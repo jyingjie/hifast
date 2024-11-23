@@ -183,15 +183,24 @@ def gen_args(argv=None):
                         If not provided, the program will use Simbad.query_object to query by `--calname`.', default=None)
 
 
-    group.add_argument('--fluxProfilePara', type=float, nargs='*',
-                    help=f'Parameters for the function of calibrator flux with respect to frequency. If the calibrator is not in the list of {calnames}, you must specify\
-                         several floating-point numbers: a0, a1, a2, a3, etc. The function will be represented by the equation \n\
-                         ```a0 + a1*log10(f) + a2*log10(f)**2 + a3*log10(f)**3 + etc```.\n\
-                         ',default= None)
+    group.add_argument('--fluxProfilePara', type=str, nargs='*',
+                    help=(f'Input the flux density profile parameters for calibrator. If the calibrator is not included in the list of {calnames}, '
+                           'you may enter several floating-point numbers: ``a0, a1, a2, a3, ...``. '
+                           'The function will then be represented by the equation ``a0 + a1*log10(f) + a2*log10(f)**2 + a3*log10(f)**3 + ...``. '
+                           'Alternatively, you can provide a path (ends with `.hdf5`) of a hdf5 file that contains fields "freq" (frequency in MHz) and "flux" (flux density in Jy).'
+                          ),
+                           default=None)
     group.add_argument('--s_method', choices=['A', 'B'],  default='B',
                     help='A and B both utilize Gaussian smoothing but with different strategies to suppress RFI. Default is B.')
     group.add_argument('--s_sigma_cbr', type=float,
                     help='Smooth sigma (in MHz) of Gaussian smooth along frequency for calibrator spectra.', default=10)
+
+    group = parser.add_argument_group(f'*Parameters with hifast.radec \n{sep_line}')
+    group.add_argument('--tol', type=float, default=1,
+                       help='max allowed extrapolate time; unit: second')
+    group.add_argument('--ky_files', nargs='*',
+                        help='KY files, if not given, try to search in .')
+
 
     group = parser.add_argument_group(f'*Parameters same with hifast.sep\n{sep_line}')
     group.add_argument('-d','--d', '--n_delay', type=int,
@@ -225,7 +234,7 @@ def gen_args(argv=None):
                           'will be used as Off-Source spectra.'))
     group.add_argument('--src_drange', nargs=2, type=float, default=[0., 30.],
                     help='Limits the distance of On-Source spectra to the Calibrator coordinates in this range. The unit is arcsecond.')
-    group.add_argument('--ref_drange', nargs=2, type=float, default=[650., 3600.],
+    group.add_argument('--ref_drange', nargs=2, type=float, default=[648., 3600.],
                     help='Limits the distance of Off-Source spectra to the Calibrator coordinates in this range. The unit is arcsecond.')
 
     group = parser.add_argument_group(f'*Parameters in Mapping mode\n{sep_line}')
@@ -366,6 +375,15 @@ class Calibrator():
                 print(f"File exists {fpath_out} or {fpath_out2}")
                 print("exit... Use ' -f ' to overwrite it.")
                 sys.exit(0)
+        self._import()
+
+    @staticmethod
+    def _import():
+        # run after _check_fout()
+        from matplotlib import pyplot as plt
+        import h5py
+        # register them to global
+        globals().update(locals())
 
     def gen_crd(self):
         """
@@ -375,7 +393,8 @@ class Calibrator():
         obj = args.cbrname
         crds = args.crd
 
-        if crds==None:
+        if crds is None:
+            print('try to get coordinates of the calibrator using astroquery.simbad')
             try:
                 from astroquery.simbad import Simbad
             except ImportError:
@@ -388,8 +407,28 @@ class Calibrator():
                 print('Calibrator can not find in Simbad.query_object, please input coordinates using ``--crd``.')
                 sys.exit(1)
         else:
+            print(f'Use input coordinates of the calibrator: {crds}')
             crd = SkyCoord(*crds,unit=(u.deg))
+        print(f'Got coordinates of the calibrator: {crd}')
         self.crd = crd
+
+    def plot_cbr_flux_profile(self, freq, flux):
+        plt.plot(freq, flux)
+        plt.grid()
+        plt.xlabel('Frequency [MHz]')
+        plt.ylabel('Flux [Jy]')
+        plt.savefig(self.outname+'-cbr_FluxProfile.png')
+
+
+    @staticmethod
+    def get_cbr_flux_from_file(fpath, freq_sample):
+        # freq_sample should in MHz
+        with h5py.File(fpath, 'r') as f:
+            freq = f['freq'][()] # in MHz
+            flux = f['flux'][()] # in Jy
+        # interpolate
+        flux_sample = interp.interp1d(freq, flux)(freq_sample)
+        return flux_sample
 
     def gen_flux_profile(self, freq_key):
         """
@@ -402,8 +441,16 @@ class Calibrator():
 
         freq_key= freq_key/1000 # to GHz
         if fpparas is not None:
-            c = CbrInfo(ra=None, dec=None, fpparas=fpparas)
-            flux = c.get_profile(freq_key)
+            # if input hdf5 file
+            if fpparas[0].endswith('.hdf5'):
+                print(f'Loading flux profile of the calibrator from {fpparas[0]}')
+                flux = self.get_cbr_flux_from_file(fpparas[0], freq_key*1e3)
+            # if polynomial cofficients (float nubmers) are input
+            else:
+                print(f'Get flux profile of the calibrator from polynomial cofficients (log): {fpparas}')
+                fpparas = list(map(float, fpparas))
+                c = CbrInfo(ra=None, dec=None, fpparas=fpparas)
+                flux = c.get_profile(freq_key)
         else:
             if calname in CbrProfiles.names:
                 c = CbrProfiles(calname)
@@ -411,6 +458,8 @@ class Calibrator():
             else:
                 raise ValueError('Can not find calibrator name in build-in flux profile. Please check calname or input flux profile parameters.')
                 sys.exit(1)
+        print('plot the flux profile of the calibrator')
+        self.plot_cbr_flux_profile(freq_key*1e3, flux)
         self.flux_profile = flux
 
     def gen_T(self, nB):
@@ -426,7 +475,9 @@ class Calibrator():
             radec = {}
         if nB == 1:
             print(f'Calculating RA-DEC for Beam {list(self.nBs_list)}')
-            radec = get_radec(self.mjd, guess_str=self.args.fname,nBs=list(self.nBs_list),nproc=self.args.nproc, tol=1)
+            radec = get_radec(self.mjd, guess_str=self.args.fname,nBs=list(self.nBs_list),nproc=self.args.nproc,
+                             tol=self.args.tol,
+                             ky_files=self.args.ky_files)
             save_dict_hdf5(self.outname+'-radec.hdf5',radec)
             print('Saved RA-DEC to '+self.outname+'-radec.hdf5')
         else:
