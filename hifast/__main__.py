@@ -106,8 +106,8 @@ Below is the help from hifast.{subcomand}:
     # print(_help, help_sub)
     # sys.exit(0)
 elif args.subcomand in subcomands_type1:
-    command = f"echo {shlex.join(args.fpath)} | xargs -I {{}} -n 1 -P {args.p} {sys.executable} -m hifast.{args.subcomand} {{}} {shlex.join(remain)}"
-    #print(command)
+    fpaths = '\n'.join(args.fpath)
+    command = f"printf '{fpaths}' | xargs -I {{}} -n 1 -P {args.p} {sys.executable} -m hifast.{args.subcomand} {{}} {shlex.join(remain)}"
 elif args.subcomand in subcomands_type2:
     command = f"{sys.executable} -m hifast.{args.subcomand} {shlex.join(remain)}"
 
