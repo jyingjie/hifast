@@ -239,7 +239,7 @@ class CheckPCal(CalOnOff):
         self.is_aband_whole = is_aband_whole
 
 # Cell
-class CalOnOffSav(CalOnOff):
+class CalOnOffSav():
     def __call__(self, outdir='./', step=None, header=None, sep_save=False, save_pcals=False, cali=True):
         """
         get T, mjd etc, and save in hdf5 file
@@ -382,7 +382,7 @@ class CalOnOffSav(CalOnOff):
             fout.close()
 
 # Cell
-class CalOnOffM(CheckPCal, CalOnOffSav):
+class CalOnOffM(CheckPCal, CalOnOffSav, CalOnOff):
 
     def gen_squeeze_freq_is_use(self, ):
         """selecting channel used to calculate relative amp"""
@@ -643,7 +643,7 @@ class CalOnOffM(CheckPCal, CalOnOffSav):
         return c_on, c_off
 
 # Cell
-class CalOnOff1111(CheckPCal, CalOnOffSav):
+class CalOnOff1111(CheckPCal, CalOnOffSav, CalOnOff):
     @staticmethod
     def split_along_a1d2(bools_2d):
         """
@@ -768,7 +768,7 @@ class FASTRawCut(FastRawData):
         self.fits_header = dict(self.hd1s[0].items())
 
     def _get_freq(self,):
-        # make sure
+        # make sure not correct to process 'FREQ_new'
         super()._get_freq(center_corr=None)
 
     def gen_out_name_base(self, outdir):
@@ -783,14 +783,10 @@ class FASTRawCut(FastRawData):
     def write_fits_header(self, g, **kwargs):
         """
         g: h5py group
-        kwargs: header new field pair: name:value
+        kwargs: header field pair: name:value
         """
-        import copy
-        header = copy.deepcopy(self.fits_header)
         for key in kwargs.keys():
-            header[key] = kwargs[key]
-        for key2 in header.keys():
-            g.attrs[key2] = header[key2]
+            g.attrs[key] = kwargs[key]
 
 
     def load_all_fields(self, inds, chan_fix=True, polar_trans=True):
@@ -823,6 +819,20 @@ class FASTRawCut(FastRawData):
         for key in args[0].keys():
             res[key] = np.hstack([d[key] for d in args])
         return res
+
+    def add_S_group(self, f):
+        """
+        add a hdf5 group for spcetra type. add 'freq', hdf5 softlink to 'DATA', 'UTOBS' in '/1'
+        f: file handle
+        """
+        g = f.create_group('S')
+        # for W,N,F. also see FastRawSpec._get_freq
+        center_corr = 0.000476837158203125/2.
+        g['freq'] = self.freq_use + center_corr
+        g['DATA'] = h5py.SoftLink('/1/DATA')
+        g['Ta'] = h5py.SoftLink('/1/DATA')
+        g['mjd'] = h5py.SoftLink('/1/UTOBS')
+
 
     def __call__(self, outdir='./', step=1, header=None, sep_save=False, h5_compression='none'):
         """
@@ -863,11 +873,15 @@ class FASTRawCut(FastRawData):
                 outname = self.out_name_base + f"{i+1:04d}.hdf5"
                 fout_sep = h5py_write(outname)
                 write_header(fout_sep, header)
-                g_sep = fout_sep.create_group('1') # table
+                g_sep_0 = fout_sep.create_group('0') # table 0
+                self.write_fits_header(g_sep_0, **dict(self.hd0s[i*step].items()))
+                g_sep = fout_sep.create_group('1') # table 1
                 for key in dict1.keys():
                     g_sep[key] = dict1[key]
                 g_sep.create_dataset(stype, data=T, chunks=True, compression=h5_compression)
                 # NAXIS1=self.NCHAN_new*self.2 ?
+                self.write_fits_header(g_sep, **self.fits_header)
+                # update new
                 self.write_fits_header(g_sep,
                                        NAXIS2=len(inds),
                                        TDIM21=f"(2, {self.NCHAN_new})",
@@ -875,6 +889,8 @@ class FASTRawCut(FastRawData):
                 # waterfall
                 mjd = dict1['UTOBS']
                 gen_carta_group(fout_sep, g_sep[stype].shape, wcs_data_name=stype, axis1=self.freq_use, axis2=mjd, wcs_data_group='1')
+                # add S group
+                self.add_S_group(fout_sep)
                 fout_sep.close()
                 print(f"Saved to {outname}")
             else:
@@ -882,6 +898,8 @@ class FASTRawCut(FastRawData):
                 if i == 0:
                     outname = self.out_name_base + f"0001.hdf5"
                     fout = h5py_write(outname)
+                    g_0 = fout.create_group('0') # table 0
+                    self.write_fits_header(g_0, **dict(self.hd0s[0].items()))
                     fout.create_group('1')
                     g = fout['1']
                     # prepare writing spec
@@ -897,6 +915,8 @@ class FASTRawCut(FastRawData):
             dict1 = self.dict_stack(*dict1_list)
             for key in dict1.keys():
                 g[key] = dict1[key]
+            self.write_fits_header(g, **self.fits_header)
+                # update new
             self.write_fits_header(g,
                                    NAXIS2=len(self.inds),
                                    TDIM21=f"(2, {self.NCHAN_new})",
@@ -904,5 +924,7 @@ class FASTRawCut(FastRawData):
             # waterfall
             mjd = dict1['UTOBS']
             gen_carta_group(fout, g[stype].shape, wcs_data_name=stype, axis1=self.freq_use, axis2=mjd, wcs_data_group='1')
+            # add S group
+            self.add_S_group(fout)
             fout.close()
             print(f"Saved to {outname}")

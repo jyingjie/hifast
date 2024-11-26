@@ -41,7 +41,9 @@ def get_baseline(x, ys, axis=None, *,
                  s_method='none', s_sigma=3, average_every=None, exclude=None,
                  exclude_add='none',
                  method='arPLS', bl_para=None,
-                 verbose=False, return_f=False, check=True):
+                 verbose=False, return_f=False, check=True,
+                 interp_nan=False,
+                 ):
     """
     subtract the baseline of spectra with XX and YY polar.
     Parameters：
@@ -52,6 +54,8 @@ def get_baseline(x, ys, axis=None, *,
     s_sigma, s_method: if s_sigma is not 'none', smoothing ys along axis using s_method ('gaussian' or 'boxcar')
     average_every: int; if set as n and n>1, then average ys along axis every n points
     return_f: If Fasle, return baseline, else return (basline, ys_processed, x_processed, weights)
+    check: if True, check if there are nan or inf in ys, if there are, add them to exclude if intep_nan is False.
+    intep_nan: if True and check is True, replace nan values with interp.interp1d but not add to exclude.
     """
     if x is not None:
         x = np.array(x, dtype='float')
@@ -178,19 +182,25 @@ def get_baseline(x, ys, axis=None, *,
         if check:
             is_finite = np.isfinite(y)
             if not is_finite.all():
-                # replace value as 0 and add to exclude
                 y_finite = y[is_finite]
                 # if all nan
                 if 0 in y_finite.shape:
                     bls[ii + np.s_[:, ]] = np.nan
                     continue
-                # replace nan
-                y = np.copy(y)
-                y[~is_finite] = np.max(y_finite)
-                if exclude is not None:
-                    _exclude = _exclude | (~is_finite)
+                if not interp_nan:
+                    # add nan to exclude and replace nan with max or any value
+                    y = np.copy(y)
+                    y[~is_finite] = np.max(y_finite)
+                    if exclude is not None:
+                        _exclude = _exclude | (~is_finite)
+                    else:
+                        _exclude = ~is_finite
                 else:
-                    _exclude = ~is_finite
+                    # not add to exclude but repalce nan values with interp.interp1d
+                    y = np.copy(y)
+                    y[~is_finite] = interp.interp1d(
+                        x[is_finite], y_finite, kind='linear', fill_value='extrapolate')(x[~is_finite])
+
             if _exclude is not None and _exclude.all():
                 warnings.warn('All points in this spectrum are excluded, it\'s baseline will set as all zeros.')
                 bls[ii + np.s_[:, ]] = 0

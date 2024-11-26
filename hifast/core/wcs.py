@@ -116,7 +116,7 @@ def gen_header(ra_range, dec_range, ra_delta, dec_delta, z, proj='SIN', type3='v
     header["BMAJ"] = beam_fwhw/60
     header["BMIN"] = beam_fwhw/60
     header["BPA"] = 0.0
-    header["BUNIT"] = 'Jy/beam'
+    header["BUNIT"] = ''
 
     #add history
     if histories is not None:

@@ -19,30 +19,21 @@ from copy import deepcopy
 from tqdm import tqdm
 
 # Cell
-def rms(data,vel,rms_vrange=None,):
+def rms(data,vel,rms_vrange=None):
     """
     data: 1D or 2D numpy array
     vel: velocity or frequency
     rms_vrange: [a,b], calculate rms from a to b
     """
-    if len(data.shape) == 1:
-        ax = -1
-    elif len(data.shape) == 2:
-        ax = -1
-    elif len(data.shape) == 3:
-        ax = 1
-            
     if rms_vrange is not None:
         rms_vrange.sort()
         is_use = (vel > rms_vrange[0])&(vel < rms_vrange[1])
         if len(data.shape) == 1:
             data = data[is_use]
-        elif len(data.shape) == 2:
+        elif len(data.shape) ==2:
             data = data[:,is_use]
-        elif len(data.shape) == 3:
-            data = data[:,is_use,:]
 
-    ans = np.sqrt(np.nanmean((data)**2,axis = ax))
+    ans = np.sqrt(np.nanmean((data)**2,axis = -1))
     return ans
 
 def get_rms_frange(spec,freq,rms_step=None,is_excluded = None):
@@ -579,7 +570,7 @@ def center_theory(freq,fcenter1,fcenter2,fcenter3,freq_step,plot,pdf,rfi_groups 
 
 
 def find_RFI(spec,freq,is_rfi,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge = 0,
-             plot = False,pdf = None,xlim = None, ylim = None,rfi_groups = 'two_groups',
+             plot = False,pdf = None,ylim = None,rfi_groups = 'two_groups',
              mask_RFI_method = 'fixed_freq',small_rfi_times = 2,chan_step = 3,
              mask_all_theory = False,freq_from_theory = None,mask_thr = 15,
              ret_type = 'all theory',**kwargs):
@@ -648,8 +639,6 @@ def find_RFI(spec,freq,is_rfi,freq_step=8.1,RMS = None,freq_thr = 0.5, ext_edge 
             ax.vlines(theory0,ymin=ymin,ymax=ymax,linestyles='--',colors='k',label = 'theory0')
         if ylim is not None:
             ax.set_ylim(ylim[0],ylim[1])
-        if xlim is not None:
-            ax.set_xlim(xlim[0],xlim[1])
         ax.set_title('RFI positions prediction')
         plt.grid();plt.legend()
         if pdf is not None:

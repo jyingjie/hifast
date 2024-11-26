@@ -26,6 +26,9 @@ parser.add_argument('--replace_rfi', type=bool_fun, choices=[True, False], defau
                    help='If True, replace find rfi as np.nan')
                     #, otherwise store ``is_rfi`` array in output file')
 
+parser.add_argument('--nobld', type=bool_fun, choices=[True, False], default='False',
+                   help="if True, output the spectra before bld and output file name will add 'nobld'")
+
 group = parser.add_argument_group(f'*mark rfi from a DS9 regions file\n{sep_line}')
 group.add_argument('--reg_from', default='none',
                    help='If not set as ``none``, mark rfi through regions from a DS9 format regions file. ' + \
@@ -137,6 +140,13 @@ group.add_argument('--sf_ext_add',type = int,default=3,
 group.add_argument('--sf_mask_rms_times',type = float, default=2,
                    help='mask from peak to 2 sides, until RMS drops to 2 times of RMS')
 
+################## invoking aoflagger #####################
+group = parser.add_argument_group(f'*Invoke aoflagger \n{sep_line}')
+group.add_argument('--aoflagger', '--af', type=bool_fun, choices=[True, False], default='False',
+                   help='Using aoflagger to mask rfi')
+group.add_argument('--af_strategy_file', '--afsf', type=str,
+                   help='path of strategy file')
+
 ################## Period 8 MHZ RFI #######################
 parser.add_argument('--rms_sigma', type=float, default =6,
                    help='gauss filter sigma to compute real rms')
@@ -194,6 +204,8 @@ group.add_argument('--time_coherent_per', type=float, default = 0.7,
 class IO(BaseIO):
     ver = 'old'
     def _get_fpart(self,):
+        if self.args.nobld:
+            return '-rfi_nobld'
         return '-rfi'
 
     def _import_m(self,):
@@ -206,6 +218,86 @@ class IO(BaseIO):
         import h5py
         from collections import OrderedDict
         import numpy as np
+
+
+    @staticmethod
+    def find_fname_his(Header, fname):
+        """
+        from historys in Header to find file:
+        return: [path, path related to the 'outdir' in history]
+        """
+        import json
+        fpath_in_list = []
+        outdir_list = []
+        cwd_list = []
+        for key in Header.keys():
+            if key.startswith('HISTORY'):
+                his = json.loads(Header[key])
+                try:
+                    args_h = json.loads(his['args'])
+                    fpath_in_list += [args_h['fpath']]
+                    outdir_list += [args_h['outdir']]
+                    cwd_list += [his['cwd']]
+                except:
+                    try:
+                        import re
+                        fpath_in_list += [re.findall(r'fpath=.*.hdf5', his['args'])[0].split('=')[1][1:]]
+                        outdir_list += [re.findall(r'outdir=[^,]*', his['args'])[0].split('=')[1][1:-1]]
+                        cwd_list += [his['cwd']]
+                    except:
+                        pass
+        for i, val in enumerate(fpath_in_list):
+            if os.path.basename(val) == fname:
+                path_ = os.path.abspath(os.path.join(cwd_list[i], val))
+                out = [path_, os.path.relpath(path_, os.path.join(cwd_list[i], outdir_list[i]))]
+                break
+        return out
+
+    def _gen_s2p_ori_fpath(self,):
+        """
+        find file path of spectra before baseline subtracted
+        """
+        args = self.args
+        if hasattr(args, 'fpattern_nobld') and args.fpattern_nobld is not None:
+            print('using the path from --fpattern_nobld as the spectra file before baseline subtracted')
+            ori_fpath = self.replace_nB(args.fpattern_nobld, self.nB)
+            if not os.path.exists(ori_fpath):
+                raise(FileNotFoundError(f'file {ori_fpath} not exists'))
+
+        else:
+            print('guess the path of the spectra file before baseline subtracted from the History')
+            fname_find = os.path.basename(args.fpath).rsplit('bld')[0][:-1] + '.hdf5'
+            ori_fpaths = self.find_fname_his(self.Header, fname_find)
+            if os.path.exists(ori_fpaths[0]):
+                ori_fpath = ori_fpaths[0]
+            elif os.path.exists(ori_fpaths[1]):
+                ori_fpath = ori_fpaths[1]
+            else:
+                raise(FileNotFoundError("can't find the spectra file before baseline subtracted, \
+                                        please specify --fpattern_nobld"))
+        self.s2p_ori_fpath = ori_fpath
+        self.Header['ori_fpath'] = self.s2p_ori_fpath
+
+    def _load_s2p_ori(self):
+        """
+        load spectra before baseline subtracted
+        """
+        if self.dict_in is None:
+            self._gen_s2p_ori_fpath()
+            print(f'load the spectra before baseline subtracted from: \n{self.s2p_ori_fpath}')
+            f = h5py.File(self.s2p_ori_fpath, 'r')['S']
+        else:
+            if self.dict_bef_bld is None:
+                raise(ValueError('need input dict_bef_bld'))
+            f = self.dict_bef_bld
+        freq = f['freq'][:]
+        s2p_ori = f[self.outfield][:]
+        is_use_freq = (freq >= self.freq.min()) & (freq <= self.freq.max())
+        if not np.all(is_use_freq):
+            inds = np.where(is_use_freq)[0]
+            s2p_ori = s2p_ori[..., inds[0]:inds[-1]+1]  # freq axis at end
+        s2p_ori = PolarMjdChan_to_MjdChanPolar(s2p_ori)
+        return s2p_ori
 
     def get_from_regions(self,):
 
@@ -452,6 +544,12 @@ class IO(BaseIO):
 
         return pd_rfi
 
+    def get_aoflagger(self):
+        args = self.args
+        from .core.aoflagger import flag_data
+        is_rfi = flag_data(self.s2p, args.af_strategy_file)
+        return is_rfi
+
     def protect_mw(self):
         args = self.args
         freq = self.freq
@@ -556,7 +654,7 @@ class IO(BaseIO):
             else:
                 raise FileNotFoundError(f"Can't find {self._19name}. Did it run hifast.rfi_multi?")
 
-        is_rfi = np.isnan(self.s2p_mean) | np.isinf(self.s2p_mean)
+        is_rfi = np.isnan(self.s2p_mean)
 
 #         is_rfi = np.full(self.s2p.shape[:2], False, dtype=bool)
 
@@ -610,6 +708,9 @@ class IO(BaseIO):
             print('finding pr')
             is_rfi |= self.get_pr()
 
+        if args.aoflagger:
+            is_rfi |= self.get_aoflagger()
+
         # existing RFI
         if 'is_rfi' in self.fs.keys():
             is_rfi |= self.fs['is_rfi'][:]
@@ -620,11 +721,14 @@ class IO(BaseIO):
     def __call__(self, save=True):
         args = self.args
         is_rfi = self.gen_is_rfi()
+        # change s2p_out if
+        if args.nobld:
+            self.s2p_out = self._load_s2p_ori()[:]
         if args.replace_rfi:
             self.s2p_out[is_rfi] = np.nan
         self.gen_dict_out(is_rfi = is_rfi)
         # replace outfield as h5py.ExternalLink
-        if self.dict_in is None and (not args.replace_rfi):
+        if self.dict_in is None and (not args.replace_rfi) and (not args.nobld):
             self.dict_out[self.outfield] = h5py.ExternalLink(os.path.relpath(
                 args.fpath, os.path.dirname(self.fpath_out)), f'/S/{self.infield}')
         if save:

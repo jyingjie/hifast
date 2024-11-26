@@ -137,6 +137,24 @@ if __name__ == '__main__':
             print(f'outdir {args.outdir} not exists. Create it now')
             os.makedirs(args.outdir, exist_ok=True)
 
+    ## add pre info to the print output
+    from .utils.output import set_output
+    pre_str = f'[hifast.{os.path.basename(sys.argv[0])[:-3]}]['
+    try:
+        pre_str += project
+    except:
+        pass
+    try:
+        pre_str += f"-M{nB:02d}"
+    except:
+        pass
+    try:
+        pre_str += f"-{date}"
+    except:
+        pass
+    pre_str += '] '
+    set_output(pre_str)
+
     ## check out file
     fname_add = date
     fname_part = re.sub('[0-9]{4}\.fits\Z', '', args.fpath)
@@ -213,7 +231,7 @@ if __name__ == '__main__':
     paras['s_para'] = s_para
 
 
-    if args.check_cal == 'none':
+    if args.check_cal == 'none' or args.not_cali:
         Cal_cls = CalOnOff
     elif args.check_cal == 'A':
         paras['freq_step_c'] = args.freq_step_c
@@ -238,7 +256,7 @@ if __name__ == '__main__':
     # init
     spec = Cal_cls(**paras)
     # set para added
-    if args.check_cal == 'A':
+    if args.check_cal == 'A' and (not args.not_cali):
         if args.merge_pcals:
             spec.set_para_pcals(calc_diff_method=args.calc_diff_method,
                                 squeeze_diff_freq=args.squeeze_diff_freq,

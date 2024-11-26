@@ -1,5 +1,5 @@
 __all__ = ['replace_spec', 'save_rep_fixed', 'repalce_near', 'replace_margin_side', 'get_margin_num', 'replace_rfi_lower', 'replace_rfi',
-           'find_loc', 'SW_FFT', 'get_sw_conf', 'fit_sw_fft', 'running_median', 'minmed']
+           'find_loc', 'SW_FFT', 'get_sw_conf', 'fit_sw_fft', 'minmed']
 
 # author: Xu Chen, Li Fujia, 2021.06
 # code: Xu Chen
@@ -231,8 +231,8 @@ def repalce_near(data_in, freq, time_rfi, mw_use=None, times_thr=None, times_s_t
     from ..utils.misc import smooth1d
     MAX = np.nanmax(data)*20
     
-#     if np.sum(np.isnan(data)) > 0:
-#         data[np.isnan(data)] = MAX
+    if np.sum(np.isnan(data)) > 0:
+        data[np.isnan(data)] = MAX
         
     if verbose:
         iter_ = tqdm(range(data.shape[0]), desc='CPU 0: ', mininterval=2)
@@ -245,10 +245,6 @@ def repalce_near(data_in, freq, time_rfi, mw_use=None, times_thr=None, times_s_t
             include = mw_use #| time_rfi[tn]
             if np.sum(include) > 0:
                 spec[include] = MAX * 20
-                
-            RMSr = real_rms(spec, freq, sigma=rms_sigma, rms_vrange=rms_frange)
-            nan = np.where(np.isnan(spec))[0]
-            if len(nan) > 0: spec[nan] = np.random.normal(scale=RMSr, size=len(nan))
 
             find = ex_sm = data_find[tn]
             # find used to define replace area
@@ -276,11 +272,9 @@ def repalce_near(data_in, freq, time_rfi, mw_use=None, times_thr=None, times_s_t
             newspec = replace_spec(tn, spec, freq, exceed_use, restrict_use, rfi_width_lim, ext_sec,
                                    ext, STD, MAX, sm = trough, **kwargs)
 
-            strange = np.where(np.abs(newspec) > times_thr * RMSr)[0]
-            newspec[strange] = np.random.normal(scale=RMSr, size=len(strange))
-            
-            nan = np.where(np.isnan(newspec))[0]
-            if len(nan) > 0: newspec[nan] = np.random.normal(scale=RMSr, size=len(nan))
+            RMS = real_rms(spec, freq, sigma=rms_sigma, rms_vrange=rms_frange)
+            strange = np.where(np.abs(newspec) > times_thr * RMS)[0]
+            newspec[strange] = np.random.normal(scale=RMS, size=len(strange))
 
             data_rep[tn, :] = newspec
 
@@ -567,109 +561,3 @@ def fit_sw_fft(s1p, freq, nproc, amp_thr_mean_factor=1.05, amp_thr_solo_factor=1
     sw.choose_and_ifft(method=choose_method, inplace_amp=True, sw_base=sw_base)
     return sw.sw
 
-def check_bottleneck():
-    try:
-        import bottleneck as bn
-    except ModuleNotFoundError:
-        bn = np
-        log.warning("Install the package 'bottleneck' will help to speed up. Now use 'numpy' instead.")
-    return bn
-
-
-def running_median(data, nspec, func='iter', method = 'median'):
-    """
-    data: 2D
-    nspec: moving window length
-    func: 'iter' using numpy or bottleneck
-          'smooth' boxcar filter
-    """
-    if method not in ['median', 'mean']:
-        raise ValueError(f"{method} should be 'median' or 'mean'!")
-    
-    n = nspec // 2
-    if func == 'iter':
-        bn = check_bottleneck()
-        tlen = data.shape[0]
-        if tlen < 2*n:
-            print(f"use all specs to {method}")
-        else:
-            print(f"use {2*n} specs to {method}")
-        t1 = np.arange(tlen)-n
-        t2 = np.arange(tlen)+n
-        t1[t1 < 0] = 0
-        t2[t2 < 2*n] = 2*n
-        t1[t1 > tlen - 2*n - 1] = tlen - 2*n - 1
-        t2[t2 > tlen - 1] = tlen - 1
-
-        sw = np.zeros_like(data)
-        for i in tqdm(range(tlen)):
-#             exec(f"sw[{i}] = bn.nan{method}(data[{t1[i]}:{t2[i]}], axis=0)")
-            if method == 'median':
-                sw[i] = bn.nanmedian(data[t1[i]:t2[i]], axis = 0)
-            elif method == 'mean':
-                sw[i] = bn.nanmean(data[t1[i]:t2[i]], axis = 0)
-
-            
-    elif func == 'smooth':
-        print(f"use {2*n +1} specs to {method}")
-        from ..utils.misc import smooth1d
-        if method == 'median':
-            s_method_t = 'median'
-        elif method == 'mean':
-            s_method_t = 'boxcar' 
-        print('Smooth ing ...')
-        sw = smooth1d(data, axis=0, sigma=n, method=s_method_t)
-
-    return sw
-
-def get_trange(N, npart = None, dpart = None,):
-    if dpart is None:
-        dpart = N // npart
-    p1 = np.arange(0, N, dpart)
-    p2 = np.arange(dpart, N + dpart, dpart)
-    p2[p2 > N] = N
-    
-    if (N - p1[-1]) < 0.75 * dpart and (N - p1[-1]) > 0:
-        p1 = np.delete(p1, -1)
-        p2 = np.delete(p2, -2)
-    return p1, p2
-
-def minmed(data, nsection = None, nspec = None, npart = 1, method = 'MedMed'):
-    """
-    data: 2D
-    npart: divide the data into n parts
-    nsection: divide each part into n sections
-    then calculate the median of each section.
-    use the 'median' or 'min' as the baseline of this part.
-    Ref: Putman et al. 2002 
-    https://ui.adsabs.harvard.edu/link_gateway/2002AJ....123..873P/doi:10.1086/338088
-    """
-    bn = check_bottleneck()
-    
-    N = data.shape[0]
-    print(f"Divided the data into {npart} part(s).")
-    if nsection is None: 
-        print(f"Each part has {N//npart//nspec} sections. Each section has {nspec} specs.")
-    elif nspec is None:
-        print(f"Each part has {nsection} sections. Each section has {N//npart//nsection} specs.")
-    
-    p1s, p2s = get_trange(N, npart)
-    
-    bsl = np.zeros_like(data)
-    for p1, p2 in zip(p1s, p2s):
-        print("part:",[p1, p2])
-        s1, s2 = get_trange(p2 - p1, nsection, nspec)
-        ind1, ind2 = s1 + p1, s2 + p1
-
-        meds = np.zeros(np.hstack((len(ind1),data.shape[1:])))
-        for i in tqdm(range(len(ind1))):
-            meds[i] = bn.nanmedian(data[ind1[i]:ind2[i]], axis = 0)
-        
-        if method == 'MinMed':
-            med = bn.nanmin(meds, axis = 0)
-        elif method == 'MedMed':
-            med = bn.nanmedian(meds, axis = 0)
-            
-        bsl[p1:p2] = med
-        
-    return bsl

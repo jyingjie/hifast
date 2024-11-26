@@ -4,7 +4,6 @@ __all__ = ['IO']
 
 # Cell
 from .utils.io import *
-import numpy as np
 
 # Internal Cell
 sep_line = '##'+'#'*70+'##'
@@ -28,10 +27,7 @@ group.add_argument('--replace_rfi', type=bool_fun, choices=[True, False], defaul
                    help='if True, replace spectra contaminated by rfi as np.nan')
 group.add_argument('--merge_polar', type=bool_fun, choices=[True, False], default='True',
                    help='if True, average two polarization')
-group.add_argument('--clip', type=bool_fun, choices=[True, False], default='False',
-                   help='if True, clip rfi')
-group.add_argument('--clip_times', type=float, nargs=2, default=[10, 50],
-                   help='clip thr [rms * neg_times, rms * posi_times]')
+
 # Cell
 class IO(BaseIO):
     ver = 'old'
@@ -41,65 +37,25 @@ class IO(BaseIO):
         """
         fpart = '-fc'
         return fpart
-    
-    def get_rms(self, rms_step=5):
-    
-        from .ripple.markRFI import get_rms_frange, rms
-        is_excluded = self.fs['is_excluded'][:]
-        is_rfi = self.fs['is_rfi'][:]
-        is_lf = np.all(is_rfi, axis = 1)
-        data = self.s2p[~is_lf]
-        data[is_excluded[~is_lf]] = np.nan
-
-        spec = np.nanmean(np.nanmean(data, axis = 0),axis = -1)
-        freq = self.freq
-
-        rms_frange = get_rms_frange(spec, freq, rms_step= rms_step,)
-
-        rmss = rms(data, freq, rms_frange)
-
-        return np.nanmedian(rmss)
-    
-    def clip_strange(self, s2p, low = 30, high = 100):
-        from .ripple.sw_fft import check_bottleneck
-        bn = check_bottleneck()
-        mean = bn.nanmean(s2p)
-        std = self.get_rms()
-
-        thr_low = mean - low * std
-        thr_high = mean + high * std
-
-        print("clip thr_low = ", thr_low)
-        print("clip thr_high = ", thr_high)
-
-        s2p[(s2p < thr_low) | (s2p > thr_high)] = np.nan
-
-        return s2p
 
     def __call__(self, save=True):
-        
+        import numpy as np
         args = self.args
         s2p = self.s2p[:]
-        
         # try load is_rfi
         if 'is_rfi' in self.fs.keys():
-            # if not replace_rfi, frame correct it
+                # if not replace_rfi, frame correct it
 
-            if self.is_use_freq is not None:
-                inds = np.where(self.is_use_freq)[0]
-                is_rfi = self.fs['is_rfi'][:, inds]
-            else:
-                is_rfi = self.fs['is_rfi'][:]
-            if args.replace_rfi:
-                print('replacing RFI')
-                s2p[is_rfi] = np.nan
+                if self.is_use_freq is not None:
+                    inds = np.where(self.is_use_freq)[0]
+                    is_rfi = self.fs['is_rfi'][:, inds]
+                else:
+                    is_rfi = self.fs['is_rfi'][:]
+                if args.replace_rfi:
+                    print('replacing RFI')
+                    s2p[is_rfi] = np.nan
         else:
             is_rfi = None
-            
-        # mask Inf and strange points
-        s2p[np.isinf(s2p)] = np.nan
-        if args.clip:
-            s2p = self.clip_strange(s2p, low = args.clip_times[0], high = args.clip_times[1])
 
         if args.merge_polar and s2p.ndim == 3:
             print('average two polarization...')

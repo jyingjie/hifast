@@ -20,8 +20,8 @@ formatter_class = argparse.ArgumentDefaultsHelpFormatter
 
 #nbdev_comment _all_ = ['os', 'sys', 'c', 're', 'copy', 'ArgumentParser', 'argparse']
 
-# Cell
-def sub_patten(string, **kwargs):
+# Internal Cell
+def sub_patten_1(string, **kwargs):
     """
     substitute '%(...)s' in string with value in kwargs
     """
@@ -31,6 +31,28 @@ def sub_patten(string, **kwargs):
             raise ValueError(f'can not find value to replace %({key})s')
         string = re.sub(r"%\("+ key + r"\)s", str(kwargs[key]), string)
     return string
+
+def sub_patten_2(string, **kwargs):
+    """
+    substitute '%[...]s' in string with value in kwargs
+    """
+    keys = re.findall(r"%\[(.*?)\]s", string)
+    for key in keys:
+        if key not in kwargs.keys():
+            raise ValueError(f'can not find value to replace %[{key}]s')
+        string = re.sub(r"%\[" + key + r"\]s", str(kwargs[key]), string)
+    return string
+
+# Cell
+
+# export
+def sub_patten(string, **kwargs):
+    if '%(' in string:
+        return sub_patten_1(string, **kwargs)
+    elif '%[' in string:
+        return sub_patten_2(string, **kwargs)
+    else:
+        return string
 
 # Cell
 def bool_fun(s):
@@ -167,7 +189,7 @@ def save_dict_hdf5(fname, dict_in, mode='w', spec2float32=False):
         else:
             if isinstance(dict_in[key], h5py.Dataset):
                 f[key] = dict_in[key][:]
-            elif spec2float32 and isinstance(dict_in[key], np.ndarray) and key in ['Ta', 'flux', 'T']:
+            elif spec2float32 and isinstance(dict_in[key], np.ndarray) and key in ['Ta', 'flux', 'T', 'Power']:
                 f[key] = dict_in[key].astype('float32')
             else:
                 f[key] = dict_in[key]
@@ -176,7 +198,7 @@ def save_dict_hdf5(fname, dict_in, mode='w', spec2float32=False):
 
 def gen_carta_group(f, data_shape, wcs_data_name, axis1=None, axis2=None,
                     wcs_data_group='S',
-                    image_group='0'):
+                    image_group='Waterfall'):
     import h5py
     import numpy as np
     wcs = {'SIMPLE': 1,
@@ -256,7 +278,7 @@ def save_specs_hdf5(fname, dict_in, mode='w', spec2float32=True, wcs_data_name=N
         else:
             if isinstance(dict_in[key], h5py.Dataset):
                 f['S'][key] = dict_in[key][:]
-            elif spec2float32 and isinstance(dict_in[key], np.ndarray) and key in ['Ta', 'flux', 'T']:
+            elif spec2float32 and isinstance(dict_in[key], np.ndarray) and key in ['Ta', 'flux', 'T', 'Power']:
                 f['S'][key] = dict_in[key].astype('float32')
             else:
                 f['S'][key] = dict_in[key]
@@ -403,14 +425,17 @@ class Path_IO(object):
         add self.fpath_out
         """
         args = self.args
+        nB = get_nB(args.fpath)
+        project = get_project(args.fpath)
+        date = get_date_from_path(args.fpath)
+        self.nB = nB
+        self.project = project
+        self.date = date
 
         if args.outdir is None or args.outdir == 'default':
             args.outdir = os.path.dirname(args.fpath)
         else:
             # replace patten in outdir
-            nB = get_nB(args.fpath)
-            project = get_project(args.fpath)
-            date = get_date_from_path(args.fpath)
             args.outdir = sub_patten(args.outdir, date=date, nB=f'{nB:02d}', project=project)
             # expand '~' as outdir may be a string in bash
             args.outdir = os.path.expanduser(args.outdir)
@@ -444,6 +469,24 @@ class Path_IO(object):
             disable = not args.show_prog if args.show_prog is not None else None
             tqdm.__init__ = partialmethod(tqdm.__init__, disable=disable)
 
+    def _set_pre_output(self,):
+        from .output import set_output
+        pre_str = f'[hifast.{os.path.basename(sys.argv[0])[:-3]}]['
+        try:
+            pre_str += self.project
+        except:
+            pass
+        try:
+            pre_str += f"-M{self.nB:02d}"
+        except:
+            pass
+        try:
+            pre_str += f"-{self.date}"
+        except:
+            pass
+        pre_str += '] '
+        set_output(pre_str)
+
 
 class BaseIO(Path_IO):
     """
@@ -472,6 +515,7 @@ class BaseIO(Path_IO):
         self.load_specs()
         self.load_radec()
         self.load_and_add_Header()
+        self._set_pre_output()
 
     def _import_m(self,):
         """
@@ -519,12 +563,10 @@ class BaseIO(Path_IO):
 
         self.mjd = fs['mjd'][:]
         self.freq = fs['freq'][:]
-        if 'vel' in fs.keys(): self.vel = fs['vel'][:] 
         self.freq_ori = self.freq
         if getattr(args, 'frange', False) and (args.frange[0] > 0. or args.frange[1] < float('inf')):
             self.is_use_freq = (self.freq >= args.frange[0]) & (self.freq <= args.frange[1])
             self.freq = self.freq[self.is_use_freq]
-            if 'vel' in fs.keys(): self.vel = self.vel[self.is_use_freq] 
         else:
             self.is_use_freq = None
 
@@ -536,6 +578,10 @@ class BaseIO(Path_IO):
             s2p = fs['Ta']
             infield = 'Ta'
             outfield = 'Ta'
+        elif 'Power' in fs.keys():
+            s2p = fs['Power']
+            infield = 'Power'
+            outfield = 'Power'
         elif 'flux' in fs.keys():
             s2p = fs['flux']
             infield = 'flux'
@@ -591,13 +637,12 @@ class BaseIO(Path_IO):
         dict_out = {}
         dict_out['mjd'] = self.mjd
         dict_out['freq'] = self.freq
-        if hasattr(self, 'vel'): dict_out['vel'] = self.vel
         if self.ver == 'old':
             self.s2p_out = MjdChanPolar_to_PolarMjdChan(self.s2p_out)
         dict_out[self.outfield] = self.s2p_out
         # add field in add_fields and args from self.fs
         if not hasattr(self, 'add_fields'):
-            self.add_fields = ['is_on', 'next_to_cal', 'is_delay', 'Tcal', 'is_extrapo',  'is_rfi']
+            self.add_fields = ['is_on', 'next_to_cal', 'is_delay', 'Tcal', 'is_extrapo', 'vel', 'is_rfi']
             self.add_fields += ['is_excluded']
         self.add_fields += args
         for field in self.add_fields:
@@ -607,22 +652,15 @@ class BaseIO(Path_IO):
         if self.is_use_freq is not None:
             if 'vel' in dict_out.keys():
                 dict_out['vel'] = dict_out['vel'][self.is_use_freq]
-            
-            if hasattr(self, 'is_use_freq2'):
-                dict_out['freq'] = dict_out['freq'][self.is_use_freq2]
-            
             if 'Tcal' in dict_out.keys():
                 # use ``try`` for backwards compatible
                 try:
                     dict_out['Tcal'] = dict_out['Tcal'][:, self.is_use_freq]
                 except:
-                    print(f"will not save 'Tcal'")
+                    pass
             for key in ['is_excluded', 'is_rfi']:
                 if key in dict_out.keys():
-                    try:
-                        dict_out[key] = dict_out[key][:, self.is_use_freq]
-                    except IndexError as e:
-                        print(f"will not save {key}")
+                    dict_out[key] = dict_out[key][:, self.is_use_freq]
         # add ra dec
         for key in ['ra', 'dec', 'is_extrapo']:
             if hasattr(self, key):
@@ -716,7 +754,7 @@ class HFDataT:
 
 class HFGroup:
 
-    def __init__(self, group, kT):
+    def __init__(self, group, kT, DATA_key=None):
         """
         group: input h5py group
         kT: key need transpose
@@ -724,8 +762,14 @@ class HFGroup:
         self.group = group
         self._key_trans_ = kT
         self.keys = group.keys
+        self.DATA_key = DATA_key
 
     def __getitem__(self, arg):
+        if arg == 'DATA' and 'DATA' not in self.group.keys():
+            if self.DATA_key is None:
+                raise(ValueError('no DATA in HFGroup'))
+            else:
+                arg = self.DATA_key
         r = self.group.__getitem__(arg)
         if arg == self._key_trans_:
             r = HFDataT(r)
@@ -744,22 +788,26 @@ class H5HDU:
 
 class H5FitsRead:
 
-    def __init__(self, fpath, kT='DATA'):
+    def __init__(self, fpath, kT='DATA', hdu_names=['0', '1'], DATA_key=None):
         import h5py
         f = h5py.File(fpath, 'r')
         self.f = f
         self.close = f.close
 
         self.hdus = {}
-        for name in ['0', '1']:
+        for name in hdu_names:
             try:
-                self.hdus[int(name)] = self._read_hdu(name, kT)
-            except:
+                if name.isdigit():
+                    self.hdus[int(name)] = self._read_hdu(name, kT, DATA_key)
+                else:
+                    self.hdus[name] = self._read_hdu(name, kT, DATA_key)
+            except exception as e:
+                print(e)
                 pass
 
-    def _read_hdu(self, hdu_name, kT):
+    def _read_hdu(self, hdu_name, kT, DATA_key=None):
         return H5HDU(hdu_name,
-                     HFGroup(self.f[hdu_name], kT),
+                     HFGroup(self.f[hdu_name], kT, DATA_key),
                      dict(self.f[hdu_name].attrs.items())
                      )
 

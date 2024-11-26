@@ -126,8 +126,15 @@ group.add_argument('--choose_method', default='all', choices=['all', 'interpolat
 group = parser.add_argument_group(f'*parameters for --method running_median or running_mmean\n{sep_line}')
 group.add_argument('--nspec',type=int, default=200,
                     help='average how many specs to fit baseline.')
-group.add_argument('--func', default='iter', choices=['iter','smooth'],
+group.add_argument('--func', default='iter', choices=['iter', 'smooth'],
                        help='function to mean or median')
+
+# Exclude files
+group = parser.add_argument_group(f'Exclude known source catalogs\n{sep_line}')
+group.add_argument('--src_file',
+                   help='Path to a text catalog with columns for RA [deg], Dec [deg], radius [arcmin], minimum frequency [MHz], and maximum frequency [MHz]. Identified sources will be added to the is_excluded array.')
+group.add_argument('--frame', choices=['BARYCENT', 'HELIOCEN', 'LSRK', 'LSRD'], default='LSRK',
+                   help='Specify the velocity rest frame for excluding source frequency ranges.')
 
 # interaction
 group = parser.add_argument_group(f'*Interaction\n{sep_line}')
@@ -244,9 +251,30 @@ class IO(BaseIO):
             s2p_ori = s2p_ori[..., inds[0]:inds[-1]+1]  # freq axis at end
         s2p_ori = PolarMjdChan_to_MjdChanPolar(s2p_ori)
         return s2p_ori
+    
 
-    @staticmethod
-    def fit_sw(s2p, freq, args, subtract):
+    def _load_sources(self):
+        args = self.args
+        fpath = args.src_file
+        if fpath is not None:
+            from .core.regions import mask_srcs
+            is_excluded = self.is_excluded if hasattr(self,'is_excluded') else np.zeros(self.s2p.shape[:2], dtype = bool)
+            print(f"loading excluded files from {fpath}")
+            self.is_excluded = mask_srcs(fpath, is_excluded, self.ra, self.dec, self.freq,
+                                         self.mjd, inplace=True, rest_frame=args.frame)
+            
+    
+    def _load_is_rfi(self):
+        # load is_rfi, is_on
+        dict_ = self.fs if self.dict_in is None else self.dict_in
+        is_rfi = dict_['is_rfi'][:] if 'is_rfi' in dict_.keys() else None
+        if is_rfi is not None and self.is_use_freq is not None:
+            is_rfi = is_rfi[:, self.is_use_freq]
+        self.is_rfi = is_rfi
+        self.is_on = dict_['is_on'][:]
+    
+    
+    def fit_sw(self, s2p, freq, args, subtract):
         """
         sin poly
         """
@@ -264,6 +292,8 @@ class IO(BaseIO):
             bounds = [(0., 1.), args.bound_f, (0, 2*np.pi), (-1, 1)] + [(-np.inf, np.inf), ]*args.deg
         opt_para = {'bounds': bounds, }
         fit_kwargs['exclude_fun'] = get_exclude_fun(args.exclude_m)
+        m, f = s2p.shape[0], s2p.shape[1]
+        fit_kwargs['is_excluded'] = np.full((2, m, f), self.is_excluded).transpose(1, 2, 0) if hasattr(self, 'is_excluded') else None
         return sub_baseline(freq, s2p, subtract=subtract, opt_para=opt_para, **fit_kwargs)
 
     def check_rms_range(self, is_rfi, rms_step=5):
@@ -353,25 +383,29 @@ class IO(BaseIO):
             ret = sw_fft.fit_sw_fft(s1p, self.freq, args.nproc, **fft_args)
         return ret, is_excluded
 
-    def med_fit_sw(self, s1p, is_on=None,):
+    def med_fit_sw(self, s1p,):
         """
         running median or mean
         """
-        from .ripple.sw_fft import running_median
+        from .ripple.running_median import running_median
         args = self.args
 
         fit_args = {}
-        keys = ['nspec','func']
+        keys = ['nspec','func', 'nproc']
         for key in keys:
             fit_args[key] = getattr(args, key)
         fit_args['method'] = args.method[8:]
+        
+        if hasattr(self, 'is_excluded'):
+            s1p[self.is_excluded | self.is_rfi] = np.nan
+        
+#         sw_on = running_median(s1p[self.is_on], **fit_args)
+#         sw_off = running_median(s1p[~self.is_on], **fit_args)
 
-        sw_on = running_median(s1p[is_on], **fit_args)
-        sw_off = running_median(s1p[~is_on], **fit_args)
-
-        sw = np.zeros_like(s1p)
-        sw[is_on] = sw_on
-        sw[~is_on] = sw_off
+#         sw = np.zeros_like(s1p)
+#         sw[self.is_on] = sw_on
+#         sw[~self.is_on] = sw_off
+        sw = running_median(s1p, **fit_args)
 
         return sw
 
@@ -380,6 +414,11 @@ class IO(BaseIO):
         args = self.args
         # gen self.s2p_out
         s2p = self.s2p[:]
+        
+        # src add to is_excluded
+        self._load_sources()
+        self._load_is_rfi()
+        
         # fit baseline:
         print(f'standing wave fitting and substract by {args.method}')
         if args.method in ['sin_poly', ]:
@@ -388,12 +427,8 @@ class IO(BaseIO):
             else:
                 self.s2p_out = self.fit_sw(s2p, self.freq, args, subtract=True)
         else:
-            # load is_rfi, is_on
-            dict_ = self.fs if self.dict_in is None else self.dict_in
-            is_rfi = dict_['is_rfi'][:] if 'is_rfi' in dict_.keys() else None
-            if is_rfi is not None and self.is_use_freq is not None:
-                is_rfi = is_rfi[:, self.is_use_freq]
-            is_on = dict_['is_on'][:]
+            is_rfi = self.is_rfi
+            is_on = self.is_on
 
             s2p_out = deepcopy(s2p)
 
@@ -458,7 +493,7 @@ class IO(BaseIO):
                     else:
                         sm_res = np.array([None, None])[None,None,:]
 
-                    is_excluded = np.zeros_like(s2p,dtype=bool)
+                    is_excluded = self.is_excluded if hasattr(self,'is_excluded') else np.zeros_like(s2p,dtype=bool) 
                     sw2 = deepcopy(s2p)
                     for i in range(s2p.shape[2]):
                         sw2[..., i], is_excluded[..., i] = self.fft_fit_sw(s2p[..., i], is_rfi, is_on, iter_twice = True,
@@ -472,7 +507,7 @@ class IO(BaseIO):
 
 
             elif (args.method == 'running_median') or (args.method == 'running_mean'):
-                s2p_out -= self.med_fit_sw(s2p_out, is_on)
+                s2p_out = s2p - self.med_fit_sw(s2p_out, )
 
             self.s2p_out = s2p_out
 

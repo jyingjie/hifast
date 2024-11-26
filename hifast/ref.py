@@ -130,7 +130,7 @@ class IO(bld_IO):
                 is_excluded |= getattr(self, key)
         s2p[is_excluded] = np.nan
 
-        from .ripple.sw_fft import minmed
+        from .ripple.running_median import minmed
         kwargs = {}
         keys = ['nsection', 'nspec', 'npart', 'method']
         for key in keys:

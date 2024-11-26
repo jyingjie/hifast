@@ -2,6 +2,10 @@
 
 __all__ = []
 
+# Internal Cell
+import h5py
+import warnings
+
 # Cell
 from .core.cal import CalOnOff
 from .core.cal import FastRawSpec
@@ -18,25 +22,26 @@ from .utils.io import get_nB
 from .utils.io import replace_nB
 from .utils.io import load_hdf5_to_dict
 
-from .interaction import bld_i as interact_bld
-from .interaction import sw_i as interact_sw
-
+try:
+    from .interaction import bld_i as interact_bld
+    from .interaction import sw_i as interact_sw
+except ImportError as err:
+    print(err)
+    warnings.warn(f"{err}. Failed to import interactive modules")
 
 from .utils.io import HFDataT
 
-# Internal Cell
-import h5py
-import warnings
+from .utils import obs_log
 
 # Internal Cell
 class HFSpec:
 
     def __init__(self, s, *,
-                 kT=('Ta', 'flux', 'DATA'),
-                 DATA_cand=('Ta', 'flux')):
+                 kT=('Ta', 'flux', 'Power', 'DATA'),
+                 DATA_cand=('Ta', 'flux', 'Power')):
         """
         s: str
-        kT: key need transpose: PolarMjdChan_to_MjdChanPolar
+        kT: field needed to be transposed by PolarMjdChan_to_MjdChanPolar
         DATA_cand: key candidates as 'DATA'
         """
         if isinstance(s, str):
@@ -52,7 +57,7 @@ class HFSpec:
 
 
     def _gen_DATA(self,):
-        _DATA = None
+        self._DATA = None
         keys_ = self._group.keys()
         if 'DATA' in keys_:
             self._DATA = 'DATA'
@@ -61,12 +66,12 @@ class HFSpec:
                 if key in keys_:
                     self._DATA = key
                     break
-        if self._DATA is None:
-            raise(KeyError('can not find spec data'))
+        # if self._DATA is None:
+        #     raise(KeyError('can not find spec data'))
 
     def keys(self,):
         keys = list(self._group.keys())
-        if 'DATA' not in keys:
+        if self._DATA is not None and 'DATA' not in keys:
             keys.append('DATA')
         return tuple(keys)
 
@@ -86,7 +91,7 @@ class HFSpec:
         return r
 
     def __repr__(self,):
-        return f"keys: {self.keys()}"
+        return f"keys:\n{repr(self.keys())}"
 
     def _set_attrs(self,):
         keys_forbid = ['keys', 'fin']

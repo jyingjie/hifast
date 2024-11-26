@@ -66,6 +66,8 @@ group.add_argument('--nr_mean_times', type=float, default=100,
 group.add_argument('--nr_diff_times', type=float, default=30,
                    help="second threhold, sharp edge on time axis. diff above this times of median will be recognized; \
                    ")
+group.add_argument('--nr_rfi_width_lim',type=int, nargs=2, default= [0, 2],
+                   help='rfi channel width limit')
 group.add_argument('--nr_mask_rms_times',type = float, default=0,
                    help='if == 0, mask whole channel; if > 0, mask RMS above ~ times of RMS. ')
 
@@ -294,7 +296,8 @@ class IO(BaseIO):
         narr_args = {}
         keys = ['nr_mean_times',
                 'nr_diff_times',
-                'nr_mask_rms_times',]
+                'nr_mask_rms_times',
+                'nr_rfi_width_lim']
         for key in keys:
             narr_args[key[3:]] = getattr(args, key)
         narr_args['frange'] = None
