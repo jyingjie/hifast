@@ -30,6 +30,8 @@ ky_dir_default = [os.path.expanduser("~")+'/KY/',
 
 # Cell
 def _tight_ra(ra):
+    if len(ra)<=1:
+        return ra
     ra_s= np.sort(ra)
     diff_s= np.diff(ra_s)
     ind_max= np.argmax(diff_s)

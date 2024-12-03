@@ -714,6 +714,10 @@ class CalOnOff1111(CheckPCal, CalOnOffSav, CalOnOff):
         c_on = self.get_field(inds_on, 'DATA',).astype('float64')
         c_off = self.get_field(inds_off, 'DATA', close_file=True).astype('float64')
 
+        if getattr(self, 'plot', False):
+            figname = self.out_name_base + "-sep.pdf"
+            plot_sep(inds_on, inds_off, c_on, c_off, figname=figname)
+
         inds_ton_m = self.inds_ton_m
 
         for polar in range(pcals_s.shape[-1]):
