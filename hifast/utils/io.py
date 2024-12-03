@@ -45,6 +45,7 @@ def sub_patten_2(string, **kwargs):
 
 # Cell
 
+
 # export
 def sub_patten(string, **kwargs):
     if '%(' in string:

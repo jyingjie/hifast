@@ -216,7 +216,7 @@ if __name__ == '__main__':
             fpath_out = f'{outdir}/{key}.19.pdf'
             ret = _check_fout(args, fpath_out)
             if ret == "exit": continue
-            
+
             nrows=4
             ncols=5
             fig, axs = plt.subplots(nrows, ncols, figsize=(160/3,90/3), sharex=True, sharey=True)
@@ -242,7 +242,7 @@ if __name__ == '__main__':
             fpath_out = f'{outdir}/{fbasename}.pdf'
             ret = _check_fout(args, fpath_out)
             if ret == "exit": continue
-            
+
             nrows=1
             ncols=1
             fig, ax = plt.subplots(nrows, ncols, figsize=(15,12), sharex=True, sharey=True)

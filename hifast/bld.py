@@ -121,7 +121,6 @@ group.add_argument('--length', type=int, default=20, not_in_write_out_config_fil
 group.add_argument('--start_init', type=int, default=0, not_in_write_out_config_file=True,
                    help='Index of the first spectrum to display when starting the program.')
 
-
 # Cell
 class IO(BaseIO):
     ver = 'old'

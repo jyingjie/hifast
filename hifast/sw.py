@@ -251,7 +251,7 @@ class IO(BaseIO):
             s2p_ori = s2p_ori[..., inds[0]:inds[-1]+1]  # freq axis at end
         s2p_ori = PolarMjdChan_to_MjdChanPolar(s2p_ori)
         return s2p_ori
-    
+
 
     def _load_sources(self):
         args = self.args
@@ -262,8 +262,8 @@ class IO(BaseIO):
             print(f"loading excluded files from {fpath}")
             self.is_excluded = mask_srcs(fpath, is_excluded, self.ra, self.dec, self.freq,
                                          self.mjd, inplace=True, rest_frame=args.frame)
-            
-    
+
+
     def _load_is_rfi(self):
         # load is_rfi, is_on
         dict_ = self.fs if self.dict_in is None else self.dict_in
@@ -272,8 +272,8 @@ class IO(BaseIO):
             is_rfi = is_rfi[:, self.is_use_freq]
         self.is_rfi = is_rfi
         self.is_on = dict_['is_on'][:]
-    
-    
+
+
     def fit_sw(self, s2p, freq, args, subtract):
         """
         sin poly
@@ -395,10 +395,10 @@ class IO(BaseIO):
         for key in keys:
             fit_args[key] = getattr(args, key)
         fit_args['method'] = args.method[8:]
-        
+
         if hasattr(self, 'is_excluded'):
             s1p[self.is_excluded | self.is_rfi] = np.nan
-        
+
 #         sw_on = running_median(s1p[self.is_on], **fit_args)
 #         sw_off = running_median(s1p[~self.is_on], **fit_args)
 
@@ -414,11 +414,11 @@ class IO(BaseIO):
         args = self.args
         # gen self.s2p_out
         s2p = self.s2p[:]
-        
+
         # src add to is_excluded
         self._load_sources()
         self._load_is_rfi()
-        
+
         # fit baseline:
         print(f'standing wave fitting and substract by {args.method}')
         if args.method in ['sin_poly', ]:
@@ -493,7 +493,7 @@ class IO(BaseIO):
                     else:
                         sm_res = np.array([None, None])[None,None,:]
 
-                    is_excluded = self.is_excluded if hasattr(self,'is_excluded') else np.zeros_like(s2p,dtype=bool) 
+                    is_excluded = self.is_excluded if hasattr(self,'is_excluded') else np.zeros_like(s2p,dtype=bool)
                     sw2 = deepcopy(s2p)
                     for i in range(s2p.shape[2]):
                         sw2[..., i], is_excluded[..., i] = self.fft_fit_sw(s2p[..., i], is_rfi, is_on, iter_twice = True,

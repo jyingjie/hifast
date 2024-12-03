@@ -139,7 +139,6 @@ class CbrProfileFile():
             return None
         return CbrInfo(self.data[name]['ra'], self.data[name]['dec'], self.data[name]['coeff'], self.data[name]['coeff_err'])
 
-
 # Cell
 fpath = os.path.dirname(__file__) + '/data/PerleyButler2017.0.json'
 CbrProfiles = CbrProfileFile(fpath)
