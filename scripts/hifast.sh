@@ -138,8 +138,6 @@ validate_file() {
     fi
 }
 
-
-# Function to execute command on a single file
 Run_fname() {
     local fname="$1"
     local start_time
@@ -166,15 +164,24 @@ Run_fname() {
             
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] Running: $*"
             
-            output=$("$@")
-            exit_code=$?
-            echo "$output"
-            echo ""
+            # Try using fd3 with error handling
+            if exec 3>&1; then
+                output=$("$@" | tee /dev/fd/3)
+                exit_code=${PIPESTATUS[0]}
+                echo "" >&3
+                exec 3>&-  # Close fd3
+            else
+                output=$("$@")
+                exit_code=$?
+                echo "$output"
+                echo ""
+            fi
+            
             if [ $exit_code -ne 0 ]; then
                 printf "Command failed:\n%s\n" "$*" >&2
                 exit $exit_code
             fi
-            #printf '%s\n' "$output"
+            
             # Update filename for next command if needed
             if [[ "$output" =~ Saved[[:space:]]to[[:space:]]([^[:space:]]+) ]]; then
                 current_fname="${BASH_REMATCH[1]}"
@@ -192,6 +199,7 @@ Run_fname() {
     debug "Processing time for $fname: $((end_time - start_time)) seconds"
     return $status
 }
+
 
 # Parse command line arguments
 POSITIONAL=()
