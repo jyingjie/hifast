@@ -944,11 +944,13 @@ class Mapping(Calibrator):
             T_fit = np.nanmedian(Tuse[:,f_cut,:], axis=1)
             try:
                 if i % (len(freq_key)//3) == 0:
-                    figname = self.outname + f'-M{nB:02d}-freq_{freq_key[i]:.2f}{figname_add}.pdf'
+                    figname_XX = self.outname + f'-M{nB:02d}-freq_{freq_key[i]:.2f}-XX-{figname_add}.pdf'
+                    figname_YY = self.outname + f'-M{nB:02d}-freq_{freq_key[i]:.2f}-YY-{figname_add}.pdf'
                 else:
-                    figname = None
-                res_XX  = self.fit_along_ra(T_fit[:,0], rause, figname=figname)
-                res_YY  = self.fit_along_ra(T_fit[:,1], rause, figname=None)
+                    figname_XX = None
+                    figname_YY = None
+                res_XX  = self.fit_along_ra(T_fit[:,0], rause, figname=figname_XX)
+                res_YY  = self.fit_along_ra(T_fit[:,1], rause, figname=figname_YY)
                 TMAX.append([res_XX[0], res_YY[0]])
                 ONv.append([res_XX[1], res_YY[1]])
                 OFFv.append([res_XX[2], res_YY[2]])

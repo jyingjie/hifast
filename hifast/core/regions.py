@@ -19,15 +19,15 @@ def read_regions(fpath):
                 break
 
         if not line.startswith('global'):
-            warnings.warn(f"format error in {fpath}, the first line not started with '#' should start with 'global'. ")
+            warnings.warn(f"format error in {fpath}, the first line not started with '#' should start with 'global'. Only DS9 format is supported, please check {fpath}")
             return None
         # region unit
         line = f.readline().strip()
         if not line:
             warnings.warn(f"no region found in {fpath}")
             return None
-        elif line != 'physical':
-            warnings.warn(f"only 'physical' type regions are supported, please check {fpath}")
+        elif line.strip() not in ['physical', 'image']:
+            warnings.warn(f"only 'pixel' type regions are supported, no regions are read from {fpath}, please check {fpath}")
             return None
         # read region
         regions = {}

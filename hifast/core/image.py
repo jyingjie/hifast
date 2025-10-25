@@ -616,7 +616,7 @@ class CalcSpecPixel():
 #         print('dist')
 #         import time
 #         time.sleep(10)
-
+        n_worker = min(len(start), n_worker)
         if n_worker > 1:
             print(f"assign gird to {n_worker} processes")
             ps = []
