@@ -55,6 +55,9 @@ parser.add_argument('--beam_fwhw', type=float, default=2.9,
                    help='beam Full width at half maximum; unit: arc minute')
 parser.add_argument('--gaussian_fwhw', type=float,
                    help='unit: arc minute; default: ``beam_fwhw/2``')
+parser.add_argument('--apply_beam_correction', type=bool_fun, choices=[True, False], required=True,
+                   help=('Apply beam correction. This updates BMAJ/BMIN in the header to reflect the new effective resolution '
+                         'and applies a flux correction factor for Jy/beam units.'))
 parser.add_argument('--bsize', type=float,
                    help='for Bessel in bessel_gaussian or sin in sinc_gaussian; unit: arc minute'+
                         '; default: ``1.55*beam_fwhw/3``')

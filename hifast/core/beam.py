@@ -25,6 +25,7 @@ class ConvFun(object):
                 gaussian_fwhw = beam_fwhw/2
             self.sigma = gaussian_fwhw / (2*(2*np.log(2))**0.5)
             self.dis_cut_suggest = 3*self.sigma
+            self.gaussian_fwhw = gaussian_fwhw
 
         elif kernel_type == 'bessel_gaussian' or kernel_type == 'sinc_gaussian':
             self.bsize = 1.55 * beam_fwhw / 3. if bsize is None else bsize
@@ -40,7 +41,20 @@ class ConvFun(object):
 
         self.kernel_type = kernel_type
         self.wei_min = wei_min
+        self.beam_fwhw = beam_fwhw
 
+        self.beam_change()
+
+    def beam_change(self):
+        # calculate new beam fwhw
+        if self.kernel_type == 'gaussian':
+            self.new_beam_fwhw = (self.beam_fwhw**2 + self.gaussian_fwhw**2)**0.5
+            # volume under the Gaussian function: 2*pi*A*sigma_X*sigma_Y
+            self.beam_factor = self.new_beam_fwhw**2 / self.beam_fwhw**2
+
+        else:
+            # To do: use Numerical method to calculate
+            pass
 
     def __call__(self, dis):
 

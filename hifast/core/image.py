@@ -344,6 +344,7 @@ class Imaging():
                      gaussian_fwhw=args.gaussian_fwhw,
                      bsize=args.bsize, gsize=args.gsize)
         self.conv_weis = cf(self.d2d.arcmin)
+        self.conv_obj = cf
 
 
     def save(self,):
@@ -400,6 +401,27 @@ class Imaging():
             #
             self.pixel_finite_nums_chan = np.zeros(shape, dtype='int32')
         self.pixel_specs_nums = np.zeros(npixel, dtype='int32')
+
+    def apply_beam_correction(self, ):
+        args = self.args
+        new_beam_fwhw = self.conv_obj.new_beam_fwhw
+        if args.apply_beam_correction:
+            print(f"Modifying BMAJ and BMIN in header from {self.header['BMAJ']*60, self.header['BMIN']*60} arcmin to {new_beam_fwhw, new_beam_fwhw} arcmin, ",
+                 "to reflect the spatial resolution change due to the convolution.")
+            self.header['BMAJ'] = new_beam_fwhw/60 # deg
+            self.header['BMIN'] = new_beam_fwhw/60 # deg
+
+            # multiple the ratio factor only when BUNIT is Jy/beam
+            print("If the BUNIT is Jy/beam, a ratio factor is needed to correct the data.")
+            if self.header["BUNIT"].lower() == 'jy/beam':
+                print(f"The BUNIT is Jy/beam, multiplying the beam ratio factor {self.conv_obj.beam_factor}")
+                self.data_cube *= self.conv_obj.beam_factor
+            else:
+                print("The BUNIT is not Jy/beam, no need to multiply the beam ratio factor")
+                pass
+        else:
+            self.header['BMAJ_new'] = new_beam_fwhw/60
+            self.header['BMIN_new'] = new_beam_fwhw/60
 
 
     def __call__(self, ):
@@ -463,6 +485,7 @@ class Imaging():
         self.data_cube = self.pixel_data.reshape(_shape).transpose(2,0,1)
         self.weis_chan_cube = self.pixel_weis_sum_chan.reshape(_shape).transpose(2,0,1)
         self.nums_chan_cube = self.pixel_finite_nums_chan.reshape(_shape).transpose(2,0,1)
+        self.apply_beam_correction()
         self.save()
 
 # Cell
@@ -690,3 +713,5 @@ args.scale_beams_file = None
 args.polar = 'M'
 
 args.frac_finite_min = 0.01
+
+
