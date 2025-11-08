@@ -48,8 +48,8 @@ parser.add_argument('-p', '--proj', default='AIT', #choices=['AIT', 'SIN', 'TAN'
 parser.add_argument('-k', '--key', choices=['flux', 'Ta', 'Power'],
                        help='')
 
-parser.add_argument('-m', '--method', default='gaussian', choices=['gaussian', 'bessel_gaussian', 'sinc_gaussian'],
-                   help='method to process the spec in r_cut')
+parser.add_argument('-m', '--method', default='gaussian', choices=['gaussian'],
+                   help='Method to process the spec in r_cut. Currently, only "gaussian" is fully supported.')
 
 parser.add_argument('--beam_fwhw', type=float, default=2.9,
                    help='beam Full width at half maximum; unit: arc minute')
@@ -58,19 +58,16 @@ parser.add_argument('--gaussian_fwhw', type=float,
 parser.add_argument('--apply_beam_correction', type=bool_fun, choices=[True, False], required=True,
                    help=('Apply beam correction. This updates BMAJ/BMIN in the header to reflect the new effective resolution '
                          'and applies a flux correction factor for Jy/beam units.'))
-parser.add_argument('--bsize', type=float,
-                   help='for Bessel in bessel_gaussian or sin in sinc_gaussian; unit: arc minute'+
-                        '; default: ``1.55*beam_fwhw/3``')
-parser.add_argument('--gsize', type=float,
-                   help='for gauss in bessel_gaussian or sinc_gaussian; unit: arc minute' +
-                        '; default: ``2.52*beam_fwhw/3``')
+# parser.add_argument('--bsize', type=float,
+#                    help='for Bessel in bessel_gaussian or sin in sinc_gaussian; unit: arc minute'+
+#                         '; default: ``1.55*beam_fwhw/3``')
+# parser.add_argument('--gsize', type=float,
+#                    help='for gauss in bessel_gaussian or sinc_gaussian; unit: arc minute' +
+#                         '; default: ``2.52*beam_fwhw/3``')
 
 parser.add_argument('--r_cut', type=float,
-                   help="spectra inside r_cut from the grid point will be considered; unit: arc second. \n" +
-                        "Default: \n"+
-                        "``--method gaussian``: 3*gaussian_sigma, i.e. 3*(gaussian_fwhw/(sqrt(8ln(2))));\n" +
-                        "``--method bessel_gaussian``: 3.8317059702075*bsize/pi;\n"+
-                        "``--method sinc_gaussian``: bsize")
+                   help="Spectra inside r_cut from the grid point will be considered; unit: arc second. " +
+                        "Default for method='gaussian' is 3*gaussian_sigma.")
 
 parser.add_argument('--frac_finite_min', type=float, default=1,
                    help='For a grid point having ``n``` spectra in ``r_cut``, if the number of ``finite value``  in a channel is zero ' +
