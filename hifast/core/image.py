@@ -333,7 +333,7 @@ class Imaging():
         if args.r_cut is None:
             cf = ConvFun(args.method, args.beam_fwhw,
                          gaussian_fwhw=args.gaussian_fwhw,
-                         bsize=args.bsize, gsize=args.gsize)
+                         bsize=getattr(args, 'bsize', None), gsize=getattr(args, 'gsize', None))
             args.r_cut = getattr(cf, 'dis_cut_suggest')*60 # to arcsec
         print(f'r_cut: {args.r_cut} arcsec')
 
@@ -342,7 +342,7 @@ class Imaging():
         args = self.args
         cf = ConvFun(args.method, args.beam_fwhw,
                      gaussian_fwhw=args.gaussian_fwhw,
-                     bsize=args.bsize, gsize=args.gsize)
+                     bsize=getattr(args, 'bsize', None), gsize=getattr(args, 'gsize', None))
         self.conv_weis = cf(self.d2d.arcmin)
         self.conv_obj = cf
 
