@@ -24,7 +24,12 @@ parser.add_argument('--nproc', '-n', type=int, default=1,
 parser.add_argument('--step', type=int, default=5,
                    help='file number used to gridding each once')
 parser.add_argument('--share_mem', type=bool_fun, choices=[True, False], default='False',
-                   help='May reduce the memory usage when nproc > 1, or may not. Only in Linux')
+                   help='Enable shared memory for multiprocessing (Linux only). When enabled, uses /dev/shm by default.')
+parser.add_argument('--temp_dir', type=str, default='/dev/shm',
+                   help='Temporary directory for multiprocessing when --share_mem is True. ' +
+                        'Default: /dev/shm (fast, in-memory). ' +
+                        'If /dev/shm is too small, specify a disk directory with more space. ' +
+                        'Note: Remember to clean up residual temp files after processing.')
 
 parser.add_argument('--ra_range', type=float, nargs=2,
                    help='ra range; unit: deg')
@@ -87,14 +92,6 @@ if __name__ == '__main__':
     import os
     from .core.image import Imaging
     args_ = parser.parse_args()
-
-    # disable using storage disk in Multiprocessing.Array
-    # https://docs.python.org/3/library/tempfile.html#tempfile.gettempdir
-    # https://docs.python.org/3/library/tempfile.html#tempfile.tempdir
-    # os.environ['TMPDIR'] = '/dev/shm'
-    if sys.platform == 'linux' and args_.share_mem:
-        import tempfile
-        tempfile.tempdir = '/dev/shm'
 
     img = Imaging(args_)
     img()
