@@ -389,25 +389,65 @@ class Imaging():
         self.conv_obj = cf
 
 
-    def save(self,):
+    def save_cubes(self):
+        """
+        Save data cubes to FITS files sequentially to minimize memory usage.
+        
+        This method creates cube views on-demand and immediately deletes the underlying
+        pixel arrays after each save, avoiding memory spikes from keeping both in memory.
+        
+        Memory behavior notes:
+        - Data is computed in float64 for accuracy during accumulation/normalization
+        - Saved as float32 to reduce file size (standard for FITS cubes)
+        - astype('float32') creates a temporary copy in RAM, regardless of whether
+          the source data is in RAM or disk-based shared memory (RawArray with temp_dir)
+        - Sequential save-and-delete approach minimizes peak RAM usage by only having
+          one float32 conversion in memory at a time
+        - When share_mem=True: source data may be on disk (temp_dir), but astype()
+          still allocates the float32 copy in RAM. This is unavoidable but brief.
+        """
         args = self.args
         from astropy.io import fits
-
+        
+        # Calculate shape for reshaping pixel arrays into cubes
+        _shape = self.ra_grid.shape + self.pixel_data.shape[-1:]
+        
+        _header = copy.deepcopy(self.header)
+        _header['BUNIT'] = ''
+        
+        # Save nums_chan_cube first and delete pixel_finite_nums_chan immediately
+        outname_ = '.'.join(args.outname.split('.')[:-1]) + '-count.fits'
+        nums_chan_cube = self.pixel_finite_nums_chan.reshape(_shape).transpose(2,0,1)
+        hdu = fits.PrimaryHDU(nums_chan_cube, header=_header)
+        print(f'Saving to {outname_}.')
+        hdu.writeto(outname_, overwrite=True)
+        print(f'Saved count cube.')
+        del nums_chan_cube
+        del self.pixel_finite_nums_chan  # Free underlying memory
+        
+        # Save weights cube and delete pixel_weis_sum_chan immediately
+        outname_ = '.'.join(args.outname.split('.')[:-1]) + '-weights.fits'
+        weis_chan_cube = self.pixel_weis_sum_chan.reshape(_shape).transpose(2,0,1)
+        hdu = fits.PrimaryHDU(weis_chan_cube.astype('float32'), header=_header)
+        print(f'Saving to {outname_}.')
+        hdu.writeto(outname_, overwrite=True)
+        print(f'Saved weights cube.')
+        del weis_chan_cube
+        del self.pixel_weis_sum_chan  # Free underlying memory
+        
+        # Apply beam correction to pixel_data before reshaping
+        self.data_cube = self.pixel_data.reshape(_shape).transpose(2,0,1)
+        self.apply_beam_correction()
+        
+        # Save main data cube and delete pixel_data immediately
         hdu = fits.PrimaryHDU(self.data_cube.astype('float32'), header=self.header)
         print(f'Saving to {args.outname}.')
         hdu.writeto(args.outname, overwrite=args.force)
-        # save the spec count in each grid
-        _header = copy.deepcopy(self.header)
-        _header['BUNIT'] = ''
-        outname_ = '.'.join(args.outname.split('.')[:-1]) + '-count.fits'
-        hdu = fits.PrimaryHDU(self.nums_chan_cube, header=_header)
-        print(f'Saving to {outname_}.')
-        hdu.writeto(outname_, overwrite=True)
-        # save wei
-        outname_ = '.'.join(args.outname.split('.')[:-1]) + '-weights.fits'
-        hdu = fits.PrimaryHDU(self.weis_chan_cube.astype('float32'), header=_header)
-        print(f'Saving to {outname_}.')
-        hdu.writeto(outname_, overwrite=True)
+        print(f'Saved data cube.')
+        del self.data_cube
+        del self.pixel_data  # Free underlying memory
+        del self.pixel_specs_nums  # Clean up remaining arrays
+    
 
     def init_out(self, DataType='float64'):
         args = self.args
@@ -526,12 +566,9 @@ class Imaging():
             self.pixel_data[self.pixel_finite_nums_chan < (self.pixel_specs_nums*args.frac_finite_min)[:, None]] = np.nan
         np.seterr(**old_set)
 
-        _shape = self.ra_grid.shape + self.pixel_data.shape[-1:]
-        self.data_cube = self.pixel_data.reshape(_shape).transpose(2,0,1)
-        self.weis_chan_cube = self.pixel_weis_sum_chan.reshape(_shape).transpose(2,0,1)
-        self.nums_chan_cube = self.pixel_finite_nums_chan.reshape(_shape).transpose(2,0,1)
-        self.apply_beam_correction()
-        self.save()
+        # Save each cube directly and delete underlying pixel arrays immediately
+        # to minimize memory usage (especially important with share_mem)
+        self.save_cubes()
 
 # Cell
 def _get_start_stop(arr,arr_in):
