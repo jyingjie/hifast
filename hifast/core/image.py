@@ -20,6 +20,7 @@ from .beam import ConvFun
 from .radec import _tight_ra
 from . import conf
 from .corr_vel import freq2vel, vel2freq
+from .parallel_fill_grid import optimized_search_around_sky
 from ..utils.io import get_nB
 from ..utils.io import replace_nB
 
@@ -351,11 +352,24 @@ class Imaging():
         cata = SkyCoord(self.ra_stack, self.dec_stack, unit=(u.degree, u.degree))
         grid = SkyCoord(self.ra_grid, self.dec_grid, unit=(u.degree, u.degree))
 
-        print('searching spectra in r_cut for each grid...')
-        self.ind_g, self.ind_cata, self.d2d, d3d = cata.ravel().search_around_sky(
-                                                        grid.ravel(), args.r_cut*u.arcsec)
-#         self.ind_cata, self.ind_g, self.d2d, d3d = grid.ravel().search_around_sky(
-#                                                         cata.ravel(), args.r_cut*u.arcsec)
+        use_optimized = getattr(args, 'use_optimized_search', True)
+        
+        if use_optimized:
+            print(f'searching spectra in r_cut for each grid (optimized, n_workers={args.nproc})...')
+            # optimized_search_around_sky(coords1, coords2) returns (idx1, idx2, d2d, d3d)
+            # cata.search_around_sky(grid) calls search_around_sky(grid, cata) internally
+            # So we need to call optimized_search_around_sky(grid, cata) to match
+            # compute_3d=False to skip unused 3D distance calculation
+            self.ind_g, self.ind_cata, self.d2d, _ = optimized_search_around_sky(
+                grid.ravel(), cata.ravel(), args.r_cut*u.arcsec, 
+                n_workers=args.nproc, compute_3d=False, verbose=False
+            )
+        else:
+            print('searching spectra in r_cut for each grid (original astropy)...')
+            # cata.search_around_sky(grid) returns (idx_grid, idx_cata, d2d, d3d)
+            self.ind_g, self.ind_cata, self.d2d, _ = cata.ravel().search_around_sky(
+                grid.ravel(), args.r_cut*u.arcsec
+            )
 
     def gen_scale_beams(self,):
         args = self.args

@@ -87,6 +87,10 @@ parser.add_argument('--wcs_from',
 parser.add_argument('--scale_beams_file',
                    help='testing')
 
+parser.add_argument('--use_optimized_search', type=bool_fun, choices=[True, False], default='True',
+                   help='Use optimized search_around_sky implementation for better performance. ' +
+                        'Set to False to use original astropy implementation for comparison.')
+
 # Cell
 if __name__ == '__main__':
     import os
