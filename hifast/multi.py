@@ -25,6 +25,8 @@ group.add_argument('--vtype', choices=['radio', 'optical'], default='optical',
 group = parser.add_argument_group(f'*after\n{sep_line}')
 group.add_argument('--replace_rfi', type=bool_fun, choices=[True, False], default='True',
                    help='if True, replace spectra contaminated by rfi as np.nan')
+group.add_argument('--mask_extrapo', type=bool_fun, choices=[True, False], default='False',
+                   help='if True, mask data points where ra/dec are extrapolated (is_extrapo=True) as np.nan')
 group.add_argument('--merge_polar', type=bool_fun, choices=[True, False], default='True',
                    help='if True, average two polarization')
 
@@ -56,6 +58,13 @@ class IO(BaseIO):
                     s2p[is_rfi] = np.nan
         else:
             is_rfi = None
+        
+        # mask data points where ra/dec are extrapolated
+        if args.mask_extrapo and 'is_extrapo' in self.fs.keys():
+            is_extrapo = self.fs['is_extrapo'][:]
+            print('masking data points with extrapolated ra/dec')
+            # is_extrapo shape: (Mjd,), s2p shape: (Mjd, Chan, Polar)
+            s2p[is_extrapo, :, :] = np.nan
 
         if args.merge_polar and s2p.ndim == 3:
             print('average two polarization...')
