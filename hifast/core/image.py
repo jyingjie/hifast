@@ -422,6 +422,7 @@ class Imaging():
         """
         args = self.args
         from astropy.io import fits
+        import gc
         
         # Calculate shape for reshaping pixel arrays into cubes
         _shape = self.ra_grid.shape + self.pixel_data.shape[-1:]
@@ -438,16 +439,7 @@ class Imaging():
         print(f'Saved count cube.')
         del nums_chan_cube
         del self.pixel_finite_nums_chan  # Free underlying memory
-        
-        # Save weights cube and delete pixel_weis_sum_chan immediately
-        outname_ = '.'.join(args.outname.split('.')[:-1]) + '-weights.fits'
-        weis_chan_cube = self.pixel_weis_sum_chan.reshape(_shape).transpose(2,0,1)
-        hdu = fits.PrimaryHDU(weis_chan_cube.astype('float32'), header=_header)
-        print(f'Saving to {outname_}.')
-        hdu.writeto(outname_, overwrite=True)
-        print(f'Saved weights cube.')
-        del weis_chan_cube
-        del self.pixel_weis_sum_chan  # Free underlying memory
+        gc.collect()  # Force garbage collection to ensure memory is freed
         
         # Apply beam correction to pixel_data before reshaping
         self.data_cube = self.pixel_data.reshape(_shape).transpose(2,0,1)
@@ -460,7 +452,19 @@ class Imaging():
         print(f'Saved data cube.')
         del self.data_cube
         del self.pixel_data  # Free underlying memory
+        gc.collect()  # Force garbage collection to ensure memory is freed
+        
+        # Save weights cube and delete pixel_weis_sum_chan immediately
+        outname_ = '.'.join(args.outname.split('.')[:-1]) + '-weights.fits'
+        weis_chan_cube = self.pixel_weis_sum_chan.reshape(_shape).transpose(2,0,1)
+        hdu = fits.PrimaryHDU(weis_chan_cube.astype('float32'), header=_header)
+        print(f'Saving to {outname_}.')
+        hdu.writeto(outname_, overwrite=True)
+        print(f'Saved weights cube.')
+        del weis_chan_cube
+        del self.pixel_weis_sum_chan  # Free underlying memory
         del self.pixel_specs_nums  # Clean up remaining arrays
+        gc.collect()  # Force garbage collection to ensure memory is freed
     
 
     def init_out(self, DataType='float64'):
