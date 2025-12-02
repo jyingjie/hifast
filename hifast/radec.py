@@ -1,54 +1,78 @@
-#!/usr/bin/env python
-# coding: utf-8
+"""
+hifast.radec
+============
+
+Calculate celestial coordinates (RA, DEC) for FAST drift scan data.
+
+This module matches spectral data with feed cabin position data (KY files)
+to compute the Right Ascension (RA) and Declination (DEC) for each spectrum.
+It supports interpolation, coordinate transformation using `erfa` or `astropy`,
+and environmental corrections.
+
+It can also process a KY file directly to calculate and plot the feed cabin's
+trajectory independent of spectral data.
+"""
 
 import os
 import re
 import sys
 from glob import glob
+import argparse
+from .utils.io import *
 
-if __name__ == '__main__':
-    from .utils.io import *
-
+def create_parser():
     sep_line = '##'+'#'*70+'##'
     parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}",
-                        formatter_class=formatter_class, allow_abbrev=False,
-                        description='Calculate RA DEC', )
-    parser.add_argument('fname',
-                        help='file name; hdf5 file with "S/mjd" filed or KY file(.xlsx)')
-    parser.add_argument('-f', dest='force', action='store_true',
-                        help='overwriting file if out file exists')
-    parser.add_argument('--ky_files', nargs='*',
-                        help='KY files, if not given, try to search in `--ky_dir`.')
-    parser.add_argument('--ky_dir',
-                        help="The directory for seraching KY file. If not specified, utilize `~/KY` if it exists. Otherwise, use `/data31/KY`.")
-    parser.add_argument('--backend', choices=['erfa', 'astropy'], default='astropy',
-                       help='using erfa or astropy. The astropy will consider dUT1, xp, yp automatically.')
-    parser.add_argument('--tol', type=float, default=1,
-                       help='max allowed extrapolate time; unit: second')
-    parser.add_argument('--ky_fixed', action='store_true',
-                       help='')
-    parser.add_argument('--no_cache', action='store_true',
-                       help='whether use the cached')
-    parser.add_argument('-n', '--nproc', type=int, default=1,
-                       help='parallel process number')
-    parser.add_argument('--plot', action='store_true',
-                       help='plot the ra dec in pdf image')
-    parser.add_argument('--outdir',
-                       help='output file directory; Default is same with input file if input hdf5 file, "./" if input .xlsx file.')
+                        formatter_class=argparse.ArgumentDefaultsHelpFormatter, allow_abbrev=False,
+                        description='Calculate RA/DEC coordinates from feed cabin data.')
     
-    group = parser.add_argument_group(f'environment parameters')
-    group.add_argument('--phpa', type=float, default=925.,
-                   help='atmospheric pressure in hPa')
-    group.add_argument('--temperature', type=float, default=15.,
-                   help='The ground-level temperature in deg C.')
-    group.add_argument('--humidity', type=float, default=0.8,
-                   help='The relative humidity as a dimensionless quantity between 0 to 1')
-    parser.add_argument('--dUT1', default=0.1,
-                   help='UT1-UTC')
-    
-    
-    
+    # --- Input/Output ---
+    group = parser.add_argument_group('Input/Output')
+    group.add_argument('fname', metavar='FILE',
+                        help='Input file path. Can be an HDF5 spectral data file (must contain "S/mjd") or a KY feed cabin log file (.xlsx).')
+    group.add_argument('--outdir', metavar='DIR',
+                        help='Output directory. Defaults to the input file directory (for HDF5) or current directory (for XLSX).')
+    group.add_argument('-f', dest='force', action='store_true',
+                        help='Force overwrite of the output file if it already exists.')
+    group.add_argument('--plot', action='store_true',
+                        help='Create a PDF plot showing the calculated RA/DEC trajectory.')
 
+    # --- Configuration ---
+    group = parser.add_argument_group('Configuration')
+    group.add_argument('--ky_files', nargs='*', metavar='FILE',
+                        help='Explicitly specify one or more KY (feed cabin log) file paths. Separate multiple files with spaces. If omitted, searches in `--ky_dir` based on observation time.')
+    group.add_argument('--ky_dir', metavar='DIR',
+                        help="Base directory to search for KY files. Defaults to standard locations, with `~/KY` checked first, followed by others like `/data31/KY`.")
+    group.add_argument('--backend', choices=['erfa', 'astropy'], default='astropy',
+                       help='Coordinate calculation backend. "astropy" (default) is recommended (auto-handles Earth orientation). "erfa" is a lower-level alternative.')
+    group.add_argument('--tol', type=float, default=1, metavar='SEC',
+                       help='Maximum allowed extrapolation time [seconds]. Coordinates are extrapolated for gaps smaller than this; larger gaps raise an error.')
+    group.add_argument('--ky_fixed', action='store_true',
+                       help='Assume fixed feed position. Useful for early drift scans with incomplete trajectory logs.')
+
+    # --- Environment ---
+    group = parser.add_argument_group('Environment')
+    group.add_argument('--phpa', type=float, default=925., metavar='HPA',
+                   help='Atmospheric pressure [hPa]. Used for refraction correction.')
+    group.add_argument('--temperature', type=float, default=15., metavar='DEG_C',
+                   help='Ground-level temperature [Celsius]. Used for refraction correction.')
+    group.add_argument('--humidity', type=float, default=0.8, metavar='0-1',
+                   help='Relative humidity [0.0 - 1.0]. Used for refraction correction.')
+    group.add_argument('--dUT1', metavar='SEC',
+                   help='UT1-UTC time difference [seconds]. Only used for "erfa" backend (ignored for "astropy" as it handles it automatically).')
+
+    # --- Performance ---
+    group = parser.add_argument_group('Performance')
+    group.add_argument('-n', '--nproc', type=int, default=1, metavar='INT',
+                       help='Number of parallel processes for multi-beam calculation.')
+    group.add_argument('--no_cache', action='store_true',
+                       help='Disable using cached intermediate results (forces fresh KY file processing).')
+    
+    return parser
+
+parser = create_parser()
+
+if __name__ == '__main__':
     args = parser.parse_args()
 #     print('#'*35+'Args'+'#'*35)
 #     print(parser.format_values())  # useful for logging where different settings came from
