@@ -1,43 +1,67 @@
 
+"""
+hifast.flux
+===========
 
-__all__ = ['IO']
+Flux calibration module.
+
+This module converts the unit of spectra from Antenna Temperature (Ta, Kelvin) to Flux Density (Jy).
+It supports two calibration methods:
+1.  **Noise Diode Calibration**: Uses a calibrator source (e.g., 3C48) observed with a noise diode to determine the gain.
+2.  **Pre-measured Gain**: Uses a standard gain curve (e.g., Jiang et al. 2020) based on zenith angle.
+"""
+
+__all__ = ['IO', 'parser']
 
 
 from .utils.io import *
 
 
-sep_line = '##'+'#'*70+'##'
-parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}", formatter_class=formatter_class, allow_abbrev=False,
-                        description='Convert the spectra temperature to flux', )
-add_common_argument(parser)
-parser.add_argument('fpath',
-                    help='input spectra temperature file path.')
-parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
-                    help='Limit frequence range')
-parser.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
-                    help="if set, don't check or add ra dec")
+def create_parser():
+    sep_line = '##'+'#'*70+'##'
+    parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}", formatter_class=formatter_class, allow_abbrev=False,
+                            description='Convert spectra from Antenna Temperature (Ta) to Flux Density (Jy).')
+    add_common_argument(parser)
 
-group = parser.add_argument_group(f'*Flux\nUse calibrator (`--cbr_store`) or pre-measured flux gain (`--pre_measured`) \n{sep_line}')
-# --flux affect the outfield name
-group.add_argument('--flux', type=bool_fun, choices=[True], default='True', not_in_write_out_config_file=True,
-                   help='It must be True.')
-group = parser.add_argument_group(f'*Use Calibrator\n{sep_line}')
-group.add_argument('--cbr_store', '--cali_fname', dest='cbr_store', default='none',
-                   help='calibrator file name or directory stored multi-files')
-group.add_argument('--cbr_name', default='*',
-                   help='calibrator name, e.g. 3C48')
-group.add_argument('--only_use_19beams', type=bool_fun, choices=[True, False], default='False',
-                   help='only use 19beams calibrator')
-group.add_argument('--fix_diff_tcal', type=bool_fun, choices=[True, False], default='True',
-                   help='If True, fix the tcal differece in spec and calibrator')
-group.add_argument('--fix_diff_ZA', type=bool_fun, choices=[True, False], default='False',
-                   help='If True, the difference in gain between the spec and the calibrator will be corrected based on the difference in zenith angle.')
-group = parser.add_argument_group(f'*Use Pre-measured flux gain if `--cbr_store` is not set\n{sep_line}')
-group.add_argument('--pre_measured', default='Jiang2020', choices=['Jiang2020', 'Liu2024'],
-                   help='Specify pre-measured flux gain. Support \'Jiang2020\'(arXiv:2002.01786), \'Liu2024\'(arXiv:..)')
-## Ambient temperature correction for Liu2024
-group.add_argument('--Atemp', '--Tamb', type=float,
-                   help='Used for `--pre_measured Liu2024`. Specify the ambient temperature in degree Celsius. If not specified, no ambient temperature correction will be applied.')
+    # --- Input/Output ---
+    group = parser.add_argument_group('Input/Output')
+    group.add_argument('fpath', metavar='FILE',
+                        help='Input spectra file path (HDF5 format, typically with units in Ta).')
+
+    # --- Calibration Method: Noise Diode ---
+    group = parser.add_argument_group('Calibration: Noise Diode')
+    group.add_argument('--cbr_store', '--cali_fname', dest='cbr_store', default='none', metavar='FILE/DIR',
+                       help='Path to the calibrator file or directory containing calibrator files. If specified, noise diode calibration is used.')
+    group.add_argument('--cbr_name', default='*', metavar='NAME',
+                       help='Name pattern of the calibrator source (e.g., "3C48", "3C286"). Used to filter files if a directory is provided.')
+    group.add_argument('--only_use_19beams', type=bool_fun, choices=[True, False], default='False',
+                       help='If True, only use calibrator data that has all 19 beams.')
+    group.add_argument('--fix_diff_tcal', type=bool_fun, choices=[True, False], default='True',
+                       help='Correct for Tcal differences between the target observation and the calibrator observation.')
+    group.add_argument('--fix_diff_ZA', type=bool_fun, choices=[True, False], default='False',
+                       help='Correct for gain differences due to Zenith Angle (ZA) differences between target and calibrator.')
+
+    # --- Calibration Method: Pre-measured Gain ---
+    group = parser.add_argument_group('Calibration: Pre-measured Gain')
+    group.add_argument('--pre_measured', default='Jiang2020', choices=['Jiang2020', 'Liu2024'],
+                       help='Select the pre-measured gain curve to use if `--cbr_store` is not set. "Jiang2020" (arXiv:2002.01786) is the standard.')
+    group.add_argument('--Atemp', '--Tamb', type=float, metavar='DEG_C',
+                       help='Ambient temperature [Celsius]. Required for "Liu2024" model correction. Ignored for "Jiang2020".')
+
+    # --- General Settings ---
+    group = parser.add_argument_group('General Settings')
+    group.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')], metavar=('MIN', 'MAX'),
+                        help='Limit the frequency range to process [MHz]. Followed by two values (min, max).')
+    group.add_argument('--no_radec', action='store_true', not_in_write_out_config_file=True,
+                        help="Skip checking or adding RA/DEC coordinates (use with caution).")
+    
+    # Internal/Hidden
+    parser.add_argument('--flux', type=bool_fun, choices=[True], default='True', not_in_write_out_config_file=True,
+                       help=argparse.SUPPRESS)
+
+    return parser
+
+parser = create_parser()
 
 
 class IO(BaseIO):
