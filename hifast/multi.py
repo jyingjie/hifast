@@ -1,34 +1,57 @@
 
+"""
+hifast.multi
+============
 
-__all__ = ['IO']
+Multi-step operations for spectral data processing.
+
+This module performs several key processing steps on the input spectra:
+1.  **Reference Frame Correction**: Converts velocities from the telescope's Topocentric frame to a standard frame (e.g., LSRK).
+2.  **RFI Masking**: Replaces flagged RFI data with NaN.
+3.  **Polarization Merging**: Averages XX and YY polarizations.
+4.  **Extrapolation Masking**: Optionally masks data points with extrapolated coordinates.
+"""
+
+__all__ = ['IO', 'parser']
 
 
 from .utils.io import *
 
 
-sep_line = '##'+'#'*70+'##'
-parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}", formatter_class=formatter_class, allow_abbrev=False,
-                        description='reference frame correction and etc.', )
-add_common_argument(parser)
-parser.add_argument('fpath',
-                    help='input spectra file path.')
-parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],
-                    help='Limit frequence range')
-group = parser.add_argument_group(f'*frame correction\n{sep_line}')
-# frame correct
-group.add_argument('--fc', type=bool_fun, choices=[True, False], default='True', not_in_write_out_config_file=True,
-                   help='frame correct')
-group.add_argument('--frame', choices=['BARYCENT', 'HELIOCEN', 'LSRK', 'LSRD'], default='LSRK',
-                   help='Velocity Rest Frames, HELIOCEN or LSRK')
-group.add_argument('--vtype', choices=['radio', 'optical'], default='optical',
-                   help='velocity type')
-group = parser.add_argument_group(f'*after\n{sep_line}')
-group.add_argument('--replace_rfi', type=bool_fun, choices=[True, False], default='True',
-                   help='if True, replace spectra contaminated by rfi as np.nan')
-group.add_argument('--mask_extrapo', type=bool_fun, choices=[True, False], default='False',
-                   help='if True, mask data points where ra/dec are extrapolated (is_extrapo=True) as np.nan')
-group.add_argument('--merge_polar', type=bool_fun, choices=[True, False], default='True',
-                   help='if True, average two polarization')
+def create_parser():
+    sep_line = '##'+'#'*70+'##'
+    parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}", formatter_class=formatter_class, allow_abbrev=False,
+                            description='Perform multi-step operations: RFI masking, reference frame correction, and polarization merging.')
+    add_common_argument(parser)
+
+    # --- Input/Output ---
+    group = parser.add_argument_group('Input/Output')
+    group.add_argument('fpath', metavar='FILE',
+                        help='Input spectra file path (HDF5 format).')
+    group.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')], metavar=('MIN', 'MAX'),
+                        help='Limit the frequency range to process [MHz]. Followed by two values (min, max).')
+
+    # --- Frame Correction ---
+    group = parser.add_argument_group('Frame Correction')
+    group.add_argument('--fc', type=bool_fun, choices=[True, False], default='True', not_in_write_out_config_file=True,
+                       help='Enable reference frame correction (Topocentric -> LSRK/Heliocentric).')
+    group.add_argument('--frame', choices=['BARYCENT', 'HELIOCEN', 'LSRK', 'LSRD'], default='LSRK',
+                       help='Target reference frame. "LSRK" (Local Standard of Rest, Kinematic) is commonly used.')
+    group.add_argument('--vtype', choices=['radio', 'optical'], default='optical',
+                       help='Velocity definition type. "optical" (cz) or "radio". Note: This is primarily for tracking/single-spectrum analysis. `hifast.cube` calculates velocity from frequency and ignores this column.')
+
+    # --- Data Processing ---
+    group = parser.add_argument_group('Data Processing')
+    group.add_argument('--replace_rfi', type=bool_fun, choices=[True, False], default='True',
+                       help='Replace RFI-contaminated spectra with NaN (requires "is_rfi" dataset in input).')
+    group.add_argument('--mask_extrapo', type=bool_fun, choices=[True, False], default='False',
+                       help='Mask data points where RA/DEC coordinates were extrapolated (requires "is_extrapo" dataset).')
+    group.add_argument('--merge_polar', type=bool_fun, choices=[True, False], default='True',
+                       help='Merge (average) the two polarizations (XX and YY) into a single Stokes I intensity.')
+    
+    return parser
+
+parser = create_parser()
 
 
 class IO(BaseIO):
