@@ -8,11 +8,9 @@ Baseline fitting and subtraction for spectral data.
 This module provides tools to fit and subtract baselines from spectra. It supports various fitting methods (PLS, polynomial, spline) and preprocessing steps (smoothing, binning) along both time and frequency axes.
 """
 
-import numpy as np
+
 from .utils.io import *
-import argparse
-import os
-import sys
+
 
 __all__ = ['IO', 'IO_i', 'create_parser', 'parser']
 
@@ -149,12 +147,14 @@ class IO(BaseIO):
 
     def _import_m(self,):
         """
-        need modify this function
+        Lazy import of heavy dependencies (numpy, h5py, etc.).
         """
         super()._import_m()
-        global h5py, OrderedDict, sub_baseline
+        global h5py, OrderedDict, sub_baseline, np
 
         import h5py
+        import numpy as np
+
         from collections import OrderedDict
         from .core.baseline import sub_baseline
 
