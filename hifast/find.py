@@ -8,17 +8,19 @@ Search for spectra near a target coordinate.
 
 This module searches for beams within a specified radius of a target RA/DEC in a list of HDF5 files.
 """
-import h5py
-import numpy as np
-from astropy.coordinates import SkyCoord
-from astropy import units as u
 import os
-import argparse
 from glob import glob
 import sys
+from .utils.io import ArgumentParser, add_common_argument, argparse
 
 class Find_point(object):
-    def __init__(self, p_str, r, p_u=(u.hourangle,u.deg), r_u=u.deg):
+    def __init__(self, p_str, r, p_u=None, r_u=None):
+        self._import_m()
+        if p_u is None:
+            p_u = (u.hourangle, u.deg)
+        if r_u is None:
+            r_u = u.deg
+
         if ':' in p_str:
             # Sexagesimal format (HH:MM:SS DD:MM:SS) -> Hourangle, Deg
             self.point = SkyCoord(p_str, unit=p_u)
@@ -31,8 +33,27 @@ class Find_point(object):
                 self.point = SkyCoord(p_str, unit=(u.deg, u.deg))
         
         self.r = r*u.deg
+
+    def _import_m(self,):
+        """
+        Lazy import of heavy dependencies.
+        """
+        global h5py, np, SkyCoord, u
+        import h5py
+        import numpy as np
+        from astropy.coordinates import SkyCoord
+        from astropy import units as u
+
     @staticmethod
     def get_radec(fname):
+        # Ensure imports are available if called statically
+        if 'h5py' not in globals():
+             global h5py, np, SkyCoord, u
+             import h5py
+             import numpy as np
+             from astropy.coordinates import SkyCoord
+             from astropy import units as u
+
         f = h5py.File(fname,'r')
         S = f["S"] if "S" in f.keys() else f
         ra_list = []
@@ -65,10 +86,11 @@ class Find_point(object):
                 print(inds)
 
 def create_parser():
-    parser = argparse.ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}",
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                     allow_abbrev=False,
-                                     description='Search for spectra within a radius of a target coordinate.')
+    parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}",
+                            formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                            allow_abbrev=False,
+                            description='Search for spectra within a radius of a target coordinate.')
+    add_common_argument(parser)
     
     parser.add_argument('fnames', nargs='+', metavar='FILE',
                         help='Input HDF5 file paths (supports glob patterns like "data/*.hdf5").')
