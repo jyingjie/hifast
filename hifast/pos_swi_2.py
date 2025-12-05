@@ -112,6 +112,24 @@ class IO(BaseIO):
 
         self.mjd_src_start = mjd_src_start
         self.mjd_ref_start = mjd_ref_start
+        
+        
+    def gen_integrated_time(self, ):
+        args = self.args
+        
+        tint_src = np.sum(~np.all(np.isnan(self.p_off_src[:,:,-1]), axis = 1))
+        tint_ref = np.sum(~np.all(np.isnan(self.p_off_ref[:,:,-1]), axis = 1))
+        
+        if not args.only_off:
+            tint_src += np.sum(~np.all(np.isnan(self.p_on_src[:,:,-1]), axis = 1))
+            tint_ref += np.sum(~np.all(np.isnan(self.p_on_ref[:,:,-1]), axis = 1))
+        
+        from astropy.time import Time
+        mjd = Time(self.mjd, format='mjd')
+        delta_mjd = (mjd[1] - mjd[0]).sec
+        
+        self.tint_src = tint_src * delta_mjd
+        self.tint_ref = tint_ref * delta_mjd
 
     def gen_Ta(self, only_off=False):
         """
@@ -191,6 +209,7 @@ class IO(BaseIO):
         args = self.args
         self._prepare()
         self.sep(args.t_src, args.t_ref, args.n_repeat, args.t_change)
+        self.gen_integrated_time()
         self.gen_Ta()
         self.gen_radec()
         self.plot_radec(outname=self.fpath_out + '-radec.png')
@@ -205,6 +224,12 @@ class IO(BaseIO):
                  self.dict_out[key] = np.array([False,])
         self.dict_out['Ta_src'] = MjdChanPolar_to_PolarMjdChan(self.Ta_src)
         self.dict_out['Ta_ref'] = MjdChanPolar_to_PolarMjdChan(self.Ta_ref)
+        
+        
+        for key in ['tint_src', 'tint_ref']:
+            print(key, getattr(self, key))
+            self.dict_out[key] = np.array([getattr(self, key)])
+        
         # save to hdf5 file
         if save:
             self.save()

@@ -88,6 +88,15 @@ group.add_argument('--pr_times', type=float, default=6,
 group.add_argument('--pr_times_s', type=float, default=1,
                    help='')
 
+####################### 19Beam RFI #######################################
+group = parser.add_argument_group(f'*19Beam RFI\n{sep_line}')
+group.add_argument('--b19', '--beam19_rfi', type=bool_fun, choices=[True, False], default='False',
+                   help='Enable or disable 19-beam RFI detection')
+group.add_argument('--b19_times', type=float, default=3,
+                   help='Threshold multiplier for 19-beam RFI detection')
+group.add_argument('--b19_min_percent', type=float, default=0.23,
+                   help='Minimum percent of beams that must exceed the threshold to classify as RFI, default >0.23 (4/19 beam)')
+
 ###################### Time domain uncontinuous RFI #########################
 parser.add_argument('--rms_frange', type=float, nargs=2,
                    help='freq range to compute rms, NEED TO DEFINE when sf, pdr')
@@ -593,10 +602,37 @@ class IO(BaseIO):
 
     def load_19rfi(self):
         import h5py
-        rfi_ = h5py.File(self._19name, 'r')
-        _is_rfi = rfi_['S']['is_rfi'][:]
-        rfi_.close()
-        return _is_rfi
+        
+        f = h5py.File(self._19name,'r')
+        fs = f['S']
+        freq = fs['freq'][()]
+        is_rfi = fs['is_rfi'][()]
+        if 'T' in fs.keys():
+            infield = 'T'
+        elif 'Ta' in fs.keys():
+            infield = 'Ta'
+        elif 'flux' in fs.keys():
+            infield = 'flux'
+        else:
+            raise(ValueError('can not find spec'))
+        s2p = fs[infield][()]
+        if s2p.shape[0] == 2 or s2p.shape[0] == 1:
+            from .utils.io import PolarMjdChan_to_MjdChanPolar
+            s2p = PolarMjdChan_to_MjdChanPolar(s2p)
+
+        f.close()
+        
+        num_19rfi = s2p[:, :, 0]
+        is_19rfi = (num_19rfi >= self.args.b19_min_percent)
+        
+        print(f"rfi number in 19 beams rfi file: {np.sum(is_19rfi)}")
+            
+        # protect extended signals in low z
+        fuse = (freq > 1410) & (freq < 1421)
+        is_19rfi[:, fuse] = False
+        self.is_19rfi = is_19rfi
+
+        return is_rfi
 
     @staticmethod
     def gen_19rfi_file(paras=[]):
@@ -650,13 +686,13 @@ class IO(BaseIO):
         # average in 19 beams
         if args.all_beams:
             if os.path.exists(self._19name):
-                is_19rfi = self.load_19rfi()
+                is_trfi = self.load_19rfi()
             else:
                 raise FileNotFoundError(f"Can't find {self._19name}. Did it run hifast.rfi_multi?")
 
-        is_rfi = np.isnan(self.s2p_mean)
-
-#         is_rfi = np.full(self.s2p.shape[:2], False, dtype=bool)
+        is_rfi = np.isnan(self.s2p_mean) | np.isinf(self.s2p_mean)
+        self.s2p[is_rfi] = np.nan
+        self.s2p_mean[is_rfi] = np.nan
 
         # manual regions
         is_rfi_tmp = self.get_from_regions()
@@ -666,14 +702,18 @@ class IO(BaseIO):
         self.protect_use = self.protect_mw()
         self.check_rms_range()
 
+        # 19 beams RFI
+        if args.all_beams & args.b19:
+            is_rfi |= self.is_19rfi
+
         # long or short freq time RFI
         if args.lf or args.sf:
             if args.all_beams and args.sf_use_time_only:
-                    is_rfi |= self.get_time_rfi(is_19rfi, is_rfi_tmp)
+                    is_rfi |= self.get_time_rfi(is_trfi, is_rfi_tmp)
                     print("Use is_timerfi(sf) in 19 beams rfi :P")
             else:
                 if args.all_beams:
-                    is_rfi |= is_19rfi
+                    is_rfi |= is_trfi
                     args.sf = False
                     print("Use is_rfi(sf) in 19 beams rfi :P")
                 is_rfi |= self.get_time_rfi(is_rfi = None, is_rfi_tmp = is_rfi_tmp)

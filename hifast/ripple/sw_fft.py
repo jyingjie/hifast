@@ -1,5 +1,5 @@
 __all__ = ['replace_spec', 'save_rep_fixed', 'repalce_near', 'replace_margin_side', 'get_margin_num', 'replace_rfi_lower', 'replace_rfi',
-           'find_loc', 'SW_FFT', 'get_sw_conf', 'fit_sw_fft', 'minmed']
+           'find_loc', 'SW_FFT', 'get_sw_conf', 'fit_sw_fft',]
 
 # author: Xu Chen, Li Fujia, 2021.06
 # code: Xu Chen
@@ -101,6 +101,7 @@ def replace_spec(tn, spec, freq, exceed_use, restrict_use, rfi_width_lim, ext_se
             try:
                 newspec_[l1:r1] = ripple
                 newspec[s:e] = newspec_[s:e] # only s to e will be changed
+#                 print(s, e, l1, r1)
             except ValueError:
                 log.info(f"tn = {tn} has a ValueError, will replace with noise")
                 # import traceback
@@ -191,7 +192,7 @@ def repalce_near(data_in, freq, time_rfi, mw_use=None, times_thr=None, times_s_t
     ext_sec: extend channel number of start and end of each section
     """
     global fdelta
-    fdelta = freq[1]-freq[0]
+    fdelta = np.abs(freq[1]-freq[0])
     ext = int(np.around(ext_freq / fdelta))
     
     data = deepcopy(data_in)
@@ -243,14 +244,15 @@ def repalce_near(data_in, freq, time_rfi, mw_use=None, times_thr=None, times_s_t
         if tn in not_rfi_num:
             spec = deepcopy(data[tn, :])
             include = mw_use #| time_rfi[tn]
-            if np.sum(include) > 0:
-                spec[include] = MAX * 20
 
             find = ex_sm = data_find[tn]
             # find used to define replace area
             RMS = rms(find, freq, rms_vrange=rms_frange)
             thr_s = RMS*times_s_thr2
             exceed_use = (np.abs(find) > thr_s) | time_rfi[tn]
+            if np.sum(include) > 0:
+                spec[include] = MAX * 20
+                exceed_use |= include
             
             if RESTRICT:
                 restrict = ex_sm = data_restrict[tn]
