@@ -79,9 +79,19 @@ def download_to_temp_and_move(url, save_path, resume=False):
             return None
 
 
-def get_file(url, save_path, resume=False, max_retries=6, retry_delay=10):
+def get_file(url, save_path, resume=False, max_retries=6, retry_delay=10, overwrite=False, failure_marker=None):
+    # --- Circuit Breaker Check ---
+    if failure_marker and os.path.exists(failure_marker):
+        try:
+            # If failure was less than 60 seconds ago, skip
+            if time.time() - os.path.getmtime(failure_marker) < 60:
+                # print(f"Skipping download due to recent network failure: {failure_marker}")
+                return None
+        except OSError:
+            pass
+
     # check if file already exists
-    if os.path.exists(save_path):
+    if not overwrite and os.path.exists(save_path):
         print(f"File already exists at: {save_path}")
         return save_path
     # mkdir if dirname doesn't exist
@@ -93,19 +103,42 @@ def get_file(url, save_path, resume=False, max_retries=6, retry_delay=10):
         try:
             fcntl.lockf(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
-            if os.path.exists(save_path):
+            if not overwrite and os.path.exists(save_path):
                 print(f"File already exists at: {save_path}")
                 return save_path
             else:
-                if itsme:
-                    return download_to_temp_and_move(url, save_path, resume)
+                if itsme or overwrite:
+                    res = download_to_temp_and_move(url, save_path, resume)
+                    
+                    # --- Circuit Breaker Update ---
+                    if failure_marker:
+                        try:
+                            if res:
+                                if os.path.exists(failure_marker):
+                                    os.remove(failure_marker)
+                            else:
+                                with open(failure_marker, 'w') as f:
+                                    f.write(str(time.time()))
+                        except OSError:
+                            pass
+                    return res
                 else:
+                    # Should not reach here if non-blocking lock acquired
                     print(f"Another process has tried to download '{save_path}' and failed.",
                           f"You may need to manually download it from {url} and put it at {save_path}.")
                     return None
         except BlockingIOError:  # Lock is held by another process
             itsme = False
             if attempt < max_retries - 1:
+                # If we are waiting for a lock, it means someone else is downloading.
+                # If we wanted to OVERWRITE, we might still want to do it after they finish? 
+                # Or if we just want "latest", getting their version is fine?
+                # For manifest: if someone else is updating, their update is fresh enough. We can accept it.
+                # So if locking conflict occurs, we treat it as "someone else handled it".
+                # BUT, `get_file` retries. When it gets the lock eventually, `os.path.exists` will be true.
+                # If `overwrite=True`, we would download AGAIN.
+                # This ensures we get OUR version? No, for manifest, if A updates, B waiting -> B gets lock -> B updates again.
+                # This is redundant but consistent with "overwrite=True".
                 if attempt == 0:
                     print(f"Another process is downloading '{save_path}'. Retrying in {retry_delay} seconds...")
                 time.sleep(retry_delay)
@@ -123,7 +156,7 @@ def get_file(url, save_path, resume=False, max_retries=6, retry_delay=10):
             except:
                 pass
 
-def download_and_extract_zip(url, target_dir, resume=False):
+def download_and_extract_zip(url, target_dir, resume=False, max_retries=6, retry_delay=10, failure_marker=None):
     """
     Downloads a ZIP file and extracts it to the target directory atomically.
     Ensures that the target directory is only created if extraction is successful.
@@ -132,6 +165,9 @@ def download_and_extract_zip(url, target_dir, resume=False):
         url (str): The URL of the ZIP file.
         target_dir (str): The directory where the contents should be extracted.
         resume (bool): Whether to resume download.
+        max_retries (int): Number of retries for lock acquisition.
+        retry_delay (int): Delay in seconds between retries.
+        failure_marker (str, optional): Path to circuit breaker file.
         
     Returns:
         str or None: path to target_dir if successful, None otherwise.
@@ -147,7 +183,7 @@ def download_and_extract_zip(url, target_dir, resume=False):
     
     zip_target_path = os.path.join(os.path.dirname(target_dir), f".tmp_{os.path.basename(target_dir)}.zip")
     
-    downloaded_zip = get_file(url, zip_target_path, resume=resume)
+    downloaded_zip = get_file(url, zip_target_path, resume=resume, max_retries=max_retries, retry_delay=retry_delay, failure_marker=failure_marker)
     
     if not downloaded_zip:
         return None

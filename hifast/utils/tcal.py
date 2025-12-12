@@ -38,7 +38,7 @@ def read_tcal_sav(nB, s_type='w', tcal_dir=None, mode='high', date='20190115'):
     import os
     if tcal_dir is None:
         tcal_dir= os.path.expanduser("~")+'/Tcal/'
-    fname = tcal_dir+f'{date}/median_{date}.Tcal-results.HI_{s_type}.{mode}.sav'
+    fname = os.path.join(tcal_dir, f'{date}/median_{date}.Tcal-results.HI_{s_type}.{mode}.sav')
     tc_info= readsav(fname)[f'{mode}_{s_type}'][0]
     tc_freq= tc_info['freq']
     return tc_freq, tc_info['M%02d_TC'%nB], fname
@@ -52,7 +52,7 @@ def read_tcal_fits(nB, s_type='w', tcal_dir=None, mode='high', date=''):
     import os
     if tcal_dir is None:
         tcal_dir= os.path.expanduser("~")+'/Tcal/'
-    fname = tcal_dir + f'{date}/CAL.{date}.{mode}.{s_type.upper()}.fits'
+    fname = os.path.join(tcal_dir, f'{date}/CAL.{date}.{mode}.{s_type.upper()}.fits')
     f = fits.open(fname)
     tc_freq = f[1].data['FREQ'][0]
     tc_T = f[1].data['TCAL'][0,nB-1].T
@@ -81,12 +81,11 @@ def check_and_update_tcal(tcal_dir, target_date=None):
     import json
     import fcntl
     import requests
+    import os  # Added import os
     from hifast.utils.downloader import download_and_extract_zip
 
     # 1. Offline Mode Check
     if os.environ.get('HIFAST_OFFLINE'):
-        # In offline mode, try to read cached manifest, otherwise return empty list (or list of local dirs?)
-        # Better to return empty list here to avoid blocking, caller should fallback to local glob
         return []
 
     os.makedirs(tcal_dir, exist_ok=True)
@@ -94,10 +93,10 @@ def check_and_update_tcal(tcal_dir, target_date=None):
     timestamp_file = os.path.join(tcal_dir, '.last_update_check')
     manifest_cache_file = os.path.join(tcal_dir, 'manifest_cache.json')
     lock_file_path = os.path.join(tcal_dir, '.update.lock')
-    
+    failure_marker = os.path.join(tcal_dir, '.network_failure')
     # --- Phase 1: Ensure Manifest Cache is Up-to-Date ---
     need_update = True
-    if os.path.exists(timestamp_file):
+    if os.path.exists(timestamp_file) and os.path.exists(manifest_cache_file):
         try:
             mtime = os.path.getmtime(timestamp_file)
             if time.time() - mtime < TCAL_UPDATE_INTERVAL:
@@ -106,45 +105,18 @@ def check_and_update_tcal(tcal_dir, target_date=None):
             pass
             
     if need_update:
-        # Acquire Lock for Manifest Update
-        lock_file = open(lock_file_path, 'a+') 
         try:
-            fcntl.lockf(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            
-            # Double check inside lock
-            if os.path.exists(timestamp_file):
-                try:
-                    mtime = os.path.getmtime(timestamp_file)
-                    if time.time() - mtime < TCAL_UPDATE_INTERVAL:
-                        need_update = False
-                except OSError:
-                    pass
-            
-            if need_update:
-                try:
-                    response = requests.get(TCAL_REPO_MANIFEST_URL, timeout=5)
-                    if response.status_code == 200:
-                        data = response.json()
-                        # Save to cache
-                        with open(manifest_cache_file, 'w') as f:
-                            json.dump(data, f)
-                        
-                        # Update timestamp
-                        with open(timestamp_file, 'w') as f:
-                            f.write(str(time.time()))
-                except Exception as e:
-                    print(f"Warning: Tcal manifest update failed: {e}")
-                    
-        except BlockingIOError:
-            pass # Someone else is updating manifest
+            from hifast.utils.downloader import get_file
+            # Use get_file with overwrite=True to force update
+            # This handles locking internally.
+            res = get_file(TCAL_REPO_MANIFEST_URL, manifest_cache_file, overwrite=True, failure_marker=failure_marker)
+            if res:
+                # Update timestamp
+                with open(timestamp_file, 'w') as f:
+                    f.write(str(time.time()))
+                
         except Exception as e:
-            print(f"Error during Tcal update check: {e}")
-        finally:
-            try:
-                fcntl.lockf(lock_file, fcntl.LOCK_UN)
-                lock_file.close()
-            except:
-                pass
+            print(f"Warning: Tcal manifest update failed: {e}")
 
     # --- Phase 2: Load Manifest ---
     manifest_dates = []
@@ -159,12 +131,45 @@ def check_and_update_tcal(tcal_dir, target_date=None):
     # --- Phase 3: Download Target Date ---
     if target_date and target_date in manifest_dates:
         target_path = os.path.join(tcal_dir, target_date)
+        
         if not os.path.exists(target_path):
-            file_url = f"{TCAL_REPO_BASE_URL}/{target_date}/{target_date}.zip"
-            # get_file handles its own locking for download
-            print(f"Downloading Tcal data for {target_date}...")
-            download_and_extract_zip(file_url, target_path)
+            
+            # Check for breaker before attempting lock (optimization)
+            if os.path.exists(failure_marker):
+                 try:
+                     if time.time() - os.path.getmtime(failure_marker) < 60:
+                          return manifest_dates
+                 except: pass
 
+            # If target file is missing, we MUST ensure it gets downloaded.
+            # We try to get an exclusive lock.
+            lock_file = open(lock_file_path, 'a+') 
+            try:
+                # First try non-blocking (fast path if we are the only one)
+                try:
+                    fcntl.lockf(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    # Someone else is holding the lock.
+                    # Since we NEED this file and it's missing, we must WAIT.
+                    print(f"Waiting for another process to download Tcal data for {target_date}...")
+                    fcntl.lockf(lock_file, fcntl.LOCK_EX) # Blocking wait
+                
+                # Once we have the lock, check existance again (maybe previous owner downloaded it)
+                if not os.path.exists(target_path):
+                    file_url = f"{TCAL_REPO_BASE_URL}/{target_date}/{target_date}.zip"
+                    print(f"Downloading Tcal data for {target_date}...")
+                    # Use large timeout (60 retries * 10s = 600s = 10 mins) for slow networks
+                    download_and_extract_zip(file_url, target_path, max_retries=60, retry_delay=10, failure_marker=failure_marker)
+            
+            except Exception as e:
+                print(f"Error updating tcal data: {e}")
+            finally:
+                 try:
+                    fcntl.lockf(lock_file, fcntl.LOCK_UN)
+                    lock_file.close()
+                 except:
+                    pass
+                 
     return manifest_dates
             
 def read_tcal(nB, s_type='w', tcal_dir=None, mode='high', date='auto', mjd=None):

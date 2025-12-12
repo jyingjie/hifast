@@ -52,6 +52,7 @@ setuptools.setup(
                       'configargparse',
                       'tqdm',
                       'threadpoolctl',
+                      'requests',
                      ],
     classifiers=[
         "Programming Language :: Python :: 3",
