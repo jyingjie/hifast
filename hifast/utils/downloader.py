@@ -1,6 +1,6 @@
 
 
-__all__ = ['download_to_temp_and_move', 'get_file']
+__all__ = ['download_to_temp_and_move', 'get_file', 'download_and_extract_zip']
 
 
 import os
@@ -122,3 +122,64 @@ def get_file(url, save_path, resume=False, max_retries=6, retry_delay=10):
                 os.remove(lock_file_path)
             except:
                 pass
+
+def download_and_extract_zip(url, target_dir, resume=False):
+    """
+    Downloads a ZIP file and extracts it to the target directory atomically.
+    Ensures that the target directory is only created if extraction is successful.
+    
+    Args:
+        url (str): The URL of the ZIP file.
+        target_dir (str): The directory where the contents should be extracted.
+        resume (bool): Whether to resume download.
+        
+    Returns:
+        str or None: path to target_dir if successful, None otherwise.
+    """
+    if os.path.exists(target_dir):
+        return target_dir
+
+    # 1. Download ZIP to a temporary location
+    # Use get_file to handle locking and downloading safely
+    # We append .zip to the directory name to create a temp zip path
+    # But get_file expects a target path.
+    # We'll use a temp directory for the zip file
+    
+    zip_target_path = os.path.join(os.path.dirname(target_dir), f".tmp_{os.path.basename(target_dir)}.zip")
+    
+    downloaded_zip = get_file(url, zip_target_path, resume=resume)
+    
+    if not downloaded_zip:
+        return None
+        
+    # 2. Extract to a temp dir
+    temp_extract_dir = os.path.join(os.path.dirname(target_dir), f".tmp_extract_{os.path.basename(target_dir)}")
+    if os.path.exists(temp_extract_dir):
+         shutil.rmtree(temp_extract_dir)
+         
+    try:
+        import zipfile
+        with zipfile.ZipFile(downloaded_zip, 'r') as zip_ref:
+            zip_ref.extractall(temp_extract_dir)
+            
+        # 3. Atomic Move
+        # If target_dir appeared in the meantime (race condition), we should check again
+        if os.path.exists(target_dir):
+             shutil.rmtree(temp_extract_dir)
+             return target_dir
+             
+        os.rename(temp_extract_dir, target_dir)
+        
+        # Cleanup zip file
+        try:
+            os.remove(downloaded_zip)
+        except OSError:
+            pass
+            
+        return target_dir
+        
+    except Exception as e:
+        print(f"Error extracting zip: {e}")
+        if os.path.exists(temp_extract_dir):
+            shutil.rmtree(temp_extract_dir)
+        return None
