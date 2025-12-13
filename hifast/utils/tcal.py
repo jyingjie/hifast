@@ -177,7 +177,7 @@ def check_and_update_tcal(tcal_dir, target_date=None):
                     pass
                  
     return manifest_dates
-            
+
 def read_tcal(nB, s_type='w', tcal_dir=None, mode='high', date='auto', mjd=None):
     """
     nB: int
@@ -235,3 +235,98 @@ def read_tcal(nB, s_type='w', tcal_dir=None, mode='high', date='auto', mjd=None)
         return read_tcal_sav(nB, s_type, tcal_dir, mode, date='20190115')
     else:
         return read_tcal_fits(nB, s_type, tcal_dir, mode, date=date)
+
+def list_tcal_dates():
+    """
+    List available Tcal dates with robust fallback:
+    1. Online Manifest (Force Update)
+    2. Local Cache (if online fails)
+    3. Local Directories (if cache fails)
+    """
+    import sys
+    import glob
+    import json # Added import json
+    tcal_dir = _get_default_tcal_dir()
+    
+    print(f"Checking Tcal dates in: {tcal_dir}", file=sys.stderr)
+    
+    dates = []
+    source = "online"
+    
+    # 1. Try Online/Cache via check_and_update_tcal
+    # We cheat a bit: passing a non-existent date 'LIST' forces it to load manifest
+    # but skip download. However, check_and_update_tcal doesn't force update manifest
+    # unless TTL expired or offline.
+    # So we manually force update the manifest first.
+    
+    manifest_url, _ = conf.get_tcal_urls()
+    manifest_cache_file = os.path.join(tcal_dir, 'manifest_cache.json')
+    failure_marker = os.path.join(tcal_dir, '.network_failure')
+    
+    try:
+        from .downloader import get_file
+        # Force update manifest
+        if not os.environ.get('HIFAST_OFFLINE'):
+             get_file(manifest_url, manifest_cache_file, overwrite=True, failure_marker=failure_marker)
+             
+        # Load Cache
+        if os.path.exists(manifest_cache_file):
+            with open(manifest_cache_file, 'r') as f:
+                data = json.load(f)
+                dates = data.get('date', [])
+                dates.sort()
+        else:
+            raise FileNotFoundError("Manifest cache not found")
+
+    except Exception as e:
+        print(f"Warning: Failed to fetch/read manifest ({e}).", file=sys.stderr)
+        source = "local_scan"
+        
+        # 3. Fallback: Scan Directories
+        print("Warning: Falling back to local directory scan.", file=sys.stderr)
+        if os.path.exists(tcal_dir):
+            # Find directories that look like YYYYMMDD
+            dirs = [d for d in os.listdir(tcal_dir) if os.path.isdir(os.path.join(tcal_dir, d)) and d.isdigit() and len(d) == 8]
+            dates = sorted(dirs)
+    
+    if source == "local_scan":
+        print(f"Source: Local Scan (Potentially incomplete)", file=sys.stderr)
+    else:
+        print(f"Source: Manifest ({manifest_url})", file=sys.stderr)
+        
+    for d in dates:
+        print(d)
+
+def download_all_tcal():
+    """Downloads all dates available in the manifest."""
+    tcal_dir = _get_default_tcal_dir()
+    dates = check_and_update_tcal(tcal_dir) # Get manifest
+    
+    print(f"Found {len(dates)} dates. Starting batch update...")
+    for date in dates:
+        print(f"Checking/Downloading {date}...")
+        check_and_update_tcal(tcal_dir, target_date=date)
+    print("All dates processed.")
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Manage Tcal Data")
+    subparsers = parser.add_subparsers(dest='command')
+    
+    # list command
+    subparsers.add_parser('list', help='List available Tcal dates (Online > Cache > Local)')
+    
+    # update-all command
+    subparsers.add_parser('update-all', help='Download/Update ALL dates from manifest')
+    
+    args = parser.parse_args()
+    
+    if args.command == 'list':
+        list_tcal_dates()
+    elif args.command == 'update-all':
+        download_all_tcal()
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()
