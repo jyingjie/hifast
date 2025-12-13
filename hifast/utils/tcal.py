@@ -28,6 +28,7 @@ Key Features & Logic:
    - In offline mode, logic degrades gracefully to use ONLY locally available files.
 """
 import numpy as np
+import os
 
 def read_tcal_sav(nB, s_type='w', tcal_dir=None, mode='high', date='20190115'):
     """
@@ -37,7 +38,7 @@ def read_tcal_sav(nB, s_type='w', tcal_dir=None, mode='high', date='20190115'):
     from scipy.io.idl import readsav
     import os
     if tcal_dir is None:
-        tcal_dir= os.path.expanduser("~")+'/Tcal/'
+        tcal_dir = _get_default_tcal_dir()
     fname = os.path.join(tcal_dir, f'{date}/median_{date}.Tcal-results.HI_{s_type}.{mode}.sav')
     tc_info= readsav(fname)[f'{mode}_{s_type}'][0]
     tc_freq= tc_info['freq']
@@ -51,7 +52,7 @@ def read_tcal_fits(nB, s_type='w', tcal_dir=None, mode='high', date=''):
     from astropy.io import fits
     import os
     if tcal_dir is None:
-        tcal_dir= os.path.expanduser("~")+'/Tcal/'
+        tcal_dir = _get_default_tcal_dir()
     fname = os.path.join(tcal_dir, f'{date}/CAL.{date}.{mode}.{s_type.upper()}.fits')
     f = fits.open(fname)
     tc_freq = f[1].data['FREQ'][0]
@@ -61,9 +62,14 @@ def read_tcal_fits(nB, s_type='w', tcal_dir=None, mode='high', date=''):
 
 
 
-# TODO: Replace with actual repository URL
-TCAL_REPO_MANIFEST_URL = "https://raw.githubusercontent.com/jyingjie/hifast-tcal-data/main/manifest.json"
-TCAL_REPO_BASE_URL = "https://github.com/jyingjie/hifast-tcal-data/releases/download"
+from .config import conf
+
+def _get_default_tcal_dir():
+    raw_dir = conf.get('tcal', 'tcal_dir', '~/Tcal/')
+    return os.path.expanduser(raw_dir)
+
+# URLs resolved via config system (Env > Config File > Default)
+TCAL_REPO_MANIFEST_URL, TCAL_REPO_BASE_URL = conf.get_tcal_urls()
 TCAL_UPDATE_INTERVAL = 86400  # Check once per 24 hours
 
 def check_and_update_tcal(tcal_dir, target_date=None):
@@ -82,7 +88,7 @@ def check_and_update_tcal(tcal_dir, target_date=None):
     import fcntl
     import requests
     import os  # Added import os
-    from hifast.utils.downloader import download_and_extract_zip
+    from .downloader import download_and_extract_zip
 
     # 1. Offline Mode Check
     if os.environ.get('HIFAST_OFFLINE'):
@@ -106,7 +112,7 @@ def check_and_update_tcal(tcal_dir, target_date=None):
             
     if need_update:
         try:
-            from hifast.utils.downloader import get_file
+            from .downloader import get_file
             # Use get_file with overwrite=True to force update
             # This handles locking internally.
             res = get_file(TCAL_REPO_MANIFEST_URL, manifest_cache_file, overwrite=True, failure_marker=failure_marker)
@@ -190,7 +196,7 @@ def read_tcal(nB, s_type='w', tcal_dir=None, mode='high', date='auto', mjd=None)
     from glob import glob
     import os
     if tcal_dir is None:
-        tcal_dir= os.path.expanduser("~")+'/Tcal/'
+        tcal_dir = _get_default_tcal_dir()
     
     
     # 1. Update manifest and get list of remote dates

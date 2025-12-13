@@ -73,6 +73,7 @@ def test_tcal_concurrency():
         print("FAIL: Some processes failed.")
 
     # Cleanup (Optional, keep if user wants to inspect)
+    return
     if os.path.exists(test_tcal_dir):
          shutil.rmtree(test_tcal_dir)
          print(f"Cleanup: Removed {test_tcal_dir}")
