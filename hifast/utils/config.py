@@ -52,6 +52,12 @@ _TCAL_R2_BASE = "https://pub-b2347aee569d45789e90c47ad3177e0e.r2.dev/tcal-data"
 # DOCUMENTATION SOURCE OF TRUTH.
 # Add new module parameters here to expose them to users via `hifast.utils.config list`.
 _KNOWN_OPTIONS = {
+    'general': {
+        'offline': {
+            'default': False,
+            'help': "Enable offline mode. Disable all network requests. (Env: HIFAST_GENERAL_OFFLINE)"
+        }
+    },
     'tcal': {
         'source': {
             'default': 'r2', 
@@ -97,6 +103,8 @@ class ConfigManager:
         # Ensure default sections exist
         if 'tcal' not in self._config:
             self._config['tcal'] = {}
+        if 'general' not in self._config:
+            self._config['general'] = {}
 
     def save(self):
         """Saves current configuration to file."""
@@ -114,6 +122,7 @@ class ConfigManager:
         2. Config File
         3. Default
         """
+
         env_var = f"HIFAST_{section.upper()}_{option.upper()}"
         if env_var in os.environ:
             return os.environ[env_var]
@@ -196,7 +205,8 @@ def main():
     Set and retrieve configuration values for HiFAST modules (e.g., Tcal).
     
     Priority Order:
-      1. Environment Variables (HIFAST_SECTION_OPTION)
+      1. Environment Variables:
+         - Standard: HIFAST_SECTION_OPTION (e.g., HIFAST_TCAL_SOURCE)
       2. Config File (~/.config/hifast/config.ini)
       3. Global Defaults
     """)
@@ -267,18 +277,20 @@ def main():
         import textwrap
         col_sec = 10
         col_opt = 15
-        col_val = 40
+        col_env = 30
+        col_val = 30
         col_desc = 35 # Allow simple wrap
         
         # Header
-        print(f"{'SECTION':<{col_sec}} {'OPTION':<{col_opt}} {'VALUE':<{col_val}} {'DESCRIPTION'}")
-        print("-" * 100)
+        print(f"{'SECTION':<{col_sec}} {'OPTION':<{col_opt}} {'ENV VAR':<{col_env}} {'VALUE':<{col_val}} {'DESCRIPTION'}")
+        print("-" * 130)
         
         # 1. Print Known Options
         for section, options in _KNOWN_OPTIONS.items():
             for opt, meta in options.items():
                 val = str(conf.get(section, opt, meta.get('default')))
                 desc = meta.get('help', '')
+                env_var = f"HIFAST_{section.upper()}_{opt.upper()}"
                 
                 # Truncate value if too long (rare config)
                 if len(val) > col_val - 2:
@@ -289,11 +301,11 @@ def main():
                 
                 # First line
                 d_first = wrapped_desc[0] if wrapped_desc else ""
-                print(f"{section:<{col_sec}} {opt:<{col_opt}} {val:<{col_val}} {d_first}")
+                print(f"{section:<{col_sec}} {opt:<{col_opt}} {env_var:<{col_env}} {val:<{col_val}} {d_first}")
                 
                 # Subsequent lines
                 for line in wrapped_desc[1:]:
-                     print(f"{'':<{col_sec}} {'':<{col_opt}} {'':<{col_val}} {line}")
+                     print(f"{'':<{col_sec}} {'':<{col_opt}} {'':<{col_env}} {'':<{col_val}} {line}")
     else:
         parser.print_help()
 

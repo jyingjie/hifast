@@ -91,7 +91,7 @@ def check_and_update_tcal(tcal_dir, target_date=None):
     from .downloader import download_and_extract_zip
 
     # 1. Offline Mode Check
-    if os.environ.get('HIFAST_OFFLINE'):
+    if conf.get_boolean('general', 'offline'):
         return []
 
     os.makedirs(tcal_dir, exist_ok=True)
@@ -265,9 +265,15 @@ def list_tcal_dates():
     
     try:
         from .downloader import get_file
-        # Force update manifest
-        if not os.environ.get('HIFAST_OFFLINE'):
-             get_file(manifest_url, manifest_cache_file, overwrite=True, failure_marker=failure_marker)
+        if not conf.get_boolean('general', 'offline'):
+             res = get_file(manifest_url, manifest_cache_file, overwrite=True, failure_marker=failure_marker)
+             if res:
+                 source = f"Manifest ({manifest_url})"
+             else:
+                 source = "Local Cache (Network Failed, using last known good)"
+        else:
+             print("Warning: Offline mode enabled. List may be incomplete (network unavailable).", file=sys.stderr)
+             source = "Local Cache (Offline Mode)"
              
         # Load Cache
         if os.path.exists(manifest_cache_file):
@@ -292,7 +298,7 @@ def list_tcal_dates():
     if source == "local_scan":
         print(f"Source: Local Scan (Potentially incomplete)", file=sys.stderr)
     else:
-        print(f"Source: Manifest ({manifest_url})", file=sys.stderr)
+        print(f"Source: {source}", file=sys.stderr)
         
     for d in dates:
         print(d)

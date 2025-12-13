@@ -68,8 +68,8 @@ def test_tcal_auto_download():
         print(f"  FAILED: {e}")
 
     # Case 3: Offline Mode Simulation
-    print(f"\n[Case 3] Offline Mode (HIFAST_OFFLINE=1)")
-    os.environ['HIFAST_OFFLINE'] = '1'
+    print(f"\n[Case 3] Offline Mode (HIFAST_GENERAL_OFFLINE=1)")
+    os.environ['HIFAST_GENERAL_OFFLINE'] = '1'
     try:
         # Try to read a date that DOES NOT exist
         # 20200531 is in manifest but not downloaded yet
@@ -82,12 +82,12 @@ def test_tcal_auto_download():
     except Exception as e:
         print(f"  Unexpected error: {e}")
     
-    del os.environ['HIFAST_OFFLINE']
+    del os.environ['HIFAST_GENERAL_OFFLINE']
 
     # Case 4: Offline Mode WITH Data
     # We know 20190115 was downloaded in Case 2.
-    print(f"\n[Case 4] Offline Mode (HIFAST_OFFLINE=1) WITH Data present")
-    os.environ['HIFAST_OFFLINE'] = '1'
+    print(f"\n[Case 4] Offline Mode (HIFAST_GENERAL_OFFLINE=1) WITH Data present")
+    os.environ['HIFAST_GENERAL_OFFLINE'] = '1'
     try:
         # A. Explicit read of existing file
         freq, tc, fname = read_tcal(nB=1, tcal_dir=test_tcal_dir, date='20190115')
@@ -107,7 +107,7 @@ def test_tcal_auto_download():
         import traceback
         traceback.print_exc()
 
-    del os.environ['HIFAST_OFFLINE']
+    del os.environ['HIFAST_GENERAL_OFFLINE']
     
     # Case 5: Online Mode with Non-Existent Directory
     # Should auto-create directory and succeed
@@ -134,7 +134,7 @@ def test_tcal_auto_download():
     # Case 6: Offline Mode with Non-Existent Directory
     # Should FAIL with ValueError (Data not found), NOT path error
     print(f"\n[Case 6] Offline Mode with NEW non-existent directory")
-    os.environ['HIFAST_OFFLINE'] = '1'
+    os.environ['HIFAST_GENERAL_OFFLINE'] = '1'
     missing_tcal_dir = os.path.expanduser("~/Tcal_missing_offline")
     if os.path.exists(missing_tcal_dir):
         shutil.rmtree(missing_tcal_dir)
@@ -151,7 +151,7 @@ def test_tcal_auto_download():
         import traceback
         traceback.print_exc()
     
-    del os.environ['HIFAST_OFFLINE']
+    del os.environ['HIFAST_GENERAL_OFFLINE']
     print("\nTests Completed.")
 
 if __name__ == "__main__":
