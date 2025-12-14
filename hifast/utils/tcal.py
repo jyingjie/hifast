@@ -314,7 +314,7 @@ def download_all_tcal():
         check_and_update_tcal(tcal_dir, target_date=date)
     print("All dates processed.")
 
-def main():
+def get_parser():
     import argparse
     parser = argparse.ArgumentParser(description="Manage Tcal Data")
     subparsers = parser.add_subparsers(dest='command')
@@ -324,7 +324,10 @@ def main():
     
     # update-all command
     subparsers.add_parser('update-all', help='Download/Update ALL dates from manifest')
-    
+    return parser
+
+def main():
+    parser = get_parser()
     args = parser.parse_args()
     
     if args.command == 'list':

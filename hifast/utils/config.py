@@ -192,9 +192,10 @@ class ConfigManager:
         return (manifest_url or default_manifest), (base_url or default_base)
 
 # Global instance
+# Global instance
 conf = ConfigManager()
 
-def main():
+def get_parser():
     import argparse
     import textwrap
     
@@ -237,13 +238,17 @@ def main():
     set_parser.add_argument('value', help='Value to set')
     
     # get command
-    get_parser = subparsers.add_parser('get', help='Get a configuration value')
-    get_parser.add_argument('section', help='Config section')
-    get_parser.add_argument('option', help='Config option')
+    get_parser_cmd = subparsers.add_parser('get', help='Get a configuration value')
+    get_parser_cmd.add_argument('section', help='Config section')
+    get_parser_cmd.add_argument('option', help='Config option')
 
     # list command
     subparsers.add_parser('list', help='List all available options and current values')
+    
+    return parser
 
+def main():
+    parser = get_parser()
     args = parser.parse_args()
     
     if args.command == 'set':
