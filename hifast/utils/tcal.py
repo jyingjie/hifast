@@ -7,6 +7,7 @@ def read_tcal_sav(nB, s_type='w', tcal_dir=None, mode='high', date='20190115'):
       beam number
     """
     from scipy.io.idl import readsav
+    import os
     if tcal_dir is None:
         tcal_dir= os.path.expanduser("~")+'/Tcal/'
     fname = tcal_dir+f'{date}/median_{date}.Tcal-results.HI_{s_type}.{mode}.sav'

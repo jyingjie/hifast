@@ -66,6 +66,8 @@ group.add_argument('--nr_mean_times', type=float, default=100,
 group.add_argument('--nr_diff_times', type=float, default=30,
                    help="second threhold, sharp edge on time axis. diff above this times of median will be recognized; \
                    ")
+group.add_argument('--nr_rfi_width_lim',type=int, nargs=2, default= [0, 2],
+                   help='rfi channel width limit')
 group.add_argument('--nr_mask_rms_times',type = float, default=0,
                    help='if == 0, mask whole channel; if > 0, mask RMS above ~ times of RMS. ')
 
@@ -79,6 +81,15 @@ group.add_argument('--pr_times', type=float, default=6,
                    help='')
 group.add_argument('--pr_times_s', type=float, default=1,
                    help='')
+
+####################### 19Beam RFI #######################################
+group = parser.add_argument_group(f'*19Beam RFI\n{sep_line}')
+group.add_argument('--b19', '--beam19_rfi', type=bool_fun, choices=[True, False], default='False',
+                   help='Enable or disable 19-beam RFI detection')
+group.add_argument('--b19_times', type=float, default=3,
+                   help='Threshold multiplier for 19-beam RFI detection')
+group.add_argument('--b19_min_percent', type=float, default=0.23,
+                   help='Minimum percent of beams that must exceed the threshold to classify as RFI')
 
 ###################### Time domain uncontinuous RFI #########################
 parser.add_argument('--rms_frange', type=float, nargs=2,
@@ -217,7 +228,7 @@ class IO(BaseIO):
                 return None
         elif args.reg_from == 'shared':
             from glob import glob
-            fpath_regs = glob(os.path.dirname + '*.reg')
+            fpath_regs = glob(os.path.dirname(args.fpath) + '/*.reg')
             length = len(fpath_regs)
             if length == 1:
                 fpath_reg = fpath_regs[0]
@@ -279,7 +290,9 @@ class IO(BaseIO):
             fit_kwargs[key[3:]] = getattr(args, key)
         for key in keys[-2:]:
             fit_kwargs[key] = getattr(args, key)
-        return mask_rfi_p(self.s2p_mask, **fit_kwargs)
+        p_rfi = mask_rfi_p(self.s2p_mask, **fit_kwargs)
+        p_rfi[:,self.protect_use] = False
+        return p_rfi
 
     def get_nr(self):
         """
@@ -292,7 +305,8 @@ class IO(BaseIO):
         narr_args = {}
         keys = ['nr_mean_times',
                 'nr_diff_times',
-                'nr_mask_rms_times',]
+                'nr_mask_rms_times',
+                'nr_rfi_width_lim']
         for key in keys:
             narr_args[key[3:]] = getattr(args, key)
         narr_args['frange'] = None
@@ -326,7 +340,7 @@ class IO(BaseIO):
         return mask_time_rfi(T, self.freq, rtype = 'long-freq',plot = False,
                               **longf_args)
 
-    def get_sf(self,T):
+    def get_sf(self,T,is_rfi = None):
         """
         Time domain uncontinuous RFI: short freq time RFI
         """
@@ -346,6 +360,12 @@ class IO(BaseIO):
         shortf_args['rfi_width_lim'] = args.sf_rfi_last
         shortf_args['rms_frange'] = args.rms_frange
         shortf_args['thr_type'] = args.lsn_thr_type
+
+        if is_rfi is not None and args.all_beams:
+            whole_rfi = np.all(is_rfi, axis = 1)
+            is_rfi[whole_rfi] = False
+            is_timerfi = np.any(is_rfi, axis = 1)
+            shortf_args['is_timerfi'] = is_timerfi
 
         return mask_time_rfi(T, self.freq, rtype = 'short-freq',plot = False,
                                **shortf_args)
@@ -372,6 +392,7 @@ class IO(BaseIO):
             t_rfi |= self.get_sf(Tt,is_rfi)
 
         return t_rfi
+        
 
     def get_pdr(self):
         """
@@ -409,7 +430,7 @@ class IO(BaseIO):
                 is_rfi = (spec > RMS * rfi_thr) & (~self.protect_use)
                 try:
                     pd_rfi[tn,:],_ = find_RFI(spec,self.freq,is_rfi,RMS = RMS,
-                                     plot = False,**find_args)
+                                        plot = False,**find_args)
                 except ValueError:
                     pd_rfi[tn,:] = True
                     print(f"tn={tn} has a ValueError !")
@@ -465,11 +486,15 @@ class IO(BaseIO):
         names.sort()
         return  names
     
-    def _write_mean(self, names):
+    def iter_19rfi(self, names):
         args = self.args
-
+        b19 = args.b19
+        
         from .ripple.mark_timeRFI import load_hdf5_spec
         data_mean = load_hdf5_spec(names[0])
+        if b19: 
+            print("finding b19")
+            num_19rfi = self.get_1beam_rfi(data_mean)
         
         import re
         print(re.findall(r'-M[0-1][0-9]', os.path.basename(names[0]))[0])
@@ -479,10 +504,44 @@ class IO(BaseIO):
             print(re.findall(r'-M[0-1][0-9]', os.path.basename(name))[0])
             sys.stdout.flush()
             data = load_hdf5_spec(name)
-            data_mean += data
+            if b19: 
+                num_19rfi_ = self.get_1beam_rfi(data)
+                num_19rfi += num_19rfi_
+            else:
+                data_mean += data
+
             k += 1
-        data_mean /= k
+        
+        if b19: 
+            num_19rfi = num_19rfi.astype(float)
+            num_19rfi /= k
+
+            data_mean = np.stack((num_19rfi, num_19rfi), axis=-1)
+        else:
+            data_mean /= k
+            
         return data_mean
+    
+        
+    def get_1beam_rfi(self, data):
+        args = self.args
+
+        rfi_kwargs = {}
+        keys = ['b19_times',
+                'ext_add',
+                'ext_frac',
+                'rms_frange',]
+        for key in keys[:1]:
+            rfi_kwargs[key[4:]] = getattr(args, key)
+        for key in keys[1:]:
+            rfi_kwargs[key] = getattr(args, key)
+            
+        rfi_kwargs['s_sigma'] = args.s_sigma_freq
+        
+        from .ripple.mark_timeRFI import mask_thr_rfi
+        is_rfi = mask_thr_rfi(data, self.freq, **rfi_kwargs).astype(int)
+        
+        return is_rfi
     
     
     def gen_s2p_out(self,):
@@ -491,7 +550,7 @@ class IO(BaseIO):
         if args.all_beams:
             names = self._glob_names()
             print(f"Creating 19 beams rfi file  ...")
-            self.s2p_out = self._write_mean(names)
+            self.s2p_out = self.iter_19rfi(names)
         else:
             raise TypeError("all_beams = True!")
             
@@ -501,10 +560,12 @@ class IO(BaseIO):
 
         print("############ find RFI for all beams #############")
         self.s2p = self.s2p_out[:]
-        self.s2p_mean = np.mean(self.s2p,axis = 2)
+        self.s2p_mean = np.mean(self.s2p,axis = 2) 
         
-        is_rfi = np.full(self.s2p.shape[:2], False, dtype=bool)
-        
+        is_rfi = np.isnan(self.s2p_mean) | np.isinf(self.s2p_mean)
+        self.s2p[is_rfi] = np.nan
+        self.s2p_mean[is_rfi] = np.nan
+
         # manual regions
         is_rfi_tmp = self.get_from_regions()
         if is_rfi_tmp is not None:
@@ -560,7 +621,7 @@ class IO(BaseIO):
         args = self.args
         is_rfi = self.gen_is_rfi()
         if args.replace_rfi:
-            self.s2p_out[is_rfi] = np.nan
+            self.s2p_out[is_rfi>0] = np.nan
         self.gen_dict_out(is_rfi = is_rfi)
         if not args.all_beams:
             # replace outfield as h5py.ExternalLink
