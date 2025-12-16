@@ -5,7 +5,6 @@ __all__ = ['IS_Interactive', 'h5py_write', 'write_header', 'binned_statistic_e',
 
 
 import numpy as np
-from matplotlib import pyplot as plt
 from scipy import interpolate as interp
 from scipy import ndimage
 import h5py
@@ -23,6 +22,10 @@ import warnings
 
 import __main__
 IS_Interactive = not hasattr(__main__, '__file__')
+if not IS_Interactive:
+    import matplotlib
+    matplotlib.use('Agg')
+from matplotlib import pyplot as plt
 
 
 import h5py

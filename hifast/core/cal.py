@@ -17,10 +17,11 @@ import scipy.interpolate as interp
 import h5py
 from astropy.io import fits
 
-from matplotlib import pyplot as plt
 import __main__
 if hasattr(__main__, '__file__'):
-    plt.switch_backend('agg')
+    import matplotlib
+    matplotlib.use('Agg')
+from matplotlib import pyplot as plt
 
 
 from ..utils.tcal import read_tcal
