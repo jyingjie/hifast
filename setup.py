@@ -59,17 +59,7 @@ strict_requirements = [
     'pyerfa~=2.0.0',
     'Pillow~=8.4.0',
     # Transitive dependencies pinned for stability
-    'certifi~=2021.10.8',
-    'chardet~=4.0.0',
-    'cycler~=0.11.0',
-    'et_xmlfile~=1.0.1',
-    'idna~=2.10',
-    'kiwisolver~=1.3.2',
-    'pyparsing~=3.0.6',
-    'python-dateutil~=2.8.2',
-    'pytz~=2021.3',
-    'six~=1.16.0',
-    'urllib3~=1.26.7',
+    # Removed non-essential deps (certifi, chardet, idna, etc.) to let top-level libs manage them
 ]
 
 loose_requirements = [
