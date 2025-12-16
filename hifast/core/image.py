@@ -426,6 +426,14 @@ class Imaging():
         # Calculate shape for reshaping pixel arrays into cubes
         _shape = self.ra_grid.shape + self.pixel_data.shape[-1:]
 
+        # Apply beam correction to pixel_data before reshaping
+        # self.data_cube is a view, so modifying it modifies self.pixel_data
+        self.data_cube = self.pixel_data.reshape(_shape).transpose(2,0,1)
+        # Apply beam correction (modifies self.header and self.data_cube)
+        # Must be done before creating _header (header copy) and saving other cubes
+        # Note: Only pixel_data needs correction; pixel_finite_nums_chan and pixel_weis_sum_chan do not.
+        self.apply_beam_correction()
+
         _header = copy.deepcopy(self.header)
         _header['BUNIT'] = ''
 
@@ -440,9 +448,6 @@ class Imaging():
         del self.pixel_finite_nums_chan  # Free underlying memory
         gc.collect()  # Force garbage collection to ensure memory is freed
 
-        # Apply beam correction to pixel_data before reshaping
-        self.data_cube = self.pixel_data.reshape(_shape).transpose(2,0,1)
-        self.apply_beam_correction()
 
         # Save main data cube and delete pixel_data immediately
         hdu = fits.PrimaryHDU(self.data_cube.astype('float32'), header=self.header)

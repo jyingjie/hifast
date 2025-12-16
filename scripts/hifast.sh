@@ -11,6 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MAX_PROCS=$(nproc)
 DEFAULT_NPROC=1
 VERBOSE=0
+export HIFAST_MAKE_OUTPUT_CLEAR=${HIFAST_MAKE_OUTPUT_CLEAR:-1}
 
 # Error handling function
 error() {
