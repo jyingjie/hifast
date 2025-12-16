@@ -99,8 +99,14 @@ def check_and_update_tcal(tcal_dir, target_date=None):
     timestamp_file = os.path.join(tcal_dir, '.last_update_check')
     manifest_cache_file = os.path.join(tcal_dir, 'manifest_cache.json')
     lock_file_path = os.path.join(tcal_dir, '.update.lock')
+    # Phase 1: Separate lock for manifest to avoid race conditions
+    manifest_lock_path = os.path.join(tcal_dir, '.manifest.lock') 
     failure_marker = os.path.join(tcal_dir, '.network_failure')
+    
     # --- Phase 1: Ensure Manifest Cache is Up-to-Date ---
+    # Double-checked locking to prevent redundant downloads
+    
+    # 1. Optimistic Check
     need_update = True
     if os.path.exists(timestamp_file) and os.path.exists(manifest_cache_file):
         try:
@@ -109,20 +115,39 @@ def check_and_update_tcal(tcal_dir, target_date=None):
                 need_update = False
         except OSError:
             pass
-            
+
     if need_update:
+        # 2. Acquire Lock and Re-check
+        # We use a blocking lock here. Usage of 'a+' matches other lock implementations in this module.
+        m_lock = open(manifest_lock_path, 'a+')
         try:
-            from .downloader import get_file
-            # Use get_file with overwrite=True to force update
-            # This handles locking internally.
-            res = get_file(TCAL_REPO_MANIFEST_URL, manifest_cache_file, overwrite=True, failure_marker=failure_marker)
-            if res:
-                # Update timestamp
-                with open(timestamp_file, 'w') as f:
-                    f.write(str(time.time()))
-                
-        except Exception as e:
-            print(f"Warning: Tcal manifest update failed: {e}")
+            fcntl.lockf(m_lock, fcntl.LOCK_EX) # Blocking
+            
+            # Re-check timestamp (someone else might have updated it while we waited)
+            already_updated = False
+            if os.path.exists(timestamp_file) and os.path.exists(manifest_cache_file):
+                try:
+                    mtime = os.path.getmtime(timestamp_file)
+                    if time.time() - mtime < TCAL_UPDATE_INTERVAL:
+                        already_updated = True
+                except OSError:
+                    pass
+            
+            if not already_updated:
+                try:
+                    from .downloader import get_file
+                    # Use get_file with overwrite=True to force update
+                    res = get_file(TCAL_REPO_MANIFEST_URL, manifest_cache_file, overwrite=True, failure_marker=failure_marker)
+                    if res:
+                        # Update timestamp
+                        with open(timestamp_file, 'w') as f:
+                            f.write(str(time.time()))
+                except Exception as e:
+                    print(f"Warning: Tcal manifest update failed: {e}")
+            
+        finally:
+            fcntl.lockf(m_lock, fcntl.LOCK_UN)
+            m_lock.close()
 
     # --- Phase 2: Load Manifest ---
     manifest_dates = []
