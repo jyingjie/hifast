@@ -208,11 +208,17 @@ if __name__ == '__main__':
 
     from tqdm import tqdm
     if not single:
-        import pandas as pd
+        from itertools import groupby
+        
         #keys = list(map(lambda x: re.sub('-M[0-1][0-9]','-M00', os.path.basename(x).split('-specs_T')[0]), fnames))
         keys = list(map(lambda x: re.sub('-M[0-1][0-9]','-M00', os.path.basename(x)), fnames))
-        files = pd.DataFrame({'key':keys, 'fname':fnames})
-        for key, _files in tqdm(files.groupby('key')):
+        
+        # Sort by keys for groupby
+        combined = sorted(zip(keys, fnames), key=lambda x: x[0])
+        
+        for key, group in tqdm(groupby(combined, lambda x: x[0])):
+            # group is iterator of (key, fname)
+            _files_fname = [x[1] for x in group]
             fpath_out = f'{outdir}/{key}.19.pdf'
             ret = _check_fout(args, fpath_out)
             if ret == "exit": continue
@@ -221,7 +227,7 @@ if __name__ == '__main__':
             ncols=5
             fig, axs = plt.subplots(nrows, ncols, figsize=(160/3,90/3), sharex=True, sharey=True)
             axs = axs.flatten()
-            for i, (fname, ax) in enumerate(zip(_files['fname'], axs[:19])):
+            for i, (fname, ax) in enumerate(zip(_files_fname, axs[:19])):
                 im = plot(fname, ax, polar=args.polar, ytick1=args.ytick1, ytick2=args.ytick2, vmin=args.vmin, vmax=args.vmax,
                           x_plot_range=xrange, vlines=vlines, colorbar=False,replace_rfi = args.replace_rfi,
                           **imshow_kwargs)

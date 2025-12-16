@@ -5,7 +5,7 @@
 import numpy as np
 import scipy.interpolate as interp
 
-import pandas as pd
+
 
 from astropy.coordinates import SkyCoord, EarthLocation
 from astropy import coordinates as coord
@@ -19,12 +19,54 @@ import json
 from . import conf
 
 def Gain_para():
-    gain_para= pd.read_csv(os.path.dirname(__file__)+'/data/FAST_gain_curve.txt', header=None, sep='\s+')
-    gain_para.set_index([0,1],inplace=True,)
-    gain_para= gain_para[gain_para.columns[::2]]
-    gain_para.columns= list(range(1050,1500,50))
-    #gain_para.loc['M01','a']
-    return gain_para 
+    fpath = os.path.dirname(__file__)+'/data/FAST_gain_curve.txt'
+    # Manually parse the file to replicate:
+    # gain_para.set_index([0,1],inplace=True)
+    # gain_para = gain_para[gain_para.columns[::2]] (taking every 2nd column?)
+    # original code: gain_para= pd.read_csv(..., header=None, sep='\s+')
+    # gain_para.set_index([0,1]) -> first two cols are index: Beam, Param
+    # gain_para= gain_para[gain_para.columns[::2]] -> if original cols were 0,1,2,3,4... after set_index, cols are 2,3,4...
+    # The ::2 on columns likely means skipping error columns or similar.
+    # gain_para.columns = list(range(1050, 1500, 50))
+    
+    # Structure needed: data[beam][freq][param] or data[beam][param][freq]
+    # Existing usage: gain_para.loc[f'M{nB:02d}'][fre][['a','b','c']]
+    # This implies: result[beam][freq] -> gives a series/dict where keys are 'a','b','c'
+    # Wait, gain_para.loc['M01'] gives a DF indexed by 'a','b','c'.
+    # gain_para.loc['M01'][fre] gives the column at 'fre', which is a Series with index 'a','b','c'.
+    # So we need: data[beam][freq] = {'a': val, 'b': val, 'c': val}
+    
+    data = {}
+    with open(fpath, 'r') as f:
+        for line in f:
+            parts = line.strip().split()
+            if not parts: continue
+            beam = parts[0]
+            param = parts[1]
+            values = parts[2:]
+            
+            # Original: gain_para = gain_para[gain_para.columns[::2]]
+            # If values indices are 0,1,2,3... ::2 takes 0, 2, 4...
+            selected_values = values[::2]
+            
+            freqs = list(range(1050, 1500, 50))
+            if len(selected_values) != len(freqs):
+                 # Fallback or error? Assuming file matches expected length
+                 pass
+            
+            if beam not in data: data[beam] = {}
+            
+            for i, freq in enumerate(freqs):
+                if freq not in data[beam]: data[beam][freq] = {}
+                data[beam][freq][param] = float(selected_values[i])
+                
+    # To support syntax: gain_para.loc['M01'][fre]['a']
+    # We can wrap it in a class or just return a dict-like object.
+    # But existing code: gain_para.loc[f'M{nB:02d}'][fre][['a','b','c']]
+    # If data is dict: data['M01'][fre] returns {'a':..., 'b':..., 'c':...}
+    # Dicts don't support list indexing [['a','b','c']].
+    # We need to change the usage in `ZA2gain` as well.
+    return data 
 
 def Get_ZA(ra, dec, mjd):
     """
@@ -49,12 +91,20 @@ def ZA2gain(ZA, nB):
     """
     # get eta
     gain_para= Gain_para()
-    freq_key= np.array(gain_para.columns)
+    # freq_key= np.array(gain_para.columns) 
+    # Use keys from first available beam (e.g. M01)
+    # The keys are frequencies.
+    # gain_para structure: data[beam][freq][param]
+    first_beam = list(gain_para.keys())[0]
+    freq_key = np.array(list(gain_para[first_beam].keys()))
     
     gain= np.zeros((len(ZA),len(freq_key)))
     is_use= ZA > 26.4
     for i,fre in enumerate(freq_key):
-        a,b,c= gain_para.loc[f'M{nB:02d}'][fre][['a','b','c']]
+        # a,b,c= gain_para.loc[f'M{nB:02d}'][fre][['a','b','c']]
+        params = gain_para[f'M{nB:02d}'][fre]
+        a, b, c = params['a'], params['b'], params['c']
+        
         gain[is_use,i]= c * ZA[is_use] + b + 26.4*(a - c)
         gain[~is_use,i]= a * ZA[~is_use] + b
     # 25.6*eta

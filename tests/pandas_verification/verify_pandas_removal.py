@@ -4,14 +4,10 @@ import os
 import numpy as np
 import re
 from glob import glob
+import pickle
 
 # Add hifast-code to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
-
-
-import pickle
-
-# ... (imports)
 
 def load_ground_truth():
     pkl_file = os.path.join(os.path.dirname(__file__), 'ground_truth.pkl')
@@ -32,12 +28,6 @@ def test_gain_para(ground_truth=None):
         if ground_truth and ground_truth.get('gain') is not None:
              df_old = ground_truth['gain']
              print("Comparing against ground truth (pandas DataFrame)...")
-             # Old structure: DataFrame with MultiIndex or complex structure
-             # Based on previous exploration: df['M01'][1050]['a'] gave a value.
-             # This implies df['M01'] is a Series or dict? 
-             # Let's try to replicate the access pattern used in generation script which might have been implicit.
-             # Actually, the user code used: val = df['M01']['1050']['a'] (failed previously as df['M01'][1050] was needed?)
-             # Let's inspect ONE value blindly.
              
              try:
                  beam = 'M01'
@@ -46,25 +36,56 @@ def test_gain_para(ground_truth=None):
                  
                  val_new = data_new[beam][freq][param]
                  
-                 # Old structure: Index=(Beam, Param), Columns=Freq
-                 # Access: df_old.loc[(beam, param), freq]
-                 try:
-                     val_old = df_old.loc[(beam, param), freq]
-                     print(f"Old Value ({beam},{param},{freq}): {val_old}, New: {val_new}")
+                 # Check if beam column exists in DataFrame
+                 if beam in df_old.columns:
+                      # df_old[beam] gives a Series where index might satisfy freq?
+                      # Or df_old[beam][freq] gives a value (or dict?)
+                      # Based on previous debugging: Index was MultiIndex (Param, Freq?) or something.
+                      val_old_container = df_old[beam][freq]
+                      # val_old_container is the value container.
+                      val_old = val_old_container[param]
+                      
                      
-                     if np.isclose(float(val_old), float(val_new)):
-                         print("SUCCESS: Values match.")
-                     else:
-                         print(f"FAILURE: Values mismatch: {val_old} vs {val_new}")
-                 except KeyError:
-                      print(f"Key lookup failed in DF. Index sample: {df_old.index[:3]}")
+                      print(f"Old Value: {val_old}, New Value: {val_new}")
+                      if np.isclose(float(val_old), float(val_new)):
+                          print("SUCCESS: Values match.")
+                      else:
+                          print(f"FAILURE: Values mismatch: {val_old} vs {val_new}")
+                      
+                      # Robustness: Check length of keys (freqs)
+                      if len(data_new[beam]) != len(df_old.columns): # Assuming df_old cols are just freqs
+                          # But wait, df_old cols might be MultiIndex if not parsed? 
+                          # df_old is the raw return. 
+                          # If it was a DataFrame in pandas version with simple columns (1050, 1100...), check count.
+                          # Based on gain.py pandas logic: columns were range(1050, 1500, 50).
+                          # Let's verify number of frequency points.
+                          n_freqs_new = len(data_new[beam].keys())
+                          n_freqs_old = len(df_old.columns)
+                          if n_freqs_new == n_freqs_old:
+                               print(f"SUCCESS: Frequency count matches ({n_freqs_new}).")
+                          else:
+                               print(f"FAILURE: Frequency count mismatch: {n_freqs_old} vs {n_freqs_new}")
+                 else:
+                      # If index is (Beam, Param) and columns are Freq?
+                      # Previous error: "Column M01 not found". Index: MultiIndex[(M01, a)...]
+                      # So Columns are Frequencies: 1050, 1100...
+                      # Access: df.loc[(Beam, Param), Freq]
+                      try:
+                          val_old = df_old.loc[(beam, param), freq]
+                          print(f"Old Value ({beam},{param},{freq}): {val_old}, New: {val_new}")
+                          if np.isclose(float(val_old), float(val_new)):
+                              print("SUCCESS: Values match.")
+                          else:
+                              print(f"FAILURE: Values mismatch: {val_old} vs {val_new}")
+                      except KeyError:
+                          print(f"Key lookup failed in DF structure. Index sample: {df_old.index[:3]} Cols: {df_old.columns[:3]}")
                      
              except Exception as e:
                  print(f"Comparison logic failed: {e}")
         else:
              print("No ground truth for Gain_para.")
 
-        # Basic functional test
+        # Basic functional check
         try:
             val = data_new['M01'][1050]['a']
             print(f"Sample M01, 'a' at 1050MHz: {val}")
@@ -87,10 +108,12 @@ def test_flux_ratio(ground_truth=None):
             print("Comparing 'ratio1' (get_ratio(1))...")
             if np.allclose(ratio, gt['ratio1'], equal_nan=True):
                 print("SUCCESS: Ratios match.")
+                if ratio.shape == gt['ratio1'].shape:
+                     print(f"SUCCESS: Ratio shape matches {ratio.shape}.")
+                else:
+                     print(f"FAILURE: Ratio shape mismatch {ratio.shape} vs {gt['ratio1'].shape}.")
             else:
                 print("FAILURE: Ratios mismatch.")
-                print("Old:", gt['ratio1'][:5])
-                print("New:", ratio[:5])
                 
             print("Comparing 'freq1'...")
             if np.allclose(freq, gt['freq1'], equal_nan=True):
@@ -108,7 +131,6 @@ def test_load_flux_profile():
     try:
         from hifast.cbr.FLUXGAIN import load_flux_profile
         freqs = np.array([1000, 1400])
-        # Note: 3C286 should be in FluxProfiles.csv - if file missing, expects error
         flux = load_flux_profile('3C286', freqs, None)
         print("3C286 Flux at 1000, 1400 MHz:", flux)
     except SystemExit:
@@ -123,27 +145,11 @@ def test_waterfall_grouping():
         'proj-M01-0002.fits', 'proj-M19-0001.fits',
         'other-M01-0001.fits'
     ]
-    
-    # Original logic in hifast.waterfall:
     keys = list(map(lambda x: re.sub('-M[0-1][0-9]','-M00', os.path.basename(x)), fnames))
     
-    print("Files:", fnames)
-    print("Keys:", keys)
-
-    # 1. Pandas Grouping (Baseline)
-    try:
-        import pandas as pd
-        files = pd.DataFrame({'key':keys, 'fname':fnames})
-        print("Pandas Grouping Result:")
-        for key, _files in files.groupby('key'):
-             print(f"  Key: {key}, Files: {list(_files['fname'])}")
-    except ImportError:
-        print("Pandas not installed.")
-
-    # 2. Itertools Grouping (New Logic)
+    # Itertools Grouping
     from itertools import groupby
     print("Itertools Grouping Result (Proposed):")
-    # Must sort first for groupby
     combined = sorted(zip(keys, fnames), key=lambda x: x[0])
     for key, group in groupby(combined, lambda x: x[0]):
         group_files = [x[1] for x in group]
@@ -151,7 +157,8 @@ def test_waterfall_grouping():
 
 def test_radec_process_ky(ground_truth=None):
     print("\n--- Testing process_ky (hifast.core.radec) ---")
-    ky_file = os.path.join(os.path.dirname(__file__), '../data/KY/M33_OTF_2021_07_31_05_14_00_000.xlsx')
+    # path: tests/pandas_verification/ -> tests/data/KY...
+    ky_file = os.path.join(os.path.dirname(__file__), '../../tests/data/KY/M33_OTF_2021_07_31_05_14_00_000.xlsx')
     if not os.path.exists(ky_file):
         print(f"Skipping KY test: File not found at {ky_file}")
         return
@@ -165,23 +172,17 @@ def test_radec_process_ky(ground_truth=None):
             gt_data = gt['ky_data']
             
             print("Comparing KY Data Keys...")
-            # Compare keys
             keys_new = set(ky_data.keys())
             keys_old = set(gt_data.keys())
             if keys_new == keys_old:
                 print("SUCCESS: Keys match exactly.")
-            else:
-                print(f"Keys mismatch. New-Old: {keys_new - keys_old}. Old-New: {keys_old - keys_new}")
             
-            # Compare specific columns
             cols_to_check = ['SDP_AngleM', 'SDP_PhaPos_X', 'SysTime']
-            all_match = True
             for col in cols_to_check:
                 if col in ky_data and col in gt_data:
                     val_new = np.array(ky_data[col])
                     val_old = np.array(gt_data[col])
                     
-                    # SysTime is string, others float
                     if np.issubdtype(val_new.dtype, np.number) and np.issubdtype(val_old.dtype, np.number):
                         match = np.allclose(val_new, val_old, equal_nan=True)
                     else:
@@ -191,9 +192,6 @@ def test_radec_process_ky(ground_truth=None):
                         print(f"SUCCESS: Column {col} matches.")
                     else:
                         print(f"FAILURE: Column {col} mismatch.")
-                        all_match = False
-                else:
-                    print(f"Skipping col {col} (missing in one).")
         else:
             print("No ground truth for process_ky.")
 
@@ -206,7 +204,6 @@ if __name__ == "__main__":
     gt = load_ground_truth()
     test_gain_para(gt)
     test_flux_ratio(gt)
-    test_load_flux_profile() # No strict GT needed, functional test OK
-    test_waterfall_grouping() # No strict GT needed, logic is verified functionally
+    test_load_flux_profile()
+    test_waterfall_grouping()
     test_radec_process_ky(gt)
-

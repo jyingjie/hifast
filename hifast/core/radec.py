@@ -12,7 +12,7 @@ import json
 
 import numpy as np
 import scipy.interpolate as interp
-import pandas as pd
+
 import h5py
 
 from astropy import units as u
@@ -104,16 +104,36 @@ def process_ky(ky_files, mjds_src=None, tol=0, ky_fixed=False):
         utcoffset = 8*u.hour
         #read ky data
         sheet_name = '整控-馈源舱数据'
-        try:
-            ky_data = pd.read_excel(ky_file, sheet_name=sheet_name, engine='openpyxl')
-        except Exception as err:
-            print(err)
-            print("can't find '整控-馈源舱数据', try to use the first sheet")
-            ky_data = pd.read_excel(ky_file, sheet_name=0, engine='openpyxl')
-        if len(ky_data)==0:
+        import openpyxl
+        wb = openpyxl.load_workbook(ky_file, data_only=True, read_only=True)
+        # Select sheet
+        if sheet_name in wb.sheetnames:
+             ws = wb[sheet_name]
+        else:
+             print("can't find '整控-馈源舱数据', try to use the first sheet")
+             ws = wb.active
+
+        # Read headers
+        rows = ws.rows
+        headers = [cell.value for cell in next(rows)]
+        # Filter None headers
+        headers = [h if h else f"Unnamed:{i}" for i, h in enumerate(headers)] # Handle empty headers if any? 
+        # But ky_data usually has nice headers.
+
+        data_dict = {h: [] for h in headers}
+        
+        count = 0
+        for row in rows:
+             count += 1
+             for i, cell in enumerate(row):
+                 if i < len(headers):
+                     data_dict[headers[i]].append(cell.value)
+                     
+        if count == 0:
             print('empty sheet')
             continue
-        ky_data = ky_data.to_dict('series')
+            
+        ky_data = data_dict
         systime = np.array(ky_data['SysTime'], dtype=str)
         systime = Time(systime, format='iso', scale='utc') - utcoffset # covert local time to UTC
         mjd = systime.mjd

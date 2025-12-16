@@ -32,16 +32,9 @@ def generate_flux_ratio():
 
 def generate_radec_ky():
     print("--- Generating process_ky ---")
-    # Data path relative to this script? tests/data is in ../data/ relative to pandas_verification/
-    # verify_pandas_removal used: os.path.join(os.path.dirname(__file__), 'data/KY/...') which was effectively tests/data
-    # So now it should be ../data
-    ky_file = os.path.join(os.path.dirname(__file__), '../data/KY/M33_OTF_2021_07_31_05_14_00_000.xlsx')
-    if not os.path.exists(ky_file):
-        print(f"File not found: {ky_file}")
-        # Try finding it relative to hifast-code root?
-        # tests/data/KY/...
-        ky_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../tests/data/KY/M33_OTF_2021_07_31_05_14_00_000.xlsx'))
-        
+    # path: tests/pandas_verification/ -> tests/data/KY...
+    ky_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../tests/data/KY/M33_OTF_2021_07_31_05_14_00_000.xlsx'))
+    
     if not os.path.exists(ky_file):
         print(f"File strictly not found: {ky_file}")
         return None
