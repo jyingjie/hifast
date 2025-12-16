@@ -48,7 +48,7 @@ strict_requirements = [
     'numpy~=1.21.0',
     'scipy~=1.7.0',
     'astropy~=4.2.1',
-    'pandas~=1.3.0',
+
     'matplotlib~=3.4.2',
     'h5py~=3.3.0',
     'openpyxl~=3.0.7',
@@ -66,7 +66,7 @@ loose_requirements = [
     'numpy>=1.17,<2',
     'scipy',
     'astropy>=4.0',
-    'pandas>=1.0',
+
     'matplotlib',
     'h5py',
     'openpyxl',

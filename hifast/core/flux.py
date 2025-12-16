@@ -13,6 +13,9 @@ import warnings
 import h5py
 import numpy as np
 import scipy.interpolate as interp
+import json
+
+from . import conf
 from astropy.time import Time
 from astropy import units
 
@@ -22,11 +25,22 @@ from ..utils.downloader import get_file
 
 def get_ratio(nB, freq=None):
     """get gain ratio to beam 1 in arXiv:2002.01786"""
-    import pandas as pd
-    ratios_para = pd.read_json(os.path.dirname(__file__) + '/data/beam_ratios.json')
+    
+    with open(os.path.dirname(__file__) + '/data/beam_ratios.json', 'r') as f:
+        ratios_para = json.load(f)
 
-    freq_key = np.array(ratios_para.index[::2], dtype=float)
-    ratios = ratios_para[f'M{nB:02d}'][::2].values
+    # Assumes JSON structure: "M01": {"1050": val, "1050_err": err, ...} (ordered)
+    # Original: freq_key = np.array(ratios_para.index[::2], dtype=float)
+    # ratios = ratios_para[f'M{nB:02d}'][::2].values
+    
+    beam_data = ratios_para[f'M{nB:02d}']
+    # Keys/Values are ordered in Python 3.7+
+    keys = list(beam_data.keys())
+    values = list(beam_data.values())
+    
+    freq_key = np.array(keys[::2], dtype=float)
+    ratios = np.array(values[::2])
+    
     if freq is not None:
         ratios= interp.interp1d(freq_key,ratios, kind='quadratic', fill_value= "extrapolate")(freq)
         freq_key=freq

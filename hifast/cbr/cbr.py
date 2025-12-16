@@ -16,7 +16,7 @@ from ..core.radec import get_radec
 from ..core.cal import CalOnOff
 from ..core.cal2 import CalOnOffM
 
-import pandas as pd
+
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 import os

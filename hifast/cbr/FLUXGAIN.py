@@ -5,7 +5,7 @@
 
 from ast import arg
 import numpy as np
-import pandas as pd
+
 import h5py
 import os
 from glob import glob
@@ -57,6 +57,8 @@ def load_crd(obj,crds):
         crd= SkyCoord(*crds,unit=(u.deg))
     return crd
 
+import csv
+
 def load_flux_profile(calname,freq_key,fpparas):
     """
     freq_key should in MHz
@@ -67,11 +69,26 @@ def load_flux_profile(calname,freq_key,fpparas):
     if fpparas is not None:
         a0,a1,a2,a3= fpparas
     else:
-        import pandas as pd
-        fpf= pd.read_csv(os.path.dirname(__file__) + '/data/FluxProfiles.csv')
+        # import pandas as pd
+        # fpf= pd.read_csv(os.path.dirname(__file__) + '/data/FluxProfiles.csv')
         try:
-            narg= np.where(fpf['name']==calname)[0][0]
-            a0,a1,a2,a3= fpf['a0'][narg],fpf['a1'][narg],fpf['a2'][narg],fpf['a3'][narg]
+            fpath = os.path.dirname(__file__) + '/data/FluxProfiles.csv'
+            found = False
+            with open(fpath, 'r') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if row['name'] == calname:
+                        a0 = float(row['a0'])
+                        a1 = float(row['a1'])
+                        a2 = float(row['a2'])
+                        a3 = float(row['a3'])
+                        found = True
+                        break
+            if not found:
+                 raise ValueError("Calibrator name not found in FluxProfiles.csv")
+
+            # narg= np.where(fpf['name']==calname)[0][0]
+            # a0,a1,a2,a3= fpf['a0'][narg],fpf['a1'][narg],fpf['a2'][narg],fpf['a3'][narg]
         except:
             print('Can not find calibrator name in FluxProfile.csv. Please check calname or input flux profile parameters.')
             sys.exit(1)
@@ -402,8 +419,20 @@ group.add_argument('--crd', type=float, nargs=2,
                    help='Calibrator coordinates in deg. Two float numbers, for RA and DEC. \
                    If None, use Simbad.query_object to query by `--calname`.', default=None)
 
-fpf= pd.read_csv(os.path.dirname(__file__) + '/data/FluxProfiles.csv')
-calnames = ','.join(fpf['name'])
+calnames = "3C48,3C286,..."
+try:
+    calnames_list = []
+    with open(os.path.dirname(__file__) + '/data/FluxProfiles.csv', 'r') as f:
+         reader = csv.DictReader(f)
+         for row in reader:
+             calnames_list.append(row['name'])
+    if calnames_list:
+        calnames = ','.join(calnames_list)
+except:
+    pass
+
+# fpf= pd.read_csv(os.path.dirname(__file__) + '/data/FluxProfiles.csv')
+# calnames = ','.join(fpf['name'])
 group.add_argument('--fluxProfilePara', type=float, nargs=4,
                    help=f'The function of calibrator flux with respect to frequency. Function of {calnames} are already embeded in code.\
                    Others must be specified and include four floating-point numbers: a0, a1, a2, and a3. \
