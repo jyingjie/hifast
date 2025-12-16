@@ -35,8 +35,13 @@ import re
 # with open(fname, 'w') as f:
 #     f.write(code)
     
-# with open("README.md", "r") as fh:
-#     long_description = fh.read()
+
+long_description = """
+HiFAST is a pipeline designed for the calibration and imaging of HI (neutral atomic hydrogen) data from the Five-hundred-meter Aperture Spherical radio Telescope (FAST).
+
+It provides a comprehensive suite of tools for radio astronomers to process raw observational data into science-ready data cubes. To learn more about the pipeline and its underlying methods, please see our [publications and citation guidelines](https://hifast.readthedocs.io/en/latest/citations.html).
+
+Documentation: https://hifast.readthedocs.io/"""
 
 # Define dependency lists
 strict_requirements = [
@@ -112,10 +117,10 @@ setuptools.setup(
     cmdclass=versioneer.get_cmdclass(),
     author="Yingjie Jing etc.",
     author_email="2012jyj@gmail.com",
-    description="https://hifast.readthedocs.io",
-#     long_description=long_description,
-#     long_description_content_type="text/markdown",
-#     url="",
+    description="A Python-based pipeline for FAST HI data calibration and imaging",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url="https://hifast.readthedocs.io",
     packages=['hifast',
               'hifast.utils',
               'hifast.core',
