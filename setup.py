@@ -37,11 +37,11 @@ import re
     
 
 long_description = """
-HiFAST is a pipeline designed for the calibration and imaging of HI (neutral atomic hydrogen) data from the Five-hundred-meter Aperture Spherical radio Telescope (FAST).
+HiFAST is a specialized pipeline developed for the calibration and imaging of neutral atomic hydrogen (HI) data from the Five-hundred-meter Aperture Spherical radio Telescope (FAST).
 
-It provides a comprehensive suite of tools for radio astronomers to process raw observational data into science-ready data cubes. To learn more about the pipeline and its underlying methods, please see our [publications and citation guidelines](https://hifast.readthedocs.io/en/latest/citations.html).
+This package provides a comprehensive toolkit for radio astronomers, facilitating the processing of raw observational data into science-ready data cubes. For in-depth information on the pipeline's algorithms and methodologies, please refer to our [publications](https://hifast.readthedocs.io/en/latest/citations.html).
 
-Documentation: https://hifast.readthedocs.io/"""
+**Documentation**: https://hifast.readthedocs.io"""
 
 # Define dependency lists
 strict_requirements = [
@@ -105,7 +105,7 @@ setuptools.setup(
     name="hifast", # Replace with your own username
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
-    author="Yingjie Jing etc.",
+    author="HiFAST Developers",
     author_email="2012jyj@gmail.com",
     description="A Python-based pipeline for FAST HI data calibration and imaging",
     long_description=long_description,
@@ -129,7 +129,8 @@ setuptools.setup(
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
-        "Operating System :: Linux",
+        "Operating System :: POSIX :: Linux",
+        "Operating System :: MacOS",
     ],
     python_requires=python_requires,
     # zip_safe=False is required because the code uses __file__ to locate data files (e.g. in hifast/core/flux.py)
