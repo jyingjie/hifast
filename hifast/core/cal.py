@@ -17,8 +17,9 @@ import scipy.interpolate as interp
 import h5py
 from astropy.io import fits
 
-import __main__
-if hasattr(__main__, '__file__'):
+
+from ..utils import is_notebook
+if not is_notebook():
     import matplotlib
     matplotlib.use('Agg')
 from matplotlib import pyplot as plt

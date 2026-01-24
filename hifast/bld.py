@@ -318,14 +318,10 @@ class IO(BaseIO):
             self.save()
 
 
-def check_backend():
-    import matplotlib as mpl
-    if 'ipympl' not in mpl.get_backend():
-        print('Please use interaction mode in Jupyert and run \'%matplotlib ipympl\' in the notebook cell first')
-        sys.exit()
 
 interact_save_lim = 20
 def interact(args):
+    from .interaction import check_backend
     check_backend()
     import h5py
     from .interaction import bld_i as interact

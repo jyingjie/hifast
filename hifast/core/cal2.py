@@ -20,8 +20,9 @@ from astropy.stats import sigma_clip
 
 import warnings
 
-import __main__
-IS_Interactive = not hasattr(__main__, '__file__')
+
+from ..utils import is_notebook
+IS_Interactive = is_notebook()
 if not IS_Interactive:
     import matplotlib
     matplotlib.use('Agg')
