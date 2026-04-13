@@ -121,7 +121,7 @@ def plot(fname, ax, polar=0, ytick1='index', ytick2=None, replace_rfi = False, *
         except Exception as err:
             print(err)
     elif ytick1 == 'index':
-        y = np.arange(vals.shape[1])
+        y = np.arange(vals.shape[0])
     y2 = None
     if ytick2 in ['ra', 'dec', 'mjd', 'time']:
         key = 'mjd' if ytick2=='time' else ytick2
@@ -130,7 +130,7 @@ def plot(fname, ax, polar=0, ytick1='index', ytick2=None, replace_rfi = False, *
         except Exception as err:
             print(err)
     elif ytick2 == 'index':
-        y2 = np.arange(vals.shape[1])
+        y2 = np.arange(vals.shape[0])
 
     im, _ = plot_im(vals, x, y=y, y2=y2, ax=ax, **kwargs)
     if ytick1=='time':
