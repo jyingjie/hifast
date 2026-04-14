@@ -91,6 +91,8 @@ def create_parser():
                        help='Path to source catalog file for masking known sources (columns: RA, Dec, Radius, MinFreq, MaxFreq).')
     group.add_argument('--frame', choices=['BARYCENT', 'HELIOCEN', 'LSRK', 'LSRD'], default='LSRK',
                        help='Velocity frame for source masking.')
+    group.add_argument('--force_M06_mask', type=bool_fun, choices=[True, False], default='False',
+                       help='Force excluded mask to False for M06 non-flat bandpass region (1406-1416 MHz).')
 
     # Post-processing
     group = parser.add_argument_group('Post-processing (Optional)')
@@ -249,8 +251,10 @@ class IO(BaseIO):
             is_excluded = fs['is_excluded'][:]
             if self.is_use_freq is not None:
                 is_excluded = is_excluded[:, self.is_use_freq]
+            
+            force_M06_mask = self.args.force_M06_mask if hasattr(self.args, 'force_M06_mask') else False 
             # M06 bandpass is not flat in [1410, 1416]
-            if self.nB == 6:
+            if force_M06_mask and self.nB == 6:
                 freq = self.freq
                 is_use = (freq > 1406) & (freq < 1416)
                 is_excluded[:, is_use] = False
