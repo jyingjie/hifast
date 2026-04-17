@@ -401,7 +401,13 @@ class Calibrator():
                 sys.exit(1)
             try:
                 sbo = Simbad.query_object(obj)
-                crd = SkyCoord((sbo['RA'][0]+sbo['DEC'][0]),unit=(u.hourangle,u.deg))
+                # Simbad output format changed in newer versions
+                if ('ra' in sbo.keys()) and ('dec' in sbo.keys()):
+                    crd = SkyCoord(sbo['ra'][0], sbo['dec'][0],unit=(u.deg,u.deg))
+                elif ('RA' in sbo.keys()) and ('DEC' in sbo.keys()):
+                    crd = SkyCoord((sbo['RA'][0]+sbo['DEC'][0]),unit=(u.hourangle,u.deg))
+                else:
+                    raise ValueError('Can not find RA and DEC in Simbad output.')
             except:
                 print('Calibrator can not find in Simbad.query_object, please input coordinates using ``--crd``.')
                 sys.exit(1)
