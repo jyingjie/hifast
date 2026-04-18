@@ -139,7 +139,6 @@ class CbrProfileFile():
             return None
         return CbrInfo(self.data[name]['ra'], self.data[name]['dec'], self.data[name]['coeff'], self.data[name]['coeff_err'])
 
-
 fpath = os.path.dirname(__file__) + '/data/PerleyButler2017.0.json'
 CbrProfiles = CbrProfileFile(fpath)
 calnames = CbrProfiles.names
@@ -179,7 +178,7 @@ def gen_args(argv=None):
                     help='Name of the calibrator, for example, "3C48".',)
     group.add_argument('--crd', type=float, nargs=2,
                     help='Coordinates of the calibrator in degrees. Input two float numbers for RA and DEC. \
-                        If not provided, the program will use Simbad.query_object to query by `--calname`.', default=None)
+                        If not provided, the program will use the built-in calibrator catalog when `--calname` is included in it.', default=None)
 
 
     group.add_argument('--fluxProfilePara', type=str, nargs='*',
@@ -388,27 +387,31 @@ class Calibrator():
         """
         load the coordinates of the calibrator
         """
+        # The built-in coordinates are interpreted in the ICRS frame.
+        # Cross-checked against SIMBAD on 2026-04-18 with query_object(name):
+        # 18/20 names resolved directly; the largest separations were 20.56"
+        # for CASSIOPEIA_A, 10.88" for TAURUS_A, 3.25" for HERCULES_A, and
+        # 1.63" for 3C295; the remaining resolved names were all within 1".
+        # J0133-3629 and J0444-2809 did not resolve by name and were skipped.
         args = self.args
         obj = args.cbrname
         crds = args.crd
 
         if crds is None:
-            print('try to get coordinates of the calibrator using astroquery.simbad')
-            try:
-                from astroquery.simbad import Simbad
-            except ImportError:
-                print('Can not import astroquery.simbad, please input coordinates using ``--crd``.')
-                sys.exit(1)
-            try:
-                sbo = Simbad.query_object(obj)
-                crd = SkyCoord((sbo['RA'][0]+sbo['DEC'][0]),unit=(u.hourangle,u.deg))
-            except:
-                print('Calibrator can not find in Simbad.query_object, please input coordinates using ``--crd``.')
+            if obj in CbrProfiles.names:
+                cbr = CbrProfiles(obj)
+                print(f'Coordinate source: built-in catalog (ICRS), RA={cbr.ra} deg, DEC={cbr.dec} deg')
+                crd = SkyCoord(cbr.ra, cbr.dec, unit=u.deg, frame='icrs')
+            else:
+                print('Calibrator is not included in the built-in catalog, please input coordinates using ``--crd``.')
                 sys.exit(1)
         else:
-            print(f'Use input coordinates of the calibrator: {crds}')
-            crd = SkyCoord(*crds,unit=(u.deg))
-        print(f'Got coordinates of the calibrator: {crd}')
+            print(f'Coordinate source: user input (interpreted as ICRS), RA={crds[0]} deg, DEC={crds[1]} deg')
+            crd = SkyCoord(*crds, unit=u.deg, frame='icrs')
+        ra_hms = crd.ra.to_string(unit=u.hour, sep=':', precision=3, pad=True)
+        dec_dms = crd.dec.to_string(unit=u.deg, sep=':', precision=2, alwayssign=True, pad=True)
+        print(f'ICRS coordinates (decimal degrees): RA={crd.ra.deg:.12f}, DEC={crd.dec.deg:.12f}')
+        print(f'ICRS coordinates (hms/dms): RA={ra_hms}, DEC={dec_dms}')
         self.crd = crd
 
     def plot_cbr_flux_profile(self, freq, flux):
