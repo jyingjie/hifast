@@ -25,6 +25,16 @@ from astropy.io import fits
 
 
 EXPECTED_H1_REWRITES = {"NAXIS2", "TDIM21"}
+TFORM_BYTES = {
+    "A": 1,
+    "L": 1,
+    "B": 1,
+    "I": 2,
+    "J": 4,
+    "K": 8,
+    "E": 4,
+    "D": 8,
+}
 
 
 def normalize_value(value):
@@ -100,19 +110,23 @@ def load_hdf5_summary(path: str) -> Dict[str, object]:
         g0 = dict(f["0"].attrs.items()) if "0" in f else {}
         g1 = dict(f["1"].attrs.items()) if "1" in f else {}
         gh = dict(f["Header"].attrs.items()) if "Header" in f else {}
+        group1_keys = list(f["1"].keys()) if "1" in f else []
 
         data_shape = tuple(int(v) for v in f["1"]["DATA"].shape) if "1" in f and "DATA" in f["1"] else None
         nchan_col = int(f["1"]["NCHAN"][0]) if "1" in f and "NCHAN" in f["1"] else None
         freq_col = normalize_value(f["1"]["FREQ"][0]) if "1" in f and "FREQ" in f["1"] else None
+        chan_bw_col = normalize_value(f["1"]["CHAN_BW"][0]) if "1" in f and "CHAN_BW" in f["1"] else None
         row_count = int(f["1"]["UTOBS"].shape[0]) if "1" in f and "UTOBS" in f["1"] else None
 
     return {
         "group0_attrs": g0,
         "group1_attrs": g1,
         "header_attrs": gh,
+        "group1_keys": group1_keys,
         "data_shape": data_shape,
         "nchan_column_first": nchan_col,
         "freq_column_first": freq_col,
+        "chan_bw_column_first": chan_bw_col,
         "row_count": row_count,
     }
 
@@ -154,6 +168,80 @@ def summarize_header_overlap(fits_h0: Dict[str, object], fits_h1: Dict[str, obje
     }
 
 
+def parse_tform_size(tform: object) -> int | None:
+    """Return the byte width represented by a FITS TFORM string."""
+    if tform is None:
+        return None
+    text = normalize_value(tform)
+    match = re.fullmatch(r"\s*(\d+)([A-Z])\s*", str(text))
+    if not match:
+        return None
+    count = int(match.group(1))
+    code = match.group(2)
+    width = TFORM_BYTES.get(code)
+    if width is None:
+        return None
+    return count * width
+
+
+def build_semantic_checks(hdf5_info: Dict[str, object]) -> Dict[str, object]:
+    """
+    Inspect whether important `/1.attrs` fields still describe the HDF5 output.
+    """
+    attrs = hdf5_info["group1_attrs"]
+    nchan = hdf5_info["nchan_column_first"]
+    chan_bw = hdf5_info["chan_bw_column_first"]
+    row_count = hdf5_info["row_count"]
+    group1_keys = hdf5_info["group1_keys"]
+
+    expected_tform21 = None
+    expected_naxis1 = None
+    if nchan is not None:
+        expected_tform21 = f"{2 * int(nchan)}E"
+
+    current_row_bytes = 0
+    unknown_tforms = []
+    for i in range(1, 22):
+        key = f"TFORM{i}"
+        val = attrs.get(key)
+        if i == 21 and expected_tform21 is not None:
+            val = expected_tform21
+        size = parse_tform_size(val)
+        if size is None:
+            unknown_tforms.append({key: normalize_value(val)})
+        else:
+            current_row_bytes += size
+    if not unknown_tforms:
+        expected_naxis1 = current_row_bytes
+
+    expected_bandwid = None
+    if nchan is not None and chan_bw is not None:
+        expected_bandwid = float(nchan) * float(chan_bw) * 1e6
+
+    checks = {
+        "dataset_count": len(group1_keys),
+        "attr_TFIELDS": normalize_value(attrs.get("TFIELDS")),
+        "tfields_matches_dataset_count": normalize_value(attrs.get("TFIELDS")) == len(group1_keys),
+        "attr_NAXIS2": normalize_value(attrs.get("NAXIS2")),
+        "row_count": row_count,
+        "naxis2_matches_row_count": normalize_value(attrs.get("NAXIS2")) == row_count,
+        "attr_TDIM21": normalize_value(attrs.get("TDIM21")),
+        "expected_TDIM21": f"(2, {nchan})" if nchan is not None else None,
+        "tdim21_matches_expected": normalize_value(attrs.get("TDIM21")) == (f"(2, {nchan})" if nchan is not None else None),
+        "attr_TFORM21": normalize_value(attrs.get("TFORM21")),
+        "expected_TFORM21": expected_tform21,
+        "tform21_matches_expected": normalize_value(attrs.get("TFORM21")) == expected_tform21,
+        "attr_NAXIS1": normalize_value(attrs.get("NAXIS1")),
+        "expected_NAXIS1_from_tforms": expected_naxis1,
+        "naxis1_matches_expected": normalize_value(attrs.get("NAXIS1")) == expected_naxis1 if expected_naxis1 is not None else None,
+        "attr_BANDWID": normalize_value(attrs.get("BANDWID")),
+        "expected_bandwidth_hz_from_columns": expected_bandwid,
+        "bandwid_matches_expected": normalize_value(attrs.get("BANDWID")) == expected_bandwid if expected_bandwid is not None else None,
+        "unknown_tforms": unknown_tforms,
+    }
+    return checks
+
+
 def build_report(first_chunk: str, hdf5_path: str, start: int, stop: int | None) -> Dict[str, object]:
     chunk_paths = infer_chunk_paths(first_chunk, start, stop)
     h0_list = []
@@ -173,6 +261,7 @@ def build_report(first_chunk: str, hdf5_path: str, start: int, stop: int | None)
     expected_rewrites = build_expected_rewrites(hdf5_info)
     expected_h1_diff, unexpected_h1_diff = split_h1_differences(h1_diff, expected_rewrites)
     header_overlap = summarize_header_overlap(ref_h0, ref_h1, hdf5_info["header_attrs"])
+    semantic_checks = build_semantic_checks(hdf5_info)
 
     return {
         "inputs": {
@@ -199,6 +288,7 @@ def build_report(first_chunk: str, hdf5_path: str, start: int, stop: int | None)
             "unexpected_differing_values": unexpected_h1_diff,
         },
         "expected_group1_rewrites": expected_rewrites,
+        "group1_semantic_checks": semantic_checks,
         "history_header_overlap": header_overlap,
         "history_header_keys": sorted(hdf5_info["header_attrs"].keys()),
     }
