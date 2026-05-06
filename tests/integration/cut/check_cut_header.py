@@ -24,7 +24,7 @@ import h5py
 from astropy.io import fits
 
 
-EXPECTED_H1_REWRITES = {"NAXIS2", "TDIM21"}
+EXPECTED_H1_REWRITES = {"NAXIS2", "TDIM21", "TFORM21", "NAXIS1"}
 TFORM_BYTES = {
     "A": 1,
     "L": 1,
@@ -134,10 +134,26 @@ def load_hdf5_summary(path: str) -> Dict[str, object]:
 def build_expected_rewrites(hdf5_info: Dict[str, object]) -> Dict[str, object]:
     """Fields that `hifast.cut` intentionally updates in `/1.attrs`."""
     row_count = hdf5_info["row_count"]
-    nchan = hdf5_info["nchan_column_first"]
+    data_shape = hdf5_info["data_shape"]
+    if data_shape is None:
+        raise ValueError("Missing DATA shape in HDF5 summary")
+    npolar, _, nchan = data_shape
+    attrs = hdf5_info["group1_attrs"]
+    expected_tform21 = f"{int(npolar) * int(nchan)}E"
+
+    expected_naxis1 = None
+    naxis1 = 0
+    for i in range(1, int(attrs["TFIELDS"]) + 1):
+        key = f"TFORM{i}"
+        tform = expected_tform21 if i == 21 else attrs[key]
+        naxis1 += parse_tform_size(tform)
+    expected_naxis1 = naxis1
+
     return {
         "NAXIS2": row_count,
-        "TDIM21": f"(2, {nchan})" if nchan is not None else None,
+        "TDIM21": f"({int(npolar)}, {int(nchan)})",
+        "TFORM21": expected_tform21,
+        "NAXIS1": expected_naxis1,
     }
 
 
@@ -194,10 +210,13 @@ def build_semantic_checks(hdf5_info: Dict[str, object]) -> Dict[str, object]:
     row_count = hdf5_info["row_count"]
     group1_keys = hdf5_info["group1_keys"]
 
+    npolar = None
     expected_tform21 = None
     expected_naxis1 = None
-    if nchan is not None:
-        expected_tform21 = f"{2 * int(nchan)}E"
+    data_shape = hdf5_info["data_shape"]
+    if data_shape is not None:
+        npolar = int(data_shape[0])
+        expected_tform21 = f"{npolar * int(nchan)}E"
 
     current_row_bytes = 0
     unknown_tforms = []
@@ -226,8 +245,8 @@ def build_semantic_checks(hdf5_info: Dict[str, object]) -> Dict[str, object]:
         "row_count": row_count,
         "naxis2_matches_row_count": normalize_value(attrs.get("NAXIS2")) == row_count,
         "attr_TDIM21": normalize_value(attrs.get("TDIM21")),
-        "expected_TDIM21": f"(2, {nchan})" if nchan is not None else None,
-        "tdim21_matches_expected": normalize_value(attrs.get("TDIM21")) == (f"(2, {nchan})" if nchan is not None else None),
+        "expected_TDIM21": f"({npolar}, {nchan})" if nchan is not None and npolar is not None else None,
+        "tdim21_matches_expected": normalize_value(attrs.get("TDIM21")) == (f"({npolar}, {nchan})" if nchan is not None and npolar is not None else None),
         "attr_TFORM21": normalize_value(attrs.get("TFORM21")),
         "expected_TFORM21": expected_tform21,
         "tform21_matches_expected": normalize_value(attrs.get("TFORM21")) == expected_tform21,

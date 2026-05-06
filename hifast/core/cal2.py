@@ -747,6 +747,17 @@ class CalOnOff1111(CheckPCal, CalOnOffSav, CalOnOff):
 
 
 class FASTRawCut(FastRawData):
+    _TFORM_BYTES = {
+        'A': 1,
+        'L': 1,
+        'B': 1,
+        'I': 2,
+        'J': 4,
+        'K': 8,
+        'E': 4,
+        'D': 8,
+    }
+
     def __init__(self,
                  fname_part,
                  start=1,
@@ -795,6 +806,46 @@ class FASTRawCut(FastRawData):
         """
         for key in kwargs.keys():
             g.attrs[key] = kwargs[key]
+
+    @classmethod
+    def _parse_tform_bytes(cls, tform):
+        match = re.fullmatch(r'\s*(\d+)([A-Z])\s*', str(tform))
+        if match is None:
+            raise(ValueError(f'Unsupported TFORM format: {tform}'))
+        count = int(match.group(1))
+        code = match.group(2)
+        return count * cls._TFORM_BYTES[code]
+
+    def _gen_data_header_updates(self, data_shape, n_rows):
+        """
+        Generate FITS-like header updates based on the actual saved DATA shape.
+
+        Parameters
+        ----------
+        data_shape : tuple
+            Shape of the stored DATA dataset, expected to be (polar, row, chan).
+        n_rows : int
+            Number of logical rows in the merged table.
+        """
+        if len(data_shape) != 3:
+            raise(ValueError(f'Expect 3D DATA shape, got {data_shape}'))
+
+        npolar, _, nchan = data_shape
+        tdim21 = f"({npolar}, {nchan})"
+        tform21 = f"{npolar * nchan}E"
+
+        naxis1 = 0
+        for i in range(1, int(self.fits_header['TFIELDS']) + 1):
+            key = f'TFORM{i}'
+            tform = tform21 if i == 21 else self.fits_header[key]
+            naxis1 += self._parse_tform_bytes(tform)
+
+        return {
+            'NAXIS2': n_rows,
+            'TDIM21': tdim21,
+            'TFORM21': tform21,
+            'NAXIS1': naxis1,
+        }
 
 
     def load_all_fields(self, inds, chan_fix=True, polar_trans=True):
@@ -887,13 +938,8 @@ class FASTRawCut(FastRawData):
                 for key in dict1.keys():
                     g_sep[key] = dict1[key]
                 g_sep.create_dataset(stype, data=T, chunks=True, compression=h5_compression)
-                # NAXIS1=self.NCHAN_new*self.2 ?
                 self.write_fits_header(g_sep, **self.fits_header)
-                # update new
-                self.write_fits_header(g_sep,
-                                       NAXIS2=len(inds),
-                                       TDIM21=f"(2, {self.NCHAN_new})",
-                                      )
+                self.write_fits_header(g_sep, **self._gen_data_header_updates(T.shape, len(inds)))
                 # waterfall
                 mjd = dict1['UTOBS']
                 gen_carta_group(fout_sep, g_sep[stype].shape, wcs_data_name=stype, axis1=self.freq_use, axis2=mjd, wcs_data_group='1')
@@ -924,11 +970,7 @@ class FASTRawCut(FastRawData):
             for key in dict1.keys():
                 g[key] = dict1[key]
             self.write_fits_header(g, **self.fits_header)
-                # update new
-            self.write_fits_header(g,
-                                   NAXIS2=len(self.inds),
-                                   TDIM21=f"(2, {self.NCHAN_new})",
-                                   )
+            self.write_fits_header(g, **self._gen_data_header_updates(g[stype].shape, len(self.inds)))
             # waterfall
             mjd = dict1['UTOBS']
             gen_carta_group(fout, g[stype].shape, wcs_data_name=stype, axis1=self.freq_use, axis2=mjd, wcs_data_group='1')
