@@ -15,6 +15,7 @@ from glob import glob
 
 from .cal import *
 from ..utils.io import MjdChanPolar_to_PolarMjdChan, gen_carta_group, save_specs_hdf5
+from ..utils.h5compression import H5CompressionConfig, resolve_h5_dataset_kwargs
 
 from astropy.stats import sigma_clip
 
@@ -847,7 +848,6 @@ class FASTRawCut(FastRawData):
             'NAXIS1': naxis1,
         }
 
-
     def load_all_fields(self, inds, chan_fix=True, polar_trans=True):
         dict1 = {} # small
         dict2 = {} # large
@@ -893,7 +893,9 @@ class FASTRawCut(FastRawData):
         g['mjd'] = h5py.SoftLink('/1/UTOBS')
 
 
-    def __call__(self, outdir='./', step=1, header=None, sep_save=False, h5_compression='none'):
+    def __call__(self, outdir='./', step=1, header=None, sep_save=False, h5_compression='none',
+                 h5_compression_level=None, h5_chunk_rows=None, h5_chunk_chans=None,
+                 h5_compression_config=None):
         """
 
         Parameters
@@ -907,8 +909,6 @@ class FASTRawCut(FastRawData):
         sep_save : bool
             if True, save file every step.
         """
-        if h5_compression == 'none':
-            h5_compression = None
         self.gen_out_name_base(outdir)
         self.gen_new_freq_axis()
 
@@ -921,6 +921,14 @@ class FASTRawCut(FastRawData):
 
         dict1_list = []
         stype = 'DATA'
+        compression_config = h5_compression_config
+        if compression_config is None:
+            compression_config = H5CompressionConfig(
+                compression=h5_compression,
+                compression_level=h5_compression_level,
+                chunk_rows=h5_chunk_rows,
+                chunk_chans=h5_chunk_chans,
+            )
         for i in range(len(inds_range)-1):
             print('part', i)
             b, e = inds_range[i:i+2]
@@ -928,6 +936,7 @@ class FASTRawCut(FastRawData):
             dict1, dict2 = self.load_all_fields(inds, chan_fix=True, polar_trans=True)
             # large data
             T = dict2[stype]
+            dataset_kwargs = resolve_h5_dataset_kwargs(T.shape, compression_config)
             if sep_save:
                 outname = self.out_name_base + f"{i+1:04d}.hdf5"
                 fout_sep = h5py_write(outname)
@@ -937,7 +946,7 @@ class FASTRawCut(FastRawData):
                 g_sep = fout_sep.create_group('1') # table 1
                 for key in dict1.keys():
                     g_sep[key] = dict1[key]
-                g_sep.create_dataset(stype, data=T, chunks=True, compression=h5_compression)
+                g_sep.create_dataset(stype, data=T, **dataset_kwargs)
                 self.write_fits_header(g_sep, **self.fits_header)
                 self.write_fits_header(g_sep, **self._gen_data_header_updates(T.shape, len(inds)))
                 # waterfall
@@ -959,7 +968,8 @@ class FASTRawCut(FastRawData):
                     # prepare writing spec
                     d_shape = list(T.shape)
                     d_shape[1] = len(self.inds)
-                    g.create_dataset(stype, shape=d_shape, dtype=T.dtype, chunks=True, compression=h5_compression)
+                    merged_kwargs = resolve_h5_dataset_kwargs(tuple(d_shape), compression_config)
+                    g.create_dataset(stype, shape=d_shape, dtype=T.dtype, **merged_kwargs)
                 g[stype][:, b:e, :] = T
                 fout.flush()
                 dict1_list.append(dict1)
