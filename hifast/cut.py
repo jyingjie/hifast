@@ -55,8 +55,10 @@ parser.add_argument('--h5_compression', default='none',
                        '  bitshuffle_zstd level 5, 128x1024: about 1.47x compression, write ~29 s, sampled read ~0.02 s\n'
                        '  Read timings above come from the benchmark script''s sampled read path rather than full-file sequential reads,\n'
                        '  so use them only as a rough comparison between methods.\n'
-                       'Note: plugin compression needs `hdf5plugin`; compressed files may not be '
-                       'opened by CARTA without matching HDF5 filter plugins.'
+                       'Note: plugin compression needs `hdf5plugin`; when opening plugin-compressed files '
+                       'in other HDF5 programs, you may need to set `HDF5_PLUGIN_PATH` to the plugin directory. '
+                       'Prebuilt plugin binaries can be taken from the `hdf5plugin` package: '
+                       'https://pypi.org/project/hdf5plugin/'
                    ))
 parser.add_argument('--h5_compression_level', type=int,
                    help='compression level for `gzip` or `bitshuffle_zstd`; default `2` for gzip and `5` for bitshuffle_zstd')
