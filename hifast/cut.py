@@ -37,22 +37,22 @@ parser.add_argument('--sep_save', type=bool_fun, choices=[True, False], default=
 parser.add_argument('--h5_compression', default='none',
                    help=(
                        'HDF5 compression method for /1/DATA. Choices: `none`, `gzip`, `lzf`, '
-                       '`bitshuffle_lz4`, `bitshuffle_zstd`, or a number in range(10) as a '
+                       '`blosc2_lz4`, `blosc2_zstd`, `bitshuffle_lz4`, `bitshuffle_zstd`, or a number in range(10) as a '
                        'backward-compatible alias for `gzip` level.\n'
                        'Recommended combinations:\n'
                        '  Compatibility/CARTA: `--h5_compression gzip --h5_compression_level 2 '
                        '--h5_chunk_rows 128 --h5_chunk_chans 512`\n'
                        '  Higher compression: `--h5_compression gzip --h5_compression_level 7 '
                        '--h5_chunk_rows 128 --h5_chunk_chans 512`\n'
-                       '  Faster plugin mode: `--h5_compression bitshuffle_lz4 '
+                       '  Faster plugin mode: `--h5_compression blosc2_lz4 '
                        '--h5_chunk_rows 128 --h5_chunk_chans 1024`\n'
-                       '  Smaller plugin mode: `--h5_compression bitshuffle_zstd '
+                       '  Balanced plugin mode: `--h5_compression blosc2_zstd '
                        '--h5_compression_level 5 --h5_chunk_rows 128 --h5_chunk_chans 1024`\n'
                        'Sample benchmark on recent full-frequency 2-pol outputs:\n'
                        '  gzip level 2, 128x512: about 1.50x compression, write ~62-80 s, sampled read ~0.03-0.04 s\n'
                        '  gzip level 7, 128x512: about 1.51x compression, write ~94-104 s, sampled read ~0.09 s\n'
-                       '  bitshuffle_lz4, 128x1024: about 1.45x compression, write ~12-18 s, sampled read ~0.02 s\n'
-                       '  bitshuffle_zstd level 5, 128x1024: about 1.47x compression, write ~29 s, sampled read ~0.02 s\n'
+                       '  blosc2_lz4, 128x1024: about 1.47x compression, write ~9 s, sampled read ~0.05 s\n'
+                       '  blosc2_zstd level 5, 128x1024: about 1.50x compression, write ~15 s, sampled read ~0.04 s\n'
                        '  Read timings above come from the benchmark script''s sampled read path rather than full-file sequential reads,\n'
                        '  so use them only as a rough comparison between methods.\n'
                        'Note: plugin compression needs `hdf5plugin`; when opening plugin-compressed files '
@@ -61,7 +61,7 @@ parser.add_argument('--h5_compression', default='none',
                        'https://pypi.org/project/hdf5plugin/'
                    ))
 parser.add_argument('--h5_compression_level', type=int,
-                   help='compression level for `gzip` or `bitshuffle_zstd`; default `2` for gzip and `5` for bitshuffle_zstd')
+                   help='compression level for `gzip`, `blosc2_lz4`, `blosc2_zstd`, or `bitshuffle_zstd`; default `2` for gzip and `5` for plugin zstd/blosc2 modes')
 parser.add_argument('--h5_chunk_rows', type=int,
                    help='chunk size along the row axis of output DATA; method-dependent default if omitted')
 parser.add_argument('--h5_chunk_chans', type=int,

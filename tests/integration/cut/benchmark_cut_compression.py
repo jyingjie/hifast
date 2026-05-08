@@ -29,6 +29,8 @@ DEFAULT_CASES = [
     {"name": "gzip_7_chunk_2x128x512", "kind": "gzip", "level": 7, "shuffle": True, "chunk": (2, 128, 512)},
     {"name": "gzip_9_chunk_2x64x1024", "kind": "gzip", "level": 9, "shuffle": True, "chunk": (2, 64, 1024)},
     {"name": "lzf_chunk_2x64x1024", "kind": "lzf", "shuffle": True, "chunk": (2, 64, 1024)},
+    {"name": "blosc2_lz4_5_chunk_2x128x1024", "kind": "blosc2_lz4", "level": 5, "chunk": (2, 128, 1024)},
+    {"name": "blosc2_zstd_5_chunk_2x128x1024", "kind": "blosc2_zstd", "level": 5, "chunk": (2, 128, 1024)},
     {"name": "bitshuffle_lz4_chunk_2x64x1024", "kind": "bitshuffle_lz4", "chunk": (2, 64, 1024)},
     {"name": "zstd_9_chunk_2x64x1024", "kind": "zstd", "level": 9, "chunk": (2, 64, 1024)},
     {"name": "bitshuffle_zstd_5_chunk_2x64x1024", "kind": "bitshuffle_zstd", "level": 5, "chunk": (2, 64, 1024)},
@@ -94,6 +96,14 @@ def resolve_case_kwargs(case: dict) -> dict:
         if hdf5plugin is None:
             raise RuntimeError("hdf5plugin is not installed")
         return hdf5plugin.Bitshuffle(cname="lz4")
+    if kind == "blosc2_lz4":
+        if hdf5plugin is None:
+            raise RuntimeError("hdf5plugin is not installed")
+        return hdf5plugin.Blosc2(cname="lz4", clevel=case["level"], filters=hdf5plugin.Blosc2.BITSHUFFLE)
+    if kind == "blosc2_zstd":
+        if hdf5plugin is None:
+            raise RuntimeError("hdf5plugin is not installed")
+        return hdf5plugin.Blosc2(cname="zstd", clevel=case["level"], filters=hdf5plugin.Blosc2.BITSHUFFLE)
     if kind == "bitshuffle_zstd":
         if hdf5plugin is None:
             raise RuntimeError("hdf5plugin is not installed")

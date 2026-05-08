@@ -23,6 +23,8 @@ class TestCutCompressionOptions(unittest.TestCase):
 
         self.assertEqual(resolve_h5_chunk(shape, "gzip"), (2, 128, 512))
         self.assertEqual(resolve_h5_chunk(shape, "lzf"), (2, 64, 1024))
+        self.assertEqual(resolve_h5_chunk(shape, "blosc2_lz4"), (2, 128, 1024))
+        self.assertEqual(resolve_h5_chunk(shape, "blosc2_zstd"), (2, 128, 1024))
         self.assertEqual(resolve_h5_chunk(shape, "bitshuffle_lz4"), (2, 128, 1024))
         self.assertEqual(resolve_h5_chunk(shape, "bitshuffle_zstd"), (2, 128, 1024))
 
@@ -64,6 +66,42 @@ class TestCutCompressionOptions(unittest.TestCase):
         self.assertEqual(kwargs["fake_filter"], "bitshuffle")
         self.assertEqual(kwargs["plugin_kwargs"], {"cname": "zstd", "clevel": 5})
 
+    def test_resolve_blosc2_lz4_kwargs(self):
+        class _FakeBlosc2Plugin(_FakePlugin):
+            class Blosc2:
+                BITSHUFFLE = 2
+
+                def __new__(cls, **kwargs):
+                    return {
+                        "fake_filter": "blosc2",
+                        "plugin_kwargs": kwargs,
+                    }
+
+        with patch("hifast.utils.h5compression.load_hdf5plugin", return_value=_FakeBlosc2Plugin):
+            kwargs = resolve_h5_dataset_kwargs((2, 2048, 65536), H5CompressionConfig(compression="blosc2_lz4"))
+
+        self.assertEqual(kwargs["chunks"], (2, 128, 1024))
+        self.assertEqual(kwargs["fake_filter"], "blosc2")
+        self.assertEqual(kwargs["plugin_kwargs"], {"cname": "lz4", "clevel": 5, "filters": 2})
+
+    def test_resolve_blosc2_zstd_kwargs(self):
+        class _FakeBlosc2Plugin(_FakePlugin):
+            class Blosc2:
+                BITSHUFFLE = 2
+
+                def __new__(cls, **kwargs):
+                    return {
+                        "fake_filter": "blosc2",
+                        "plugin_kwargs": kwargs,
+                    }
+
+        with patch("hifast.utils.h5compression.load_hdf5plugin", return_value=_FakeBlosc2Plugin):
+            kwargs = resolve_h5_dataset_kwargs((2, 2048, 65536), H5CompressionConfig(compression="blosc2_zstd"))
+
+        self.assertEqual(kwargs["chunks"], (2, 128, 1024))
+        self.assertEqual(kwargs["fake_filter"], "blosc2")
+        self.assertEqual(kwargs["plugin_kwargs"], {"cname": "zstd", "clevel": 5, "filters": 2})
+
     def test_invalid_none_level(self):
         with self.assertRaisesRegex(ValueError, "`none` does not use h5_compression_level"):
             resolve_h5_dataset_kwargs((2, 2048, 65536), H5CompressionConfig(compression="none", compression_level=1))
@@ -80,6 +118,30 @@ class TestCutCompressionOptions(unittest.TestCase):
     def test_invalid_gzip_level(self):
         with self.assertRaisesRegex(ValueError, "gzip compression level should be in range\\(10\\)"):
             resolve_h5_dataset_kwargs((2, 2048, 65536), H5CompressionConfig(compression="gzip", compression_level=10))
+
+    def test_invalid_blosc2_lz4_level(self):
+        class _FakeBlosc2Plugin(_FakePlugin):
+            class Blosc2:
+                BITSHUFFLE = 2
+
+                def __new__(cls, **kwargs):
+                    return kwargs
+
+        with patch("hifast.utils.h5compression.load_hdf5plugin", return_value=_FakeBlosc2Plugin):
+            with self.assertRaisesRegex(ValueError, "blosc2_lz4 compression level should be in \\[0, 9\\]"):
+                resolve_h5_dataset_kwargs((2, 2048, 65536), H5CompressionConfig(compression="blosc2_lz4", compression_level=10))
+
+    def test_invalid_blosc2_zstd_level(self):
+        class _FakeBlosc2Plugin(_FakePlugin):
+            class Blosc2:
+                BITSHUFFLE = 2
+
+                def __new__(cls, **kwargs):
+                    return kwargs
+
+        with patch("hifast.utils.h5compression.load_hdf5plugin", return_value=_FakeBlosc2Plugin):
+            with self.assertRaisesRegex(ValueError, "blosc2_zstd compression level should be in \\[0, 9\\]"):
+                resolve_h5_dataset_kwargs((2, 2048, 65536), H5CompressionConfig(compression="blosc2_zstd", compression_level=10))
 
     def test_invalid_bitshuffle_zstd_level(self):
         with patch("hifast.utils.h5compression.load_hdf5plugin", return_value=_FakePlugin):

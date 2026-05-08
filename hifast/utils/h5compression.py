@@ -29,7 +29,15 @@ def normalize_h5_compression_method(h5_compression):
     method = str(h5_compression).strip().lower()
     if method == "":
         method = "none"
-    valid = {"none", "gzip", "lzf", "bitshuffle_lz4", "bitshuffle_zstd"}
+    valid = {
+        "none",
+        "gzip",
+        "lzf",
+        "bitshuffle_lz4",
+        "bitshuffle_zstd",
+        "blosc2_lz4",
+        "blosc2_zstd",
+    }
     if method not in valid:
         raise ValueError(f"Unsupported h5 compression method: {h5_compression}")
     return method
@@ -39,7 +47,7 @@ def resolve_h5_chunk(shape, method, chunk_rows=None, chunk_chans=None):
     npolar, n_rows, n_chans = [int(v) for v in shape]
     if method == "gzip":
         default_rows, default_chans = 128, 512
-    elif method in {"bitshuffle_lz4", "bitshuffle_zstd"}:
+    elif method in {"bitshuffle_lz4", "bitshuffle_zstd", "blosc2_lz4", "blosc2_zstd"}:
         default_rows, default_chans = 128, 1024
     else:
         default_rows, default_chans = 64, 1024
@@ -99,5 +107,21 @@ def resolve_h5_dataset_kwargs(shape, config: H5CompressionConfig):
         if not 1 <= level <= 22:
             raise ValueError("bitshuffle_zstd compression level should be in [1, 22]")
         kwargs.update(hdf5plugin.Bitshuffle(cname="zstd", clevel=level))
+        return kwargs
+    if method == "blosc2_lz4":
+        if level is None:
+            level = 5
+        level = int(level)
+        if not 0 <= level <= 9:
+            raise ValueError("blosc2_lz4 compression level should be in [0, 9]")
+        kwargs.update(hdf5plugin.Blosc2(cname="lz4", clevel=level, filters=hdf5plugin.Blosc2.BITSHUFFLE))
+        return kwargs
+    if method == "blosc2_zstd":
+        if level is None:
+            level = 5
+        level = int(level)
+        if not 0 <= level <= 9:
+            raise ValueError("blosc2_zstd compression level should be in [0, 9]")
+        kwargs.update(hdf5plugin.Blosc2(cname="zstd", clevel=level, filters=hdf5plugin.Blosc2.BITSHUFFLE))
         return kwargs
     raise ValueError(f"Unsupported h5 compression method: {method}")
