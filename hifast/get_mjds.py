@@ -1,8 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from .core.tcal_onoff import tcal_onoff
-from .utils.io import save_specs_hdf5
+from .utils.io import (
+    ArgumentParser,
+    add_h5_compression_arguments,
+    normalize_h5_compression_args,
+    save_specs_hdf5,
+)
 from glob import glob
 import numpy as np
 import os
@@ -19,7 +23,8 @@ import re
 # In[432]:
 
 
-def get_mjds(fname_part, outdir=None, read_all=False, t_step=1):
+def get_mjds(fname_part, outdir=None, read_all=False, t_step=1, h5_compression_config=None):
+    from .core.tcal_onoff import tcal_onoff
     mjd_delta= t_step*np.array(1.16508454084396362304687500e-05, dtype=np.float64)
     end_file= len(glob(fname_part+'*.fits'))
     
@@ -35,7 +40,7 @@ def get_mjds(fname_part, outdir=None, read_all=False, t_step=1):
     else:
         outname= os.path.join(outdir, 
                 f"{os.path.basename(fname_part)[:-1]}-specs_T-mjd-{os.path.basename(os.path.dirname(fname_part))}.hdf5")
-        save_specs_hdf5(outname,{'mjd':mjds})
+        save_specs_hdf5(outname, {'mjd':mjds}, h5_compression_config=h5_compression_config)
 
 
 # In[478]:
@@ -62,8 +67,7 @@ def main(basedirs,outdir='./', band=None, **kargs):
 
 if __name__ == '__main__':
     import os
-    import argparse
-    parser = argparse.ArgumentParser(allow_abbrev=False)
+    parser = ArgumentParser(allow_abbrev=False)
     parser.add_argument('basedirs',nargs='+',
                         help='basedirs')
     parser.add_argument('--outdir', required=False, default='./',
@@ -74,5 +78,14 @@ if __name__ == '__main__':
                        help='time step; s')
     parser.add_argument('-b', '--band', nargs='+', choices=['F', 'W', 'N'],
                        help='freq band type, F, W, N')
+    add_h5_compression_arguments(parser)
     args = parser.parse_args()
-    main(args.basedirs, args.outdir, args.band, read_all=args.read_all, t_step=args.t_step)
+    h5_compression_config = normalize_h5_compression_args(args)
+    main(
+        args.basedirs,
+        args.outdir,
+        args.band,
+        read_all=args.read_all,
+        t_step=args.t_step,
+        h5_compression_config=h5_compression_config,
+    )

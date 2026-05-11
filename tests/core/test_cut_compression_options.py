@@ -1,11 +1,18 @@
 import unittest
+import tempfile
 from unittest.mock import patch
+
+import numpy as np
+import h5py
 
 from hifast.utils.h5compression import (
     H5CompressionConfig,
+    normalize_h5_compression_args,
     resolve_h5_chunk,
     resolve_h5_dataset_kwargs,
 )
+from hifast.utils.io import save_specs_hdf5
+from hifast.utils.io import BaseIO
 
 
 class _FakePlugin:
@@ -33,6 +40,10 @@ class TestCutCompressionOptions(unittest.TestCase):
 
         self.assertEqual(resolve_h5_chunk(shape, "gzip"), (2, 100, 400))
         self.assertEqual(resolve_h5_chunk(shape, "bitshuffle_lz4"), (2, 100, 400))
+
+    def test_resolve_h5_chunk_for_2d_and_1d(self):
+        self.assertEqual(resolve_h5_chunk((2048, 65536), "gzip"), (128, 512))
+        self.assertEqual(resolve_h5_chunk((65536,), "gzip"), (512,))
 
     def test_resolve_gzip_kwargs_defaults(self):
         kwargs = resolve_h5_dataset_kwargs((2, 2048, 65536), H5CompressionConfig(compression="gzip"))
@@ -147,6 +158,60 @@ class TestCutCompressionOptions(unittest.TestCase):
         with patch("hifast.utils.h5compression.load_hdf5plugin", return_value=_FakePlugin):
             with self.assertRaisesRegex(ValueError, "bitshuffle_zstd compression level should be in \\[1, 22\\]"):
                 resolve_h5_dataset_kwargs((2, 2048, 65536), H5CompressionConfig(compression="bitshuffle_zstd", compression_level=0))
+
+    def test_normalize_h5_compression_args_legacy_numeric(self):
+        class _Args:
+            h5_compression = "3"
+            h5_compression_level = None
+            h5_chunk_rows = 64
+            h5_chunk_chans = 256
+
+        config = normalize_h5_compression_args(_Args)
+        self.assertEqual(config, H5CompressionConfig(compression="gzip", compression_level=3, chunk_rows=64, chunk_chans=256))
+
+    def test_save_specs_hdf5_applies_gzip_compression(self):
+        dict_in = {
+            "Header": {"test": "yes"},
+            "Ta": np.zeros((2, 32, 64), dtype=np.float32),
+            "freq": np.linspace(1000, 1001, 64),
+            "mjd": np.linspace(60000, 60001, 32),
+        }
+        config = H5CompressionConfig(compression="gzip", compression_level=2)
+        with tempfile.NamedTemporaryFile(suffix=".hdf5") as tmp:
+            save_specs_hdf5(tmp.name, dict_in, h5_compression_config=config)
+            with h5py.File(tmp.name, "r") as f:
+                self.assertEqual(f["S"]["Ta"].compression, "gzip")
+                self.assertEqual(f["S"]["Ta"].compression_opts, 2)
+                self.assertEqual(f["S"]["Ta"].chunks, (2, 32, 64))
+                self.assertEqual(f["S"]["freq"].compression, "gzip")
+                self.assertEqual(f["S"]["mjd"].compression, "gzip")
+
+    def test_baseio_builds_default_h5_compression_config(self):
+        class _Args:
+            pass
+
+        io = BaseIO.__new__(BaseIO)
+        io.args = _Args()
+        self.assertEqual(io._get_h5_compression_config(), H5CompressionConfig())
+
+    def test_baseio_builds_h5_compression_config_from_args(self):
+        class _Args:
+            h5_compression = "blosc2_zstd"
+            h5_compression_level = 5
+            h5_chunk_rows = 128
+            h5_chunk_chans = 1024
+
+        io = BaseIO.__new__(BaseIO)
+        io.args = _Args()
+        self.assertEqual(
+            io._get_h5_compression_config(),
+            H5CompressionConfig(
+                compression="blosc2_zstd",
+                compression_level=5,
+                chunk_rows=128,
+                chunk_chans=1024,
+            ),
+        )
 
 
 if __name__ == "__main__":

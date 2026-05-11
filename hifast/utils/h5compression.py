@@ -11,12 +11,83 @@ class H5CompressionConfig:
     chunk_chans: int | None = None
 
 
+H5_COMPRESSION_HELP = (
+    'HDF5 compression method. Choices: `none`, `gzip`, `lzf`, '
+    '`blosc2_lz4`, `blosc2_zstd`, `bitshuffle_lz4`, `bitshuffle_zstd`, or a number in range(10) as a '
+    'backward-compatible alias for `gzip` level.\n'
+    'Recommended combinations:\n'
+    '  Compatibility/CARTA: `--h5_compression gzip --h5_compression_level 2 '
+    '--h5_chunk_rows 128 --h5_chunk_chans 512`\n'
+    '  Higher compression: `--h5_compression gzip --h5_compression_level 7 '
+    '--h5_chunk_rows 128 --h5_chunk_chans 512`\n'
+    '  Faster plugin mode: `--h5_compression blosc2_lz4 '
+    '--h5_chunk_rows 128 --h5_chunk_chans 1024`\n'
+    '  Balanced plugin mode: `--h5_compression blosc2_zstd '
+    '--h5_compression_level 5 --h5_chunk_rows 128 --h5_chunk_chans 1024`\n'
+    'Sample benchmark on recent full-frequency 2-pol outputs:\n'
+    '  gzip level 2, 128x512: about 1.50x compression, write ~62-80 s, sampled read ~0.03-0.04 s\n'
+    '  gzip level 7, 128x512: about 1.51x compression, write ~94-104 s, sampled read ~0.09 s\n'
+    '  blosc2_lz4, 128x1024: about 1.47x compression, write ~9 s, sampled read ~0.05 s\n'
+    '  blosc2_zstd level 5, 128x1024: about 1.50x compression, write ~15 s, sampled read ~0.04 s\n'
+    '  Read timings above come from the benchmark script''s sampled read path rather than full-file sequential reads,\n'
+    '  so use them only as a rough comparison between methods.\n'
+    'Note: plugin compression needs `hdf5plugin`; when opening plugin-compressed files '
+    'in other HDF5 programs, you may need to set `HDF5_PLUGIN_PATH` to the plugin directory. '
+    'Prebuilt plugin binaries can be taken from the `hdf5plugin` package: '
+    'https://pypi.org/project/hdf5plugin/'
+)
+
+H5_COMPRESSION_LEVEL_HELP = (
+    'compression level for `gzip`, `blosc2_lz4`, `blosc2_zstd`, or `bitshuffle_zstd`; '
+    'default `2` for gzip and `5` for plugin zstd/blosc2 modes'
+)
+
+H5_CHUNK_ROWS_HELP = (
+    'chunk size along the row axis of output datasets; method-dependent default if omitted'
+)
+
+H5_CHUNK_CHANS_HELP = (
+    'chunk size along the channel axis of output datasets; method-dependent default if omitted'
+)
+
+
 def load_hdf5plugin():
     try:
         import hdf5plugin
     except ImportError as exc:
-        raise ImportError("`bitshuffle_*` compression needs `hdf5plugin` to be installed") from exc
+        raise ImportError("plugin compression needs `hdf5plugin` to be installed") from exc
     return hdf5plugin
+
+
+def add_h5_compression_arguments(parser):
+    parser.add_argument('--h5_compression', default='none', help=H5_COMPRESSION_HELP)
+    parser.add_argument('--h5_compression_level', type=int, help=H5_COMPRESSION_LEVEL_HELP)
+    parser.add_argument('--h5_chunk_rows', type=int, help=H5_CHUNK_ROWS_HELP)
+    parser.add_argument('--h5_chunk_chans', type=int, help=H5_CHUNK_CHANS_HELP)
+
+
+def normalize_h5_compression_args(args):
+    try:
+        legacy_level = int(args.h5_compression)
+    except ValueError:
+        legacy_level = None
+    if legacy_level is not None:
+        if not 0 <= legacy_level <= 9:
+            raise ValueError('legacy numeric --h5_compression should be in range(10)')
+        if args.h5_compression_level is not None:
+            raise ValueError('do not set both numeric --h5_compression and --h5_compression_level')
+        args.h5_compression = 'gzip'
+        args.h5_compression_level = legacy_level
+    if args.h5_chunk_rows is not None and args.h5_chunk_rows <= 0:
+        raise ValueError('--h5_chunk_rows should be a positive integer')
+    if args.h5_chunk_chans is not None and args.h5_chunk_chans <= 0:
+        raise ValueError('--h5_chunk_chans should be a positive integer')
+    return H5CompressionConfig(
+        compression=args.h5_compression,
+        compression_level=args.h5_compression_level,
+        chunk_rows=args.h5_chunk_rows,
+        chunk_chans=args.h5_chunk_chans,
+    )
 
 
 def normalize_h5_compression_method(h5_compression):
@@ -44,7 +115,9 @@ def normalize_h5_compression_method(h5_compression):
 
 
 def resolve_h5_chunk(shape, method, chunk_rows=None, chunk_chans=None):
-    npolar, n_rows, n_chans = [int(v) for v in shape]
+    dims = tuple(int(v) for v in shape)
+    if len(dims) == 0:
+        return None
     if method == "gzip":
         default_rows, default_chans = 128, 512
     elif method in {"bitshuffle_lz4", "bitshuffle_zstd", "blosc2_lz4", "blosc2_zstd"}:
@@ -55,7 +128,12 @@ def resolve_h5_chunk(shape, method, chunk_rows=None, chunk_chans=None):
     chunk_chans = default_chans if chunk_chans is None else int(chunk_chans)
     if chunk_rows <= 0 or chunk_chans <= 0:
         raise ValueError("h5 chunk sizes should be positive integers")
-    return (npolar, min(n_rows, chunk_rows), min(n_chans, chunk_chans))
+    if len(dims) == 1:
+        return (min(dims[0], chunk_chans),)
+    if len(dims) == 2:
+        return (min(dims[0], chunk_rows), min(dims[1], chunk_chans))
+    prefix = dims[:-2]
+    return prefix + (min(dims[-2], chunk_rows), min(dims[-1], chunk_chans))
 
 
 def resolve_h5_dataset_kwargs(shape, config: H5CompressionConfig):
@@ -68,7 +146,9 @@ def resolve_h5_dataset_kwargs(shape, config: H5CompressionConfig):
         chunk_chans=config.chunk_chans,
     )
 
-    kwargs = {"chunks": chunk}
+    kwargs = {}
+    if chunk is not None:
+        kwargs["chunks"] = chunk
     if method == "none":
         if level is not None:
             raise ValueError("`none` does not use h5_compression_level")

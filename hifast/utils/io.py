@@ -3,8 +3,9 @@
 __all__ = ['formatter_class', 'os', 'sys', 'c', 're', 'copy', 'ArgumentParser', 'argparse', 'sub_patten', 'bool_fun',
            'add_common_argument', 'hide_paras', 'del_paras_in_string', 'rec_his', 'MjdChanPolar_to_PolarMjdChan',
            'PolarMjdChan_to_MjdChanPolar', 'save_dict_hdf5', 'gen_carta_group', 'save_specs_hdf5', 'load_hdf5_to_dict',
-           'load_hdf5_to_dict_old', 'get_project', 'get_date_from_path', 'get_nB', 'replace_nB', 'Path_IO', 'BaseIO',
-           'HFDataT', 'HFGroup', 'H5HDU', 'H5FitsRead']
+           'load_hdf5_to_dict_old', 'get_project', 'get_date_from_path', 'get_nB', 'replace_nB',
+           'H5CompressionConfig', 'add_h5_compression_arguments', 'normalize_h5_compression_args',
+           'Path_IO', 'BaseIO', 'HFDataT', 'HFGroup', 'H5HDU', 'H5FitsRead']
 
 
 import os
@@ -13,6 +14,12 @@ import re
 import copy
 from .colors import Colors as c
 from .conf_arg import ArgumentParser, argparse
+from .h5compression import (
+    H5CompressionConfig,
+    add_h5_compression_arguments,
+    normalize_h5_compression_args,
+    resolve_h5_dataset_kwargs,
+)
 # from configargparse import ArgumentParser
 # import argparse
 formatter_class = argparse.ArgumentDefaultsHelpFormatter
@@ -163,16 +170,18 @@ def PolarMjdChan_to_MjdChanPolar(pmc, check_polar=True):
     return pmc.transpose((1, 2, 0))
 
 
-def save_dict_hdf5(fname, dict_in, mode='w', spec2float32=False):
+def save_dict_hdf5(fname, dict_in, mode='w', spec2float32=False, h5_compression_config=None):
     """
     fname: str
     dict_in: dict; keys of the dict_in are str, value needs support slice, i.e. value[:].
              if 'Header':{...} in dict_in, save in attrs of group 'Header'
     spec2float32: default: True
              if True, convert 'Ta', 'flux', 'T' to float32
+    h5_compression_config: H5CompressionConfig or None
     """
     import h5py
-    import numpy as np
+    if h5_compression_config is None:
+        h5_compression_config = H5CompressionConfig()
     try:
         f = h5py.File(fname, mode)
     except OSError:
@@ -188,13 +197,32 @@ def save_dict_hdf5(fname, dict_in, mode='w', spec2float32=False):
             for key2 in header.keys():
                 f['Header'].attrs[key2] = header[key2]
         else:
-            if isinstance(dict_in[key], h5py.Dataset):
-                f[key] = dict_in[key][:]
-            elif spec2float32 and isinstance(dict_in[key], np.ndarray) and key in ['Ta', 'flux', 'T', 'Power']:
-                f[key] = dict_in[key].astype('float32')
-            else:
-                f[key] = dict_in[key]
+            _save_h5_item(f, key, dict_in[key], spec2float32, h5_compression_config)
     f.close()
+
+
+def _prepare_h5_dataset_data(value, spec2float32, key):
+    import h5py
+    import numpy as np
+    if isinstance(value, h5py.Dataset):
+        data = value[:]
+    elif spec2float32 and isinstance(value, np.ndarray) and key in ['Ta', 'flux', 'T', 'Power']:
+        data = value.astype('float32')
+    else:
+        data = value
+    shape = getattr(data, 'shape', None)
+    if shape is None or len(shape) == 0:
+        return data, None
+    return data, shape
+
+
+def _save_h5_item(group, key, value, spec2float32, h5_compression_config):
+    data, shape = _prepare_h5_dataset_data(value, spec2float32, key)
+    if shape is None:
+        group[key] = data
+        return
+    dataset_kwargs = resolve_h5_dataset_kwargs(shape, h5_compression_config)
+    group.create_dataset(key, data=data, **dataset_kwargs)
 
 
 def gen_carta_group(f, data_shape, wcs_data_name, axis1=None, axis2=None,
@@ -249,16 +277,19 @@ def gen_carta_group(f, data_shape, wcs_data_name, axis1=None, axis2=None,
         f[image_group].attrs[key] = wcs[key]
 
 
-def save_specs_hdf5(fname, dict_in, mode='w', spec2float32=True, wcs_data_name=None):
+def save_specs_hdf5(fname, dict_in, mode='w', spec2float32=True, wcs_data_name=None,
+                    h5_compression_config=None):
     """
     fname: str
     dict_in: dict; keys of the dict_in are str, value needs support slice, i.e. value[:].
              if 'Header':{...} in dict_in, save in attrs of group 'Header'
     spec2float32: default: True
              if True, convert 'Ta', 'flux', 'T' to float32
+    h5_compression_config: H5CompressionConfig or None
     """
     import h5py
-    import numpy as np
+    if h5_compression_config is None:
+        h5_compression_config = H5CompressionConfig()
     # handle hdf5 is opened
     try:
         f = h5py.File(fname, mode)
@@ -277,12 +308,7 @@ def save_specs_hdf5(fname, dict_in, mode='w', spec2float32=True, wcs_data_name=N
             for key2 in header.keys():
                 f['Header'].attrs[key2] = header[key2]
         else:
-            if isinstance(dict_in[key], h5py.Dataset):
-                f['S'][key] = dict_in[key][:]
-            elif spec2float32 and isinstance(dict_in[key], np.ndarray) and key in ['Ta', 'flux', 'T', 'Power']:
-                f['S'][key] = dict_in[key].astype('float32')
-            else:
-                f['S'][key] = dict_in[key]
+            _save_h5_item(f['S'], key, dict_in[key], spec2float32, h5_compression_config)
     # save group for carta read
     # try:
 
@@ -506,6 +532,7 @@ class BaseIO(Path_IO):
         self.args = args if inplace_args else copy.deepcopy(args)
         self.dict_in = dict_in
         self.HistoryAdd = HistoryAdd
+        self.h5_compression_config = self._get_h5_compression_config()
         self._gen_fpath_out()
         if self.dict_in is None:
             self._check_fout()
@@ -517,6 +544,12 @@ class BaseIO(Path_IO):
         self.load_radec()
         self.load_and_add_Header()
         self._set_pre_output()
+
+    def _get_h5_compression_config(self,):
+        args = self.args
+        if not hasattr(args, 'h5_compression'):
+            return H5CompressionConfig()
+        return normalize_h5_compression_args(args)
 
     def _import_m(self,):
         """
@@ -676,7 +709,12 @@ class BaseIO(Path_IO):
 
     def save(self,):
         print("Saving...")
-        save_specs_hdf5(self.fpath_out, self.dict_out, wcs_data_name=self.outfield)
+        save_specs_hdf5(
+            self.fpath_out,
+            self.dict_out,
+            wcs_data_name=self.outfield,
+            h5_compression_config=self.h5_compression_config,
+        )
         print(f"Saved to {self.fpath_out}")
 
     def gen_s2p_out(self):

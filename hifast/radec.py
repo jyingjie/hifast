@@ -67,6 +67,7 @@ def create_parser():
                        help='Number of parallel processes for multi-beam calculation.')
     group.add_argument('--no_cache', action='store_true',
                        help='Disable using cached intermediate results (forces fresh KY file processing).')
+    add_h5_compression_arguments(parser)
     
     return parser
 
@@ -74,6 +75,7 @@ parser = create_parser()
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    h5_compression_config = normalize_h5_compression_args(args)
 #     print('#'*35+'Args'+'#'*35)
 #     print(parser.format_values())  # useful for logging where different settings came from
 #     print('#'*35+'####'+'#'*35)
@@ -127,7 +129,7 @@ if __name__ == '__main__':
     header = rec_his(args=json.dumps(args.__dict__))
     print('Saving...')
     radec['Header'] = header
-    save_specs_hdf5(fileout, radec)
+    save_specs_hdf5(fileout, radec, h5_compression_config=h5_compression_config)
     print(f"Saved to {fileout}")
     if plot:
         plot_radec(radec, fileout + '.pdf')
