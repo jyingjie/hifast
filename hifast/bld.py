@@ -22,6 +22,7 @@ def create_parser():
                             allow_abbrev=False,
                             description='Fit and subtract the baseline from spectral data.')
     add_common_argument(parser)
+    add_h5_compression_arguments(parser)
     
     # Input/Output
     parser.add_argument('fpath', metavar='FILE',

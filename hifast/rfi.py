@@ -12,6 +12,7 @@ parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:
                         formatter_class=formatter_class, allow_abbrev=False,
                         description='rfi', )
 add_common_argument(parser)
+add_h5_compression_arguments(parser)
 parser.add_argument('fpath',
                     help='input baselined spectra file path.')
 # not support --frange

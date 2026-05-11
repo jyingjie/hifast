@@ -49,6 +49,15 @@ def write_header(f, header):
         f['Header'].attrs[key2] = header[key2]
 
 
+def write_dataset_with_config(group, name, data, h5_compression_config):
+    shape = getattr(data, 'shape', None)
+    if shape is None or len(shape) == 0:
+        group[name] = data
+        return
+    dataset_kwargs = resolve_h5_dataset_kwargs(shape, h5_compression_config)
+    group.create_dataset(name, data=data, **dataset_kwargs)
+
+
 def mean_a(arr):
     """
     calculate the mean value of 5th to 95th peercent of the input arr
@@ -245,7 +254,8 @@ class CheckPCal(CalOnOff):
 
 
 class CalOnOffSav():
-    def __call__(self, outdir='./', step=None, header=None, sep_save=False, save_pcals=False, cali=True):
+    def __call__(self, outdir='./', step=None, header=None, sep_save=False, save_pcals=False, cali=True,
+                 h5_compression_config=None):
         """
         get T, mjd etc, and save in hdf5 file
 
@@ -261,6 +271,8 @@ class CalOnOffSav():
             if True, save file every step.
         """
         #
+        if h5_compression_config is None:
+            h5_compression_config = H5CompressionConfig()
         self.gen_out_name_base(outdir)
         n_step = self.lens[0]*step if step is not None else len(self.inds)
         inds_range = np.append(np.arange(0, self.inds[-1], n_step), self.inds[-1]+1)
@@ -290,14 +302,14 @@ class CalOnOffSav():
 #                 warnings.warn('More than one-third of the Cals are abandoned. Please check your data and ``--pcal_vary_frac``.')
             if save_pcals:
                 print(f"saving pcals in {outname}")
-                fwp_S['inds_ton'] = self.inds_ton
-                fwp_S['is_aband_whole'] = self.is_aband_whole
+                write_dataset_with_config(fwp_S, 'inds_ton', self.inds_ton, h5_compression_config)
+                write_dataset_with_config(fwp_S, 'is_aband_whole', self.is_aband_whole, h5_compression_config)
                 for attr in ['pcals_merged',
                              'pcals_merged_s',
                              'pcals_amp_diff_interp_values',
                             ]:
                     if hasattr(self, attr):
-                        fwp_S[attr] = getattr(self, attr)
+                        write_dataset_with_config(fwp_S, attr, getattr(self, attr), h5_compression_config)
                 fwp.close()
                 try:
                     del self.pcals
@@ -346,7 +358,7 @@ class CalOnOffSav():
                 # print(res)
                 outname = self.out_name_base + f"-specs_T_{i:04d}_{i+1:04d}.hdf5"
                 res['Header'] = header
-                save_specs_hdf5(outname, res, wcs_data_name='Ta')
+                save_specs_hdf5(outname, res, wcs_data_name='Ta', h5_compression_config=h5_compression_config)
                 print(f"Saved to {outname}")
                 del res
             else:
@@ -360,7 +372,8 @@ class CalOnOffSav():
                     # prepare writing spec
                     d_shape = list(T.shape)
                     d_shape[1] = len(self.inds)
-                    g.create_dataset('Ta', shape=d_shape, dtype=T.dtype, chunks=True)
+                    dataset_kwargs = resolve_h5_dataset_kwargs(d_shape, h5_compression_config)
+                    g.create_dataset('Ta', shape=d_shape, dtype=T.dtype, **dataset_kwargs)
                 g['Ta'][:, b:e, :] = T
                 fout.flush()
                 mjds += [mjd, ]
@@ -369,18 +382,18 @@ class CalOnOffSav():
         if not sep_save:
             write_header(fout, header)
             for key in extra.keys():
-                g[key] = extra[key]
-            g['mjd'] = np.hstack(mjds)
-            g['freq'] = self.freq_use
-            g['Tcal'] = tc_inter
-            g['inds_ton'] = self.inds_ton
-            g['is_aband_whole'] = self.is_aband_whole
+                write_dataset_with_config(g, key, extra[key], h5_compression_config)
+            write_dataset_with_config(g, 'mjd', np.hstack(mjds), h5_compression_config)
+            write_dataset_with_config(g, 'freq', self.freq_use, h5_compression_config)
+            write_dataset_with_config(g, 'Tcal', tc_inter, h5_compression_config)
+            write_dataset_with_config(g, 'inds_ton', self.inds_ton, h5_compression_config)
+            write_dataset_with_config(g, 'is_aband_whole', self.is_aband_whole, h5_compression_config)
             for attr in ['pcals_merged',
                          'pcals_merged_s',
                          'pcals_amp_diff_interp_values',
                         ]:
                 if hasattr(self, attr):
-                    g[attr] = getattr(self, attr)
+                    write_dataset_with_config(g, attr, getattr(self, attr), h5_compression_config)
 
             print(f"Saved to {outname}")
             gen_carta_group(fout, g['Ta'].shape, wcs_data_name='Ta', axis1=g['freq'], axis2=g['mjd'])

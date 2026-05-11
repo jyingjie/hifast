@@ -12,6 +12,7 @@ parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:
                         formatter_class=formatter_class, allow_abbrev=False,
                         description='Fit and subtract standing wave',)
 add_common_argument(parser)
+add_h5_compression_arguments(parser)
 parser.add_argument('fpath',
                     help='input baselined spectra file path')
 parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],

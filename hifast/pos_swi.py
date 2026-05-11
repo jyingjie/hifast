@@ -55,6 +55,7 @@ parser.add_argument('--n_repeat', type=int, required=True,
 
 parser.add_argument('--only_off', type=bool_fun, choices=[True, False], default='False',
                     help='only noise off')
+add_h5_compression_arguments(parser)
 
 
 
@@ -69,6 +70,7 @@ class IO(Path_IO):
         self._check_fout()
         self._import_m()
         self.nB = self.get_nB(self.args.fpath)
+        self.h5_compression_config = normalize_h5_compression_args(self.args)
         self.load_and_add_Header()
 
     def _import_m(self,):
@@ -155,7 +157,12 @@ class IO(Path_IO):
         self.dict_out = dict_out
 
         print("Saving...")
-        save_specs_hdf5(self.fpath_out, self.dict_out, wcs_data_name=self.outfield)
+        save_specs_hdf5(
+            self.fpath_out,
+            self.dict_out,
+            wcs_data_name=self.outfield,
+            h5_compression_config=self.h5_compression_config,
+        )
         print(f"Saved to {self.fpath_out}")
 
 

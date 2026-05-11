@@ -22,6 +22,7 @@ def create_parser():
     parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}", formatter_class=formatter_class, allow_abbrev=False,
                             description='Convert spectra from Antenna Temperature (Ta) to Flux Density (Jy).')
     add_common_argument(parser)
+    add_h5_compression_arguments(parser)
 
     # --- Input/Output ---
     group = parser.add_argument_group('Input/Output')

@@ -28,7 +28,7 @@ from matplotlib import pyplot as plt
 from ..utils.tcal import read_tcal
 from ..utils.misc import smooth_axis1_d3, down_sample, median_filter_axis1_d3
 from ..utils.misc import smooth1d
-from ..utils.io import save_specs_hdf5, MjdChanPolar_to_PolarMjdChan
+from ..utils.io import save_specs_hdf5, MjdChanPolar_to_PolarMjdChan, H5CompressionConfig
 from ..utils.io import H5FitsRead
 
 
@@ -761,7 +761,8 @@ class CalOnOff(FastRawSpec):
         count_off = p_off.astype('float64') / p_cal_s[np.where(inds_in_tcal_off[:,None] - uni[None,:] ==0, )[1]]
         return count_on, count_off, p_cal_s, inds_ton[uni]
 
-    def __call__(self, outdir='./', step=None, header=None, sep_save=False, save_pcals=False, cali=True):
+    def __call__(self, outdir='./', step=None, header=None, sep_save=False, save_pcals=False, cali=True,
+                 h5_compression_config=None):
         """
         get T, mjd etc, and save in hdf5 file
 
@@ -777,6 +778,8 @@ class CalOnOff(FastRawSpec):
             if True, save file every step.
         """
         #
+        if h5_compression_config is None:
+            h5_compression_config = H5CompressionConfig()
         outfield = 'Ta' if cali else 'Power'
         self.gen_out_name_base(outdir)
         n_step= self.lens[0]*step if step is not None else len(self.inds)
@@ -832,7 +835,7 @@ class CalOnOff(FastRawSpec):
                 #print(res)
                 outname= self.out_name_base + f"-specs_T_{i:04d}_{i+1:04d}.hdf5"
                 res['Header'] = header
-                save_specs_hdf5(outname, res, wcs_data_name=outfield)
+                save_specs_hdf5(outname, res, wcs_data_name=outfield, h5_compression_config=h5_compression_config)
                 print(f"Saved to {outname}")
                 del res
             else:
@@ -848,7 +851,7 @@ class CalOnOff(FastRawSpec):
             res['Tcal'] = tc_inter
             outname= self.out_name_base + f"-specs_T.hdf5"
             res['Header'] = header
-            save_specs_hdf5(outname, res, wcs_data_name=outfield)
+            save_specs_hdf5(outname, res, wcs_data_name=outfield, h5_compression_config=h5_compression_config)
             print(f"Saved to {outname}")
         if save_pcals and cali:
             p_cal_s_res = {}
@@ -859,7 +862,7 @@ class CalOnOff(FastRawSpec):
             outname = self.out_name_base +'_p_cal_s.hdf5'
             print(f"p_cal in {outname}")
             p_cal_s_res['Header'] = header
-            save_specs_hdf5(outname, p_cal_s_res)
+            save_specs_hdf5(outname, p_cal_s_res, h5_compression_config=h5_compression_config)
 
 
 def plot_sep(inds_on, inds_off, val_on, val_off, axs=None, figname=None, n_max=1500, re_tick=None, vlines_sep=True):

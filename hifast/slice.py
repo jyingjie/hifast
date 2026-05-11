@@ -11,6 +11,7 @@ sep_line = '##'+'#'*70+'##'
 parser = ArgumentParser(prog=f"python -m hifast.{os.path.basename(sys.argv[0])[:-3]}", formatter_class=formatter_class, allow_abbrev=False,
                         description='', )
 add_common_argument(parser)
+add_h5_compression_arguments(parser)
 parser.add_argument('fpath',
                     help='input spectra temperature file path.')
 parser.add_argument('--frange', type=float, nargs=2, default=[0, float('inf')],

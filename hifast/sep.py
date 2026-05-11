@@ -43,6 +43,7 @@ parser.add_argument('--stop', type=int,
                    help='chunk number of stop')
 parser.add_argument('--sep_save', type=bool_fun, choices=[True, False], default='False',
                    help='every step save to a file')
+add_h5_compression_arguments(parser)
 
 group = parser.add_argument_group(f'*Power and Temperature of Cal smoothing\n{sep_line}')
 group.add_argument('--smooth', choices=['mean','poly','gaussian'], default='gaussian',
@@ -118,6 +119,7 @@ if __name__ == '__main__':
     print('#'*35+'####'+'#'*35)
 
     args = args_
+    h5_compression_config = normalize_h5_compression_args(args)
 
     #check input file exits
     if not os.path.exists(args.fpath):
@@ -273,4 +275,5 @@ if __name__ == '__main__':
                                 )
 
     spec(outdir=args.outdir, step=args.step, header=header,
-         sep_save=args.sep_save, save_pcals=args.save_pcals, cali=(not args.not_cali))
+         sep_save=args.sep_save, save_pcals=args.save_pcals, cali=(not args.not_cali),
+         h5_compression_config=h5_compression_config)
