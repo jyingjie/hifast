@@ -60,10 +60,10 @@ def load_hdf5plugin():
 
 
 def add_h5_compression_arguments(parser):
-    parser.add_argument('--h5_compression', default='none', help=H5_COMPRESSION_HELP)
-    parser.add_argument('--h5_compression_level', type=int, help=H5_COMPRESSION_LEVEL_HELP)
-    parser.add_argument('--h5_chunk_rows', type=int, help=H5_CHUNK_ROWS_HELP)
-    parser.add_argument('--h5_chunk_chans', type=int, help=H5_CHUNK_CHANS_HELP)
+    parser.add_argument('--h5_compression', default='none', env_var='HIFAST_H5_COMPRESSION', help=H5_COMPRESSION_HELP)
+    parser.add_argument('--h5_compression_level', type=int, env_var='HIFAST_H5_COMPRESSION_LEVEL', help=H5_COMPRESSION_LEVEL_HELP)
+    parser.add_argument('--h5_chunk_rows', type=int, env_var='HIFAST_H5_CHUNK_ROWS', help=H5_CHUNK_ROWS_HELP)
+    parser.add_argument('--h5_chunk_chans', type=int, env_var='HIFAST_H5_CHUNK_CHANS', help=H5_CHUNK_CHANS_HELP)
 
 
 def normalize_h5_compression_args(args):

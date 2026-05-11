@@ -7,12 +7,14 @@ import h5py
 
 from hifast.utils.h5compression import (
     H5CompressionConfig,
+    add_h5_compression_arguments,
     normalize_h5_compression_args,
     resolve_h5_chunk,
     resolve_h5_dataset_kwargs,
 )
 from hifast.utils.io import save_specs_hdf5
 from hifast.utils.io import BaseIO
+from hifast.utils.io import ArgumentParser
 
 
 class _FakePlugin:
@@ -168,6 +170,15 @@ class TestCutCompressionOptions(unittest.TestCase):
 
         config = normalize_h5_compression_args(_Args)
         self.assertEqual(config, H5CompressionConfig(compression="gzip", compression_level=3, chunk_rows=64, chunk_chans=256))
+
+    def test_add_h5_compression_arguments_sets_env_vars(self):
+        parser = ArgumentParser(allow_abbrev=False)
+        add_h5_compression_arguments(parser)
+        actions = {action.dest: action for action in parser._actions}
+        self.assertEqual(actions["h5_compression"].env_var, "HIFAST_H5_COMPRESSION")
+        self.assertEqual(actions["h5_compression_level"].env_var, "HIFAST_H5_COMPRESSION_LEVEL")
+        self.assertEqual(actions["h5_chunk_rows"].env_var, "HIFAST_H5_CHUNK_ROWS")
+        self.assertEqual(actions["h5_chunk_chans"].env_var, "HIFAST_H5_CHUNK_CHANS")
 
     def test_save_specs_hdf5_applies_gzip_compression(self):
         dict_in = {
