@@ -115,11 +115,13 @@ setuptools.setup(
               'hifast.utils',
               'hifast.core',
               'hifast.ripple',
+              'hifast.rfi_bump_support',
               'hifast.interaction',
               'hifast.cbr'],
     package_data={
         "hifast.core": ["data/*.txt", "data/*.json"],
         "hifast.cbr": ["data/*.json"],
+        "hifast.rfi_bump_support": ["configs/*.yaml"],
     },
     scripts = glob.glob('scripts/*.sh'),
     install_requires=install_requires,

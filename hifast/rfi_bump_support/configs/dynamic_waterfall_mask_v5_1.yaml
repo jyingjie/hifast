@@ -1,0 +1,75 @@
+# v5.1：逐波束独立定位，按当前样本的实测残留选择最窄可用 mask。
+# 本参数文件在新的日期测试前固定；保留测试数据不得用于修改这些阈值。
+
+metadata:
+  version: independent_track_adaptive_width_v5_1
+  status: frozen_holdout_validation
+  formal_science_mask: false
+
+local_guide_discovery:
+  profile_statistic: mean_median_average
+  minimum_peak_prominence: 0.025
+  minimum_peak_height: 0.05
+  minimum_peak_separation_mhz: 0.12
+  frequency_edge_exclusion_mhz: 0.18
+  maximum_profile_peaks: 18
+  chain_lengths: [4, 3]
+  spacing_range_mhz: [0.78, 1.12]
+  maximum_spacing_standard_deviation_mhz: 0.075
+
+tracker:
+  maximum_common_shift_mhz: 0.14
+  maximum_jump_channels_per_time_bin: 4
+  transition_penalty_per_channel_squared: 0.22
+  teeth_used_for_score: 3
+  response_clip: [-2.0, 8.0]
+  local_refine_half_width_channels: 4
+  common_refine_time_median_rows: 3
+  support_response_threshold: 0.5
+  minimum_supported_teeth: 3
+  minimum_path_confidence: 1.0
+
+candidate_ranking:
+  dynamic_path_z_clip: 5.0
+  reference_correlation_weight: 0.0
+  reference_residual_mad_khz_penalty: 0.0
+  four_tooth_bonus: 0.3
+  profile_strength_weight: 0.2
+  search_edge_fraction_penalty: 2.0
+
+candidate_selection:
+  independent_per_beam: true
+  evaluate_all_pretrack_accepted_pairs: true
+  prefer_four_matched_teeth: true
+  minimum_matched_guides_across_time_bins: 3
+  maximum_guide_difference_khz: 50.0
+  maximum_spacing_standard_deviation_mhz: 0.075
+  maximum_track_disagreement_channels: 4.0
+  minimum_track_agreement_fraction: 0.80
+
+mask:
+  apply_to_all_times_after_track_acceptance: true
+  confidence_gate: false
+  minimum_amplitude_snr: 0.5
+  minimum_masked_tooth_count: 3
+  half_width_fwhm_grid:
+    [0.50, 0.55, 0.60, 0.65, 0.675, 0.70, 0.705, 0.71, 0.715,
+     0.725, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00, 1.10, 1.20]
+  margin_channels: 0.50
+  width_selection: minimum_mask_fraction_passing_all_acceptance_tests
+
+acceptance:
+  minimum_dynamic_path_z: 2.5
+  maximum_search_edge_fraction: 0.10
+  maximum_total_leakage_fraction_for_width_selection: 0.08
+  maximum_total_leakage_fraction_for_final_acceptance: 0.10
+  maximum_single_tooth_leakage_fraction: 0.15
+  maximum_test_band_mask_fraction: 0.15
+  require_all_selected_tooth_metrics_finite: true
+  on_localization_or_mask_failure: skip_without_automatic_mask
+
+restrictions:
+  modify_input_hdf5: false
+  write_formal_mask: false
+  run_doppler_correction: false
+  generate_cube: false

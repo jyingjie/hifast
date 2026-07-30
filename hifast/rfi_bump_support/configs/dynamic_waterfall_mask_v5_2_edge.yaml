@@ -1,0 +1,47 @@
+# v5.2 C 级：仅在 B 级的两个时间分辨率都出现越界四齿证据时使用。
+
+metadata:
+  version: hierarchical_edge_stage_v5_2
+  status: frozen_before_independent_validation
+  formal_science_mask: false
+
+local_guide_discovery:
+  profile_statistic: mean_median_average
+  minimum_peak_prominence: 0.020
+  minimum_peak_height: 0.040
+  minimum_peak_separation_mhz: 0.12
+  frequency_edge_exclusion_mhz: 0.18
+  maximum_profile_peaks: 24
+  chain_lengths: [4, 3]
+  spacing_range_mhz: [0.72, 1.22]
+  maximum_spacing_standard_deviation_mhz: 0.12
+
+tracker:
+  maximum_common_shift_mhz: 0.45
+  maximum_jump_channels_per_time_bin: 10
+  transition_penalty_per_channel_squared: 0.12
+  teeth_used_for_score: 3
+  response_clip: [-2.0, 8.0]
+  local_refine_half_width_channels: 4
+  common_refine_time_median_rows: 3
+  support_response_threshold: 0.5
+  minimum_supported_teeth: 3
+  minimum_path_confidence: 1.0
+
+candidate_ranking:
+  dynamic_path_z_clip: 5.0
+  reference_correlation_weight: 0.0
+  reference_residual_mad_khz_penalty: 0.0
+  four_tooth_bonus: 0.3
+  profile_strength_weight: 0.2
+  search_edge_fraction_penalty: 2.0
+
+acceptance:
+  minimum_dynamic_path_z: 2.5
+  maximum_search_edge_fraction: 0.10
+
+restrictions:
+  modify_input_hdf5: false
+  write_formal_mask: false
+  run_doppler_correction: false
+  generate_cube: false
