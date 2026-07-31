@@ -5,12 +5,14 @@ import h5py
 import numpy as np
 import pytest
 
-from hifast.rfi_bump import (
+from hifast.core.rfi_bump import (
     ALGORITHM,
     CONFIG_PATH,
-    IO,
     apply_masks,
     nearest_frequency_indices,
+)
+from hifast.rfi_bump import (
+    IO,
     parser,
 )
 
