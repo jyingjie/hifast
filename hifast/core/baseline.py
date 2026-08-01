@@ -1,6 +1,6 @@
 
 
-__all__ = ['get_baseline', 'get_baseline_mp', 'BL_base', 'BL_PLS', 'BL_arPLS', 'BL_Gauss', 'BL_Chebyshev', 'BL_poly',
+__all__ = ['get_baseline', 'get_baseline_mp', 'BL_base', 'BL_PLS', 'BL_ContextPLS', 'BL_arPLS', 'BL_Gauss', 'BL_Chebyshev', 'BL_poly',
            'BL_sin_poly', 'BL_sin_poly_2', 'piecewise_polyfit', 'BL_knpoly', 'BL_spline', 'BL_knspline', 'BL_asPLS',
            'BL_masPLS', 'get_exclude_fun', 'sub_baseline']
 
@@ -20,6 +20,7 @@ from threadpoolctl import ThreadpoolController
 from astropy.stats import sigma_clipped_stats
 
 from ..utils.misc import average_every_n, smooth1d, smooth1d_fft, extend_Trues
+from .baseline_context import ContextReweighter, validate_frequency_axis
 
 import os
 import warnings
@@ -118,7 +119,13 @@ def get_baseline(x, ys, axis=None, *,
             raise(ValueError('need knots for knpoly- method'))
     # select baseline method
 
-    if '-' in method:
+    if method == 'PLS-context':
+        BL = BL_ContextPLS(**bl_para)
+        # Validate once outside the per-spectrum exception handler.  A time
+        # coordinate or malformed frequency grid must not silently produce a
+        # zero baseline for every spectrum.
+        BL.prepare(x)
+    elif '-' in method:
         p1, p2 = method.split('-')
         if p1 == 'PLS':
             BL = BL_PLS(**bl_para, rew_type=p2)
@@ -492,6 +499,122 @@ class BL_PLS(BL_base):
 BL_arPLS = BL_PLS
 
 
+class BL_ContextPLS(BL_PLS):
+    """PLS with dual-scale Context signal protection and zero correction.
+
+    The default parameters are the fixed preset validated in
+    ``baseline_fitting_test/results/v14_context_variants``.  Each call to
+    :meth:`fit` handles one spectrum; no information is shared between
+    spectra or polarizations.
+    """
+
+    def __init__(
+            self, lam=10**9, deg=2, *,
+            context_small_mhz=(1.0, 2.0),
+            context_large_mhz=(4.0, 8.0),
+            context_thresholds=(2.5, 3.0),
+            context_slope=2.0,
+            context_expand_mhz=0.5,
+            context_linefree_probability_max=0.9,
+            **kwargs):
+        self.context_small_mhz = context_small_mhz
+        self.context_large_mhz = context_large_mhz
+        self.context_thresholds = context_thresholds
+        self.context_slope = context_slope
+        self.context_expand_mhz = context_expand_mhz
+        self.context_linefree_probability_max = context_linefree_probability_max
+        self._context_reweighter = None
+        self._context_freq = None
+        super().__init__(lam=lam, deg=deg, rew_type='asym2', **kwargs)
+
+    def prepare(self, x):
+        """Validate a frequency grid and cache its Context geometry."""
+        freq = validate_frequency_axis(x)
+        if (
+                self._context_reweighter is None
+                or self._context_freq.shape != freq.shape
+                or not np.array_equal(self._context_freq, freq)):
+            self._context_freq = np.copy(freq)
+            self._context_reweighter = ContextReweighter(
+                freq,
+                small_mhz=self.context_small_mhz,
+                large_mhz=self.context_large_mhz,
+                thresholds=self.context_thresholds,
+                slope=self.context_slope,
+                expand_mhz=self.context_expand_mhz,
+                linefree_probability_max=(
+                    self.context_linefree_probability_max
+                ),
+                offset=self.offset,
+            )
+        return self._context_reweighter
+
+    def fit(self, *, x=None, y=None, exclude=None, exclude_add='none', wei=None):
+        """Fit one spectrum with the tested Context iteration."""
+        reweighter = self.prepare(x)
+        self.exclude = exclude
+        N = len(y)
+        wt = np.ones(N) if wei is None else np.copy(wei)
+        if self.exclude is not None:
+            wt[self.exclude] = 0
+
+        center_shift = 0.0
+        probability = np.zeros(N, dtype=np.float64)
+        ratio_fit = np.inf
+        for i in range(self.niter):
+            w = wt
+            z = self._fit(x, y, w)
+            d = y - z
+            wt, center_shift, probability = reweighter.update(
+                d, exclude=self.exclude
+            )
+            z = z + center_shift
+            d = d - center_shift
+            ratio_fit = norm(w-wt)/norm(w)
+            if ratio_fit < self.ratio:
+                break
+
+        exclude2 = None
+        if exclude_add == 'auto' or exclude_add == 'auto1':
+            is_ = w < 0.01
+            if self.exclude is not None:
+                is_[self.exclude] = False
+            exclude2 = extend_Trues(is_, axis=-1, ext_frac=1/3)
+        elif exclude_add == 'auto2':
+            ds = ndimage.gaussian_filter1d(d, 3)
+            negative = d[(d < 0) & (
+                np.ones(N, dtype=bool)
+                if self.exclude is None else ~self.exclude
+            )]
+            usable = d if self.exclude is None else d[~self.exclude]
+            scale = STD(negative) if negative.size else STD(usable)
+            is_ = ds > 3*scale
+            if self.exclude is not None:
+                is_[self.exclude] = False
+            exclude2 = extend_Trues(is_, axis=-1, ext_frac=1/3)
+        elif exclude_add != 'none':
+            raise ValueError('not supported exclude_add: %s' % exclude_add)
+
+        if exclude2 is not None:
+            if self.exclude is not None:
+                exclude2 |= self.exclude
+            w = wt
+            w[exclude2] = 0
+            z = self._fit(x, y, w)
+            d = y - z
+            _, center_shift, probability = reweighter.update(
+                d, exclude=exclude2
+            )
+            z = z + center_shift
+
+        self.success = True if ratio_fit <= self.ratio else False
+        self.wei = w
+        self.i = i
+        self.context_probability = probability
+        self.context_center_shift = center_shift
+        return z
+
+
 class BL_Gauss(BL_base):
     """
     """
@@ -819,7 +942,7 @@ def get_exclude_fun(exclude_m):
 def sub_baseline(freq, yss, *, subtract=True, nproc=1, exclude_fun=None, is_excluded=None, exclude_add='none', inplace=False,
                  njoin=1, s_method_t='none', s_sigma_t=None,
                  method='arPLS', s_method_freq='none', s_sigma_freq=None, average_every_freq=None,
-                 lam=1e8, deg=2, offset=2, ratio=0.01, niter=100, sin_f=[0.925, ], rew=True, opt_para=None,
+                 lam=None, deg=2, offset=2, ratio=0.01, niter=100, sin_f=[0.925, ], rew=True, opt_para=None,
                  verbose=True,
                  knots=None,
                  ):
@@ -844,6 +967,11 @@ def sub_baseline(freq, yss, *, subtract=True, nproc=1, exclude_fun=None, is_excl
         raise(ValueError('yss should has 3-dim'))
     if yss.shape[1] != len(freq):
         raise(ValueError('the 2nd dimension of yss should equal to the length of freq'))
+
+    # Keep the historical 1e8 default for existing methods.  PLS-context uses
+    # the 1e9 value under which its fixed preset was validated.
+    if lam is None:
+        lam = 1e9 if method == 'PLS-context' else 1e8
 
     # baseline fit parameter
     bl_para = {

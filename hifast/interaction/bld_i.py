@@ -155,6 +155,7 @@ def main():
 
     rew_type = ['asym1', 'asym2', 'asym3', 'sym1',]
     method = ['PLS-'+r for r in rew_type]
+    method += ['PLS-context']
     method += ['poly-'+r for r in rew_type]
     method += ['Gauss-'+r for r in rew_type]
     method += ['knspline-'+r for r in rew_type]

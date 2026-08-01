@@ -42,6 +42,7 @@ def create_parser():
     rew_type = ['asym1', 'asym2', 'asym3', 'sym1',]
     method = ['none']
     method += ['PLS-'+r for r in rew_type]
+    method += ['PLS-context']
     method += ['poly-'+r for r in rew_type]
     method += ['knpoly-'+r for r in rew_type]
     method += ['Gauss-'+r for r in rew_type]
@@ -51,9 +52,9 @@ def create_parser():
     method += ['original']
     
     group.add_argument('--method', default='arPLS', choices=method,
-                       help='Baseline fitting algorithm. "arPLS" is robust for most cases. "poly-*" uses polynomial fitting.')
-    group.add_argument('--lam', type=float, default=1.0e8, metavar='LAMBDA',
-                       help='Smoothing parameter (lambda) for PLS, Spline, and Gauss methods. Larger values = smoother (stiffer) baseline. Typical range: 1e4 - 1e9.')
+                       help='Baseline fitting algorithm. "PLS-context" protects coherent weak emission with fixed 1/4 and 2/8 MHz scales and is only available along frequency. "poly-*" uses polynomial fitting.')
+    group.add_argument('--lam', type=float, default=None, metavar='LAMBDA',
+                       help='Smoothing parameter (lambda) for PLS, Spline, and Gauss methods. The method default is 1e8, or 1e9 for PLS-context.')
     group.add_argument('--deg', type=int, default=2, metavar='DEG',
                        help='Degree for polynomial or spline methods.')
     group.add_argument('--knots', type=str, metavar='JSON_FILE',
@@ -140,6 +141,17 @@ parser = create_parser()
 class IO(BaseIO):
     ver = 'old'
 
+    def __init__(self, args, *positional, **kwargs):
+        inplace_args = kwargs.pop('inplace_args', False)
+        resolved_args = args if inplace_args else copy.deepcopy(args)
+        if hasattr(resolved_args, 'lam') and resolved_args.lam is None:
+            resolved_args.lam = (
+                1e9 if resolved_args.method == 'PLS-context' else 1e8
+            )
+        super().__init__(
+            resolved_args, *positional, inplace_args=True, **kwargs
+        )
+
     def _get_fpart(self,):
         fpart = '-bld'
         if self.args.post_method is not None and self.args.post_method != 'none':
@@ -189,6 +201,10 @@ class IO(BaseIO):
 
         trans = getattr(args, 'trans', False)
         if trans:
+            if fit_kwargs['method'] == 'PLS-context':
+                raise ValueError(
+                    'PLS-context uses MHz windows and cannot fit along the time axis'
+                )
             if fit_kwargs['is_excluded'] is not None:
                  fit_kwargs['is_excluded'] = fit_kwargs['is_excluded'].transpose((1, 0, 2))
             return sub_baseline(np.arange(len(mjd)), s2p.transpose((1, 0, 2)), subtract=True, **fit_kwargs).transpose((1, 0, 2))
